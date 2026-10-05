@@ -1,172 +1,435 @@
-import { el, fmtUSD, fmtPct, fmtCompact, api, isUnlocked } from "../shared.js";
+import {
+  el, esc, safeUrl, fmtUSD, fmtPct, fmtCompact, fmtNum, fmtRatio, api, isUnlocked, toast, lockedHint, signed,
+  loading, errorBox, fundContext, invalidateContext, pushRecent, statusBadge, tabNav,
+} from "../shared.js";
+import { lineChart, destroyAll } from "../charts.js";
+import { openPositionDialog } from "./holdings.js";
+import * as financialsTab from "./research/financials.js";
+import * as valuationTab from "./research/valuation.js";
+import * as streetTab from "./research/street.js";
+import * as riskTab from "./research/risk.js";
+import * as ownershipTab from "./research/ownership.js";
+import * as filingsTab from "./research/filings.js";
 
-let chartInstance = null;
+const TABS = [
+  ["overview", "Overview"],
+  ["financials", "Financials"],
+  ["valuation", "Valuation"],
+  ["street", "Street"],
+  ["risk", "Risk"],
+  ["ownership", "Ownership"],
+  ["filings", "Filings"],
+  ["thesis", "Thesis"],
+];
+const TAB_MODULES = { financials: financialsTab, valuation: valuationTab, street: streetTab, risk: riskTab, ownership: ownershipTab, filings: filingsTab };
 
-function statRow(label, value) {
-  return `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+export const title = (params) => {
+  const tab = TABS.find(([k]) => k === params.tab);
+  return `${(params.symbol || "").toUpperCase()}${tab && tab[0] !== "overview" ? ` · ${tab[1]}` : ""}`;
+};
+
+// One fetch per ticker; switching tabs reuses it (5-minute freshness).
+let cache = null;
+async function loadData(symbol, force = false) {
+  if (!force && cache?.symbol === symbol && Date.now() - cache.at < 5 * 60 * 1000) return cache;
+  const [data, fund] = await Promise.all([api(`/api/research/${encodeURIComponent(symbol)}`), fundContext()]);
+  cache = { symbol, data, fund, at: Date.now() };
+  return cache;
+}
+export function invalidateResearch() { cache = null; }
+// Holdings/watchlist changes elsewhere make the cached Owned/Watching state stale.
+window.addEventListener("pif:context-changed", () => { cache = null; });
+
+// Yahoo values arrive as { raw } objects, sometimes as strings like "Infinity" or {} when
+// missing; only finite numbers get through.
+const num = (v) => { const x = v && typeof v === "object" ? v.raw : v; return typeof x === "number" && Number.isFinite(x) ? x : null; };
+
+function stat(label, value, sub = "") {
+  return `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
 }
 
-function renderChart(canvas, points) {
-  if (chartInstance) {
-    chartInstance.destroy();
-    chartInstance = null;
-  }
-  if (!points || !points.length || typeof Chart === "undefined") return;
-  chartInstance = new Chart(canvas, {
-    type: "line",
-    data: {
-      labels: points.map((p) => p.date),
-      datasets: [{
-        label: "Close",
-        data: points.map((p) => p.close),
-        borderColor: "#4f8cff",
-        backgroundColor: "rgba(79,140,255,0.1)",
-        pointRadius: 0,
-        tension: 0.15,
-        fill: true,
-      }],
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { maxTicksLimit: 8, color: "#8d97ab" }, grid: { display: false } },
-        y: { ticks: { color: "#8d97ab" }, grid: { color: "#1c2435" } },
-      },
-    },
+function rangeStat(lo, hi, price) {
+  if (!lo || !hi) return stat("52-week range", "—");
+  const pos = price ? Math.min(100, Math.max(0, ((price - lo) / (hi - lo)) * 100)) : null;
+  return stat("52-week range", `<span class="range-val">${fmtUSD(lo)} – ${fmtUSD(hi)}</span>`,
+    pos === null ? "" : `${pos.toFixed(0)}% of range<span class="range-track" aria-hidden="true"><span class="range-dot" style="left:${pos}%"></span></span>`);
+}
+
+function chartSummary(points) {
+  if (!points?.length) return null;
+  const first = points[0], last = points[points.length - 1];
+  const closes = points.map((p) => p.close);
+  return { first, last, hi: Math.max(...closes), lo: Math.min(...closes), chg: ((last.close - first.close) / first.close) * 100 };
+}
+
+export function analystConsensus(trend) {
+  const t = trend?.[0];
+  if (!t) return null;
+  const buy = (t.strongBuy || 0) + (t.buy || 0), hold = t.hold || 0, sell = (t.sell || 0) + (t.strongSell || 0);
+  const total = buy + hold + sell;
+  if (!total) return null;
+  const score = (buy - sell) / total;
+  const label = score >= 0.6 ? "Strong buy" : score >= 0.25 ? "Buy" : score > -0.25 ? "Hold" : score > -0.6 ? "Sell" : "Strong sell";
+  return { buy, hold, sell, total, label };
+}
+
+const isFinancialSector = (data) => /financial/i.test(data.profile?.sector || "");
+
+// ---- Overview tab ----
+
+function renderOverview(c, { symbol, data, fund, price }) {
+  const sd = data.stats.summaryDetail || {};
+  const ks = data.stats.defaultKeyStatistics || {};
+  const st = data.street;
+  const an = data.analysis;
+  const cs = chartSummary(data.chart);
+  const consensus = analystConsensus(st?.trend);
+  const lastFy = an?.annual?.at(-1);
+  const profile = data.profile || {};
+  const next = st?.nextEarnings?.dates?.[0];
+  const daysToEarnings = next ? Math.ceil((new Date(next) - new Date()) / 864e5) : null;
+
+  // Snapshot: the handful of numbers an analyst checks first, each linking to its tab.
+  const snap = [
+    ["Upside to target", st?.targets?.upside != null ? signed(st.targets.upside * 100, fmtPct(st.targets.upside * 100)) : "—", "street", st?.targets?.mean ? `Mean target ${fmtUSD(st.targets.mean)} · ${st.targets.analysts} analysts` : ""],
+    ["Piotroski F-score", an?.piotroski && !isFinancialSector(data) ? `${an.piotroski.score}/${an.piotroski.outOf}` : "—", "financials", an?.piotroski && !isFinancialSector(data) ? an.piotroski.verdict : isFinancialSector(data) ? "Not meaningful for financials" : ""],
+    isFinancialSector(data)
+      ? ["ROE (last FY)", fmtRatio(lastFy?.roe), "financials", "Key return metric for financials"]
+      : ["ROIC (last FY)", fmtRatio(lastFy?.roic), "financials", lastFy ? `FCF margin ${fmtRatio(lastFy.fcfMargin)}` : ""],
+    ["Beta", st?.keyStats?.beta != null ? st.keyStats.beta.toFixed(2) : "—", "risk", st?.shortInterest?.pctFloat != null ? `Short interest ${fmtRatio(st.shortInterest.pctFloat)} of float` : ""],
+    ["Next earnings", next ? esc(next) : "—", "street", daysToEarnings !== null ? `${daysToEarnings >= 0 ? `in ${daysToEarnings} days` : "date passed"}${st.nextEarnings.estimated ? " (estimated)" : ""}` : ""],
+  ];
+
+  c.innerHTML = `
+    <section class="summary" aria-label="Key statistics">
+      ${stat("Market cap", fmtCompact(num(sd.marketCap)))}
+      ${stat("P/E", num(sd.trailingPE)?.toFixed(1) ?? "—", num(ks.forwardPE) ? `Forward ${num(ks.forwardPE).toFixed(1)}` : "")}
+      ${rangeStat(num(sd.fiftyTwoWeekLow), num(sd.fiftyTwoWeekHigh), price)}
+      ${stat("Dividend yield", num(sd.dividendYield) ? `${(num(sd.dividendYield) * 100).toFixed(2)}%` : "—", st?.exDividendDate ? `Ex-div ${esc(st.exDividendDate)}` : "")}
+      ${stat("Analyst consensus", consensus ? consensus.label : "—",
+        consensus ? `${consensus.buy} buy · ${consensus.hold} hold · ${consensus.sell} sell<span class="consensus-bar" aria-hidden="true"><span style="flex:${consensus.buy}" class="c-buy"></span><span style="flex:${consensus.hold}" class="c-hold"></span><span style="flex:${consensus.sell}" class="c-sell"></span></span>` : "")}
+    </section>
+
+    <section class="snapshot" aria-label="Analyst snapshot">
+      ${snap.map(([label, value, tab, sub]) => `
+        <a class="snap" href="#/research/${encodeURIComponent(symbol)}/${tab}">
+          <span class="snap-label">${label}</span>
+          <span class="snap-value">${value}</span>
+          ${sub ? `<span class="snap-sub">${sub}</span>` : ""}
+        </a>`).join("")}
+    </section>
+
+    <div class="research-layout">
+      <div class="research-main">
+        ${data.position ? renderPosition(data.position, price) : ""}
+        <section class="panel" aria-labelledby="chart-h">
+          <div class="panel-head"><h3 id="chart-h">Price, past year</h3>
+            <a class="small" href="#/research/${encodeURIComponent(symbol)}/risk">Compare with the market →</a></div>
+          <div class="chart-box">
+            <canvas id="priceChart" role="img" aria-label="${cs ? esc(`${symbol} closing price over the past year: from ${fmtUSD(cs.first.close)} on ${cs.first.date} to ${fmtUSD(cs.last.close)} on ${cs.last.date}, ${fmtPct(cs.chg)}. High ${fmtUSD(cs.hi)}, low ${fmtUSD(cs.lo)}.`) : "No price data"}"></canvas>
+          </div>
+          ${data.technicals?.sma50 ? `<p class="muted small chart-note">50-day avg ${fmtUSD(data.technicals.sma50)}${data.technicals.sma200 ? ` · 200-day avg ${fmtUSD(data.technicals.sma200)}` : ""}</p>` : ""}
+        </section>
+        <section class="panel" aria-labelledby="news-h">
+          <h3 id="news-h">News</h3>
+          ${renderNews(data.news, !!data.errors?.news)}
+        </section>
+      </div>
+      <aside class="research-side" aria-label="Company context">
+        <section class="panel" aria-labelledby="about-h">
+          <h3 id="about-h">About</h3>
+          ${profile.longBusinessSummary ? `
+            <details class="about">
+              <summary>${esc(profile.longBusinessSummary.slice(0, 280))}${profile.longBusinessSummary.length > 280 ? "… <span class=\"btn-link\">Read more</span>" : ""}</summary>
+              <p class="small">${esc(profile.longBusinessSummary.slice(280))}</p>
+            </details>` : `<p class="muted">No company profile available.</p>`}
+          <dl class="facts small">
+            ${profile.fullTimeEmployees ? `<dt>Employees</dt><dd>${fmtNum(profile.fullTimeEmployees)}</dd>` : ""}
+            ${profile.city ? `<dt>HQ</dt><dd>${esc([profile.city, profile.state, profile.country].filter(Boolean).join(", "))}</dd>` : ""}
+          </dl>
+          ${profile.website ? `<p class="small"><a href="${safeUrl(profile.website)}" target="_blank" rel="noopener">Company website<span class="sr-only"> (opens in new tab)</span></a></p>` : ""}
+        </section>
+        <section class="panel" aria-labelledby="peers-h">
+          <h3 id="peers-h">Peers &amp; competitors</h3>
+          ${renderPeers(data.peers, fund, symbol)}
+        </section>
+      </aside>
+    </div>`;
+
+  lineChart(el("priceChart"), {
+    labels: data.chart.map((p) => p.date),
+    datasets: [{ label: symbol, data: data.chart.map((p) => p.close), color: "--chart-line" }],
+    yFormat: (v) => `$${Number(v).toFixed(0)}`,
+    legend: false,
+    fill: true,
   });
 }
 
-function renderNews(news) {
-  if (!news || !news.length) return `<p class="muted">No recent news available (news requires a Finnhub API key).</p>`;
-  return `<ul class="news-list">${news.map((n) => `
-    <li>
-      <a href="${n.url}" target="_blank" rel="noopener">${n.headline}</a>
-      <div class="muted small">${n.source || ""} · ${n.datetime ? new Date(n.datetime).toLocaleDateString() : ""}</div>
-    </li>
-  `).join("")}</ul>`;
-}
-
-function renderPeers(peers) {
-  if (!peers || !peers.length) return `<p class="muted">No peer data available.</p>`;
-  return `<div class="chip-list">${peers.map((p) => `<a class="chip" href="#/research/${p}">${p}</a>`).join("")}</div>`;
-}
-
-function renderFinancials(financials) {
-  if (!financials) return `<p class="muted">No SEC financial history available for this ticker.</p>`;
-  const row = (label, series) => {
-    if (!series || !series.length) return "";
-    const latest = series[series.length - 1];
-    return `<tr><td>${label}</td><td>${latest.end}</td><td>${fmtCompact(latest.val)}</td></tr>`;
-  };
+function renderPosition(p, price) {
+  const mv = price ? p.shares * price : p.marketValue;
+  const gain = mv - p.totalCost;
+  const gainPct = p.totalCost ? (gain / p.totalCost) * 100 : null;
   return `
-    <table class="mini-table">
-      <thead><tr><th>Metric</th><th>As of</th><th>Value</th></tr></thead>
-      <tbody>
-        ${row("Revenue", financials.revenue)}
-        ${row("Net Income", financials.netIncome)}
-        ${row("EPS (diluted)", financials.eps)}
-      </tbody>
-    </table>
-  `;
+    <section class="panel position-panel" aria-labelledby="pos-h">
+      <h3 id="pos-h">The fund's position</h3>
+      <div class="kv-grid kv-4">
+        <div><span class="muted small">Shares</span><strong>${p.shares.toLocaleString()}</strong></div>
+        <div><span class="muted small">Avg cost</span><strong>${fmtUSD(p.avgCost)}</strong></div>
+        <div><span class="muted small">Value${price ? " (live)" : ""}</span><strong>${fmtUSD(mv)}</strong></div>
+        <div><span class="muted small">Gain</span><strong>${signed(gain, fmtUSD(gain))}${gainPct !== null ? ` <span class="small">(${fmtPct(gainPct)})</span>` : ""}</strong></div>
+      </div>
+      ${p.notes ? `<p class="muted small">Note: ${esc(p.notes)}</p>` : ""}
+    </section>`;
 }
 
-async function saveThesis(symbol) {
-  const textarea = el("thesisInput");
-  try {
-    await api(`/api/research/${symbol}/thesis`, {
-      method: "PUT",
-      body: JSON.stringify({ author: "Fund member", thesis: textarea.value }),
+function renderNews(news, errored) {
+  if (!news || !news.length) {
+    return `<p class="muted">${errored ? "News is unavailable right now (needs a Finnhub API key on the server)." : "No news in the last two weeks."}</p>`;
+  }
+  return `<ul class="news-list">${news.slice(0, 8).map((n) => `
+    <li>
+      <a href="${safeUrl(n.url)}" target="_blank" rel="noopener">${esc(n.headline)}<span class="sr-only"> (opens in new tab)</span></a>
+      <div class="muted small">${esc(n.source || "")}${n.datetime ? ` · ${new Date(n.datetime).toLocaleDateString()}` : ""}</div>
+    </li>`).join("")}</ul>`;
+}
+
+function renderPeers(peers, fund, symbol) {
+  if (!peers || !peers.length) return `<p class="muted">No peer data available.</p>`;
+  return `<div class="chip-list">${peers.map((p) => `
+    <a class="chip" href="#/research/${encodeURIComponent(p)}">${esc(p)}${statusBadge(p, fund)}</a>`).join("")}</div>
+    <p class="muted small"><a href="#/research/${encodeURIComponent(symbol)}/valuation">Compare valuations side by side →</a></p>`;
+}
+
+// ---- Thesis tab: team thesis + target, price alerts, pitches ----
+
+let dirty = false;
+function onBeforeUnload(e) {
+  if (dirty) { e.preventDefault(); e.returnValue = ""; }
+}
+
+const thesisMeta = (t) =>
+  t?.updatedAt ? `Last edited${t.author ? ` by <strong>${esc(t.author)}</strong>` : ""} on ${esc(t.updatedAt.slice(0, 10))}` : "No thesis written yet.";
+
+function renderThesisTab(c, { symbol, data, price, unlocked }) {
+  const t = data.thesis;
+  let author = "";
+  try { author = localStorage.getItem("pif_author") || ""; } catch { /* ignore */ }
+  const sinceThesis = t?.priceAtThesis && price ? price / t.priceAtThesis - 1 : null;
+  const toTarget = t?.targetPrice && price ? t.targetPrice / price - 1 : null;
+
+  c.innerHTML = `
+    <div class="research-layout">
+      <div class="research-main">
+        <section class="panel" aria-labelledby="thesis-h">
+          <div class="panel-head"><h3 id="thesis-h">Team thesis</h3><span class="muted small" id="thesisMeta">${thesisMeta(t)}</span></div>
+          ${t?.targetPrice ? `
+            <div class="kv-grid kv-4 thesis-kpis">
+              <div><span class="muted small">Team target</span><strong>${fmtUSD(t.targetPrice)}</strong></div>
+              <div><span class="muted small">Upside from here</span><strong>${toTarget !== null ? signed(toTarget * 100, fmtPct(toTarget * 100)) : "—"}</strong></div>
+              <div><span class="muted small">Price when set</span><strong>${t.priceAtThesis ? fmtUSD(t.priceAtThesis) : "—"}</strong></div>
+              <div><span class="muted small">Move since</span><strong>${sinceThesis !== null ? signed(sinceThesis * 100, fmtPct(sinceThesis * 100)) : "—"}</strong></div>
+            </div>` : ""}
+          ${unlocked ? `
+            <label for="thesisInput" class="field-label">Thesis</label>
+            <textarea id="thesisInput" rows="10" placeholder="Why own it? Key risks, catalysts, valuation, and what would make us sell…"></textarea>
+            <div class="thesis-actions">
+              <label class="inline-label">Target price ($) <input id="thesisTarget" type="number" step="any" min="0" inputmode="decimal" value="${t?.targetPrice ?? ""}" /></label>
+              <label class="inline-label">Your name <input id="thesisAuthor" value="${esc(author)}" autocomplete="name" /></label>
+              <button id="saveThesisBtn" class="btn btn-primary">Save thesis</button>
+              <span id="thesisStatus" class="muted small" role="status"></span>
+            </div>
+            <p class="muted small">Setting a target locks in today's price so the call can be graded later. Price alerts and the Portfolio alerts feed flag when it's reached.</p>` : `
+            <div id="thesisRead" class="thesis-read">${t?.thesis ? "" : `<p class="muted">No thesis yet.</p>`}</div>
+            ${lockedHint("Unlock to write or edit the thesis.")}`}
+        </section>
+      </div>
+      <aside class="research-side">
+        <section class="panel" aria-labelledby="pitch-h">
+          <h3 id="pitch-h">Pitches</h3>
+          ${data.pitches.length ? `<ul class="link-list">${data.pitches.map((p) => `
+            <li><a href="#/pitches/${p.id}">${esc(p.direction.toUpperCase())} ${esc(symbol)}</a>
+              <span class="status-pill status-${esc(p.status)}">${esc(p.status)}</span>
+              <div class="muted small">${esc(p.author)} · ${esc(p.createdAt.slice(0, 10))}${p.basePrice ? ` · base ${fmtUSD(p.basePrice)}` : ""}</div></li>`).join("")}</ul>`
+            : `<p class="muted">No pitches yet.</p>`}
+          <p><a class="btn btn-ghost btn-sm" href="#/pitches/new/${encodeURIComponent(symbol)}">+ Start a pitch</a></p>
+        </section>
+        <section class="panel" aria-labelledby="alerts-h">
+          <h3 id="alerts-h">Price alerts</h3>
+          <ul class="link-list" id="alertList">
+            ${data.priceAlerts.map((a) => `<li>${a.direction === "above" ? "Rises above" : "Falls below"} <strong>${fmtUSD(a.price)}</strong>${a.note ? ` <span class="muted small">— ${esc(a.note)}</span>` : ""}
+              ${unlocked ? `<button class="btn-link small" data-del-alert="${a.id}" aria-label="Delete alert at ${fmtUSD(a.price)}">Remove</button>` : ""}</li>`).join("") || `<li class="muted">No alerts set.</li>`}
+          </ul>
+          ${unlocked ? `
+            <form id="alertForm" class="alert-form">
+              <label class="sr-only" for="alertDir">Direction</label>
+              <select id="alertDir"><option value="above">Above</option><option value="below">Below</option></select>
+              <label class="sr-only" for="alertPrice">Price</label>
+              <input id="alertPrice" type="number" step="any" min="0" placeholder="Price" required inputmode="decimal" />
+              <button class="btn btn-ghost btn-sm">Add alert</button>
+            </form>` : lockedHint("Unlock to set alerts.")}
+        </section>
+      </aside>
+    </div>`;
+
+  if (unlocked) {
+    let draft = null;
+    try { draft = localStorage.getItem(`pif_draft_${symbol}`); } catch { /* ignore */ }
+    el("thesisInput").value = draft ?? (t?.thesis || "");
+    if (draft !== null && draft !== (t?.thesis || "")) {
+      dirty = true;
+      el("thesisStatus").textContent = "Restored your unsaved draft";
+    }
+    el("thesisInput").addEventListener("input", (e) => {
+      dirty = true;
+      el("thesisStatus").textContent = "Unsaved changes";
+      try { localStorage.setItem(`pif_draft_${symbol}`, e.target.value); } catch { /* ignore */ }
     });
-    el("thesisStatus").textContent = "Saved.";
-    setTimeout(() => (el("thesisStatus").textContent = ""), 2000);
-  } catch (err) {
-    el("thesisStatus").textContent = `Error: ${err.message}`;
+    el("saveThesisBtn").addEventListener("click", () => saveThesis(symbol, price));
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    el("alertForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await api("/api/price-alerts", { method: "POST", body: JSON.stringify({ symbol, direction: el("alertDir").value, price: Number(el("alertPrice").value) }) });
+        toast("Alert added.", { type: "success" });
+        rerender(true);
+      } catch (err) { toast(err.message, { type: "error" }); }
+    });
+    c.querySelectorAll("[data-del-alert]").forEach((b) => b.addEventListener("click", async () => {
+      try {
+        await api(`/api/price-alerts/${b.dataset.delAlert}`, { method: "DELETE" });
+        rerender(true);
+      } catch (err) { toast(err.message, { type: "error" }); }
+    }));
+  } else if (t?.thesis) {
+    el("thesisRead").textContent = t.thesis;
   }
 }
+
+async function saveThesis(symbol, price) {
+  const author = el("thesisAuthor").value.trim();
+  if (!author) {
+    el("thesisAuthor").setAttribute("aria-invalid", "true");
+    el("thesisStatus").textContent = "Add your name so the team knows who wrote this.";
+    el("thesisAuthor").focus();
+    return;
+  }
+  el("thesisAuthor").removeAttribute("aria-invalid");
+  try { localStorage.setItem("pif_author", author); } catch { /* ignore */ }
+  const btn = el("saveThesisBtn");
+  btn.disabled = true;
+  try {
+    await api(`/api/research/${encodeURIComponent(symbol)}/thesis`, {
+      method: "PUT",
+      body: JSON.stringify({ author, thesis: el("thesisInput").value, targetPrice: el("thesisTarget").value, priceAtThesis: price }),
+    });
+    dirty = false;
+    try { localStorage.removeItem(`pif_draft_${symbol}`); } catch { /* ignore */ }
+    toast(`Thesis for ${symbol} saved.`, { type: "success" });
+    rerender(true);
+  } catch (err) {
+    el("thesisStatus").textContent = `Not saved: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function rerender(force) {
+  if (force) cache = null;
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
+// ---- Page shell ----
 
 export async function mount(container, params) {
   const symbol = (params.symbol || "").toUpperCase();
-  container.innerHTML = `<p class="muted">Loading research on ${symbol}...</p>`;
+  const tab = TABS.some(([k]) => k === params.tab) ? params.tab : "overview";
+  window.removeEventListener("beforeunload", onBeforeUnload);
+  dirty = false;
+  destroyAll();
 
-  let data;
+  if (!cache || cache.symbol !== symbol) container.innerHTML = loading(`Loading research on ${symbol}…`);
+  let ctx;
   try {
-    data = await api(`/api/research/${symbol}`);
+    ctx = await loadData(symbol);
   } catch (err) {
-    container.innerHTML = `<p class="error">Could not load research for ${symbol}: ${err.message}</p>`;
+    container.innerHTML = `<div class="page-head"><h2>${esc(symbol)}</h2></div>${errorBox(`Could not load research for ${symbol}: ${err.message}`)}`;
+    return;
+  }
+  const { data, fund } = ctx;
+
+  if (data.notFound) {
+    container.innerHTML = `
+      <div class="page-head"><h2>No results for “${esc(symbol)}”</h2></div>
+      <div class="page-pad">
+        <p>We couldn't find price or company data for that ticker. Check the spelling, or try the share-class format (e.g. <code>BRK-B</code> or <code>BRK.B</code>).</p>
+        <p class="muted">Not a stock? ETFs and funds have price data but no SEC fundamentals.</p>
+        <p><a href="#/research">← Back to Research</a></p>
+      </div>`;
     return;
   }
 
+  pushRecent(symbol);
   const profile = data.profile || {};
-  const summaryDetail = data.stats.summaryDetail || {};
-  const keyStats = data.stats.defaultKeyStatistics || {};
-  const financialData = data.stats.financialData || {};
-
-  const price = financialData.currentPrice?.raw ?? summaryDetail.previousClose?.raw ?? null;
+  const price = data.technicals?.price ?? null;
   const unlocked = isUnlocked();
+  const cs = chartSummary(data.chart);
+  const owned = !!data.position, watched = !!data.watch;
+  const base = `#/research/${encodeURIComponent(symbol)}`;
+
+  const actions = [];
+  if (owned) actions.push(`<span class="badge badge-owned">Owned</span>`);
+  else if (watched) actions.push(`<span class="badge badge-watch">Watching</span>`);
+  else if (unlocked) actions.push(`<button id="watchBtn" class="btn btn-ghost">+ Watch</button>`);
+  if (!owned && unlocked) actions.push(`<button id="addPosBtn" class="btn btn-ghost">+ Add to holdings</button>`);
+  actions.push(`<a class="btn btn-ghost" href="#/pitches/new/${encodeURIComponent(symbol)}">Pitch it</a>`);
+  actions.push(`<button id="copyLinkBtn" class="btn btn-ghost" aria-label="Copy link to this page">Copy link</button>`);
+
+  const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => k);
 
   container.innerHTML = `
-    <section class="research-header">
+    <div class="page-head research-head">
       <div>
-        <h2>${symbol} <span class="muted">${profile.sector ? `· ${profile.sector}` : ""}</span></h2>
-        <p class="muted">${profile.industry || ""}</p>
+        <h2>${esc(symbol)}${data.name ? ` <span class="company-name">${esc(data.name)}</span>` : ""}</h2>
+        <p class="muted page-desc">${[profile.sector, profile.industry].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</p>
       </div>
-      <div class="research-header-right">
+      <div class="research-price">
         <div class="price-tag">${price !== null ? fmtUSD(price) : "—"}</div>
-        ${unlocked ? `<button id="watchBtn" class="btn btn-ghost">+ Watch</button>` : ""}
+        ${cs ? `<div class="small">${signed(cs.chg, fmtPct(cs.chg))} <span class="muted">1Y</span></div>` : ""}
       </div>
-    </section>
+      <div class="page-actions">${actions.join("")}</div>
+    </div>
+    ${tabNav(TABS.map(([k, label]) => [k, k === "overview" ? base : `${base}/${k}`, label]), tab, `${symbol} research sections`)}
+    ${partial.length && tab === "overview" ? `<p class="notice" role="note">Some data couldn't be loaded (${partial.map(esc).join(", ")}). The rest of the page is still accurate.</p>` : ""}
+    <div id="tabBody"></div>`;
 
-    <section class="summary">
-      ${statRow("Market Cap", fmtCompact(summaryDetail.marketCap?.raw))}
-      ${statRow("P/E (TTM)", summaryDetail.trailingPE?.raw?.toFixed(2) ?? "—")}
-      ${statRow("52W Range", summaryDetail.fiftyTwoWeekLow?.raw && summaryDetail.fiftyTwoWeekHigh?.raw ? `${fmtUSD(summaryDetail.fiftyTwoWeekLow.raw)} – ${fmtUSD(summaryDetail.fiftyTwoWeekHigh.raw)}` : "—")}
-      ${statRow("Dividend Yield", summaryDetail.dividendYield?.raw ? fmtPct(summaryDetail.dividendYield.raw * 100) : "—")}
-      ${statRow("Analyst Rec.", data.stats.recommendationTrend?.trend?.[0]?.strongBuy !== undefined ? "See trend" : "—")}
-    </section>
+  const body = el("tabBody");
+  const tctx = { symbol, data, fund, price, unlocked, isFinancial: isFinancialSector(data) };
+  if (tab === "overview") renderOverview(body, tctx);
+  else if (tab === "thesis") renderThesisTab(body, tctx);
+  else await TAB_MODULES[tab].render(body, tctx);
 
-    <section class="research-grid">
-      <div class="panel">
-        <h3>Price (1Y)</h3>
-        <canvas id="priceChart" height="220"></canvas>
-      </div>
-      <div class="panel">
-        <h3>About</h3>
-        <p class="muted small">${profile.longBusinessSummary ? profile.longBusinessSummary.slice(0, 500) + (profile.longBusinessSummary.length > 500 ? "…" : "") : "No company profile available."}</p>
-      </div>
-      <div class="panel">
-        <h3>Fundamentals (SEC)</h3>
-        ${renderFinancials(data.financials)}
-      </div>
-      <div class="panel">
-        <h3>Peers / Competitors</h3>
-        ${renderPeers(data.peers)}
-      </div>
-      <div class="panel">
-        <h3>News</h3>
-        ${renderNews(data.news)}
-      </div>
-      <div class="panel">
-        <h3>Team Thesis</h3>
-        <textarea id="thesisInput" rows="6" ${unlocked ? "" : "disabled"} placeholder="${unlocked ? "Write the fund's thesis, risks, and price target..." : "Unlock editing to write a thesis."}">${data.thesis?.thesis || ""}</textarea>
-        ${unlocked ? `<button id="saveThesisBtn" class="btn btn-primary">Save thesis</button>` : ""}
-        <span id="thesisStatus" class="muted small"></span>
-      </div>
-    </section>
-  `;
-
-  renderChart(el("priceChart"), data.chart);
-
-  if (unlocked) {
-    el("saveThesisBtn").addEventListener("click", () => saveThesis(symbol));
-    el("watchBtn").addEventListener("click", async () => {
-      try {
-        await api("/api/watchlist", { method: "POST", body: JSON.stringify({ symbol, sourcedFrom: "research page" }) });
-        el("watchBtn").textContent = "Watching";
-        el("watchBtn").disabled = true;
-      } catch (err) {
-        alert(err.message);
-      }
-    });
-  }
+  el("copyLinkBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      toast("Link copied.");
+    } catch {
+      toast("Couldn't copy — use the address bar.", { type: "error" });
+    }
+  });
+  el("addPosBtn")?.addEventListener("click", () => openPositionDialog(null, { symbol, lastPrice: price ?? "" }));
+  el("watchBtn")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      await api("/api/watchlist", { method: "POST", body: JSON.stringify({ symbol, sourcedFrom: "research page" }) });
+      invalidateContext(); // also clears this page's cache, so the next visit shows "Watching"
+      btn.outerHTML = `<span class="badge badge-watch" tabindex="-1" id="watchBadge">Watching</span>`;
+      el("watchBadge").focus();
+      toast(`${symbol} added to the watchlist.`, { type: "success" });
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message, { type: "error" });
+    }
+  });
 }

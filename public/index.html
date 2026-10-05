@@ -3,44 +3,88 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pitzer Investment Fund — Holdings Tracker</title>
+  <meta name="color-scheme" content="dark light" />
+  <title>Pitzer Investment Fund</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
+  <a class="skip-link" href="#view">Skip to main content</a>
+
   <header class="topbar">
-    <h1>Pitzer Investment Fund</h1>
-    <nav class="nav">
-      <a class="nav-link" href="#/">Holdings</a>
-      <a class="nav-link" href="#/screener">Discovery</a>
-      <a class="nav-link" href="#/insiders">Insiders</a>
-      <a class="nav-link" href="#/macro">Macro</a>
-      <a class="nav-link" href="#/watchlist">Watchlist</a>
+    <a class="brand" href="#/">
+      <span class="brand-mark" aria-hidden="true">PIF</span>
+      <span class="brand-name">Pitzer Investment Fund</span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      <a class="nav-link" href="#/" data-section="portfolio">Portfolio</a>
+      <a class="nav-link" href="#/research" data-section="research">Research</a>
+      <a class="nav-link" href="#/screener" data-section="ideas">Ideas</a>
+      <a class="nav-link" href="#/macro" data-section="market">Market</a>
     </nav>
-    <form id="jumpForm" class="jump-form">
-      <input id="jumpInput" type="text" placeholder="Research a ticker..." maxlength="10" />
+
+    <form id="jumpForm" class="jump-form" role="search">
+      <label for="jumpInput" class="sr-only">Research a ticker</label>
+      <input id="jumpInput" type="search" list="tickerOptions" autocomplete="off" spellcheck="false"
+             placeholder="Search ticker…  ( / )" maxlength="10" aria-describedby="jumpHint" />
+      <datalist id="tickerOptions"></datalist>
+      <span id="jumpHint" class="sr-only">Type a ticker symbol and press Enter. Press slash from anywhere to focus this box.</span>
+      <button type="submit" class="btn btn-primary btn-sm">Go</button>
     </form>
+
     <div class="auth-area">
-      <span id="authStatus" class="auth-status">Viewing only</span>
-      <button id="loginBtn" class="btn btn-ghost">Unlock editing</button>
-      <button id="logoutBtn" class="btn btn-ghost hidden">Lock</button>
+      <a id="alertsLink" class="icon-btn" href="#/alerts" aria-label="Alerts">
+        <span aria-hidden="true">🔔</span><span id="alertCount" class="icon-badge hidden"></span>
+      </a>
+      <a class="icon-btn" href="#/settings" aria-label="Settings" data-section="settings"><span aria-hidden="true">⚙</span></a>
+      <button id="memberBtn" class="btn btn-ghost btn-sm" aria-haspopup="dialog" title="Member sign-in (to vote on pitches)">Sign in</button>
+      <span id="authStatus" class="auth-status" role="status"></span>
+      <button id="loginBtn" class="btn btn-ghost btn-sm" title="Enter the shared fund password to edit">Unlock<span class="hide-sm"> editing</span></button>
+      <button id="logoutBtn" class="btn btn-ghost btn-sm hidden">Lock</button>
     </div>
   </header>
 
-  <main id="view"></main>
+  <main id="view" tabindex="-1" aria-busy="false"></main>
 
-  <dialog id="dialog">
-    <form id="posForm">
+  <div id="routeAnnouncer" class="sr-only" aria-live="polite"></div>
+  <div id="toasts" class="toasts"></div>
+
+  <dialog id="dialog" aria-labelledby="dialogTitle">
+    <form id="posForm" novalidate>
       <h2 id="dialogTitle">Add position</h2>
       <input type="hidden" name="id" />
-      <label>Ticker <input name="symbol" required maxlength="10" style="text-transform:uppercase" /></label>
-      <label>Shares <input name="shares" type="number" step="any" required /></label>
-      <label>Last Price <input name="lastPrice" type="number" step="any" /></label>
-      <label>Avg Cost / Share <input name="avgCost" type="number" step="any" /></label>
-      <label>Total Cost ($) <input name="totalCost" type="number" step="any" /></label>
-      <label>Market Value ($) <input name="marketValue" type="number" step="any" /></label>
-      <label>Dividend Income ($) <input name="divIncome" type="number" step="any" /></label>
-      <label>Notes <input name="notes" /></label>
+      <div class="form-grid">
+        <label>Ticker <span class="req" aria-hidden="true">*</span>
+          <input name="symbol" required maxlength="10" autocapitalize="characters" aria-describedby="err-symbol" />
+          <span class="field-error" id="err-symbol"></span>
+        </label>
+        <label>Shares <span class="req" aria-hidden="true">*</span>
+          <input name="shares" type="number" step="any" min="0" required inputmode="decimal" aria-describedby="err-shares" />
+          <span class="field-error" id="err-shares"></span>
+        </label>
+        <label>Avg cost / share
+          <input name="avgCost" type="number" step="any" min="0" inputmode="decimal" />
+        </label>
+        <label>Last price
+          <input name="lastPrice" type="number" step="any" min="0" inputmode="decimal" />
+        </label>
+        <label>Total cost ($)
+          <input name="totalCost" type="number" step="any" min="0" inputmode="decimal" aria-describedby="hint-total" />
+          <span class="field-hint" id="hint-total">Auto: shares × avg cost</span>
+        </label>
+        <label>Market value ($)
+          <input name="marketValue" type="number" step="any" min="0" inputmode="decimal" aria-describedby="hint-mv" />
+          <span class="field-hint" id="hint-mv">Auto: shares × last price</span>
+        </label>
+        <label>Dividend income ($)
+          <input name="divIncome" type="number" step="any" min="0" inputmode="decimal" />
+        </label>
+        <label class="span-2">Notes
+          <input name="notes" />
+        </label>
+      </div>
+      <p class="muted small"><span class="req" aria-hidden="true">*</span> Required. Leave total cost / market value blank to calculate them.</p>
       <div class="dialog-actions">
         <button type="button" id="cancelBtn" class="btn btn-ghost">Cancel</button>
         <button type="submit" class="btn btn-primary">Save</button>
@@ -48,16 +92,51 @@
     </form>
   </dialog>
 
-  <dialog id="loginDialog">
+  <dialog id="loginDialog" aria-labelledby="loginTitle">
     <form id="loginForm">
-      <h2>Unlock editing</h2>
-      <label>Shared edit password <input name="password" type="password" required /></label>
-      <p class="error hidden" id="loginError">Incorrect password.</p>
+      <h2 id="loginTitle">Unlock editing</h2>
+      <p class="muted small">Viewing is open to everyone. The shared fund password lets you add or edit holdings, write theses, and manage the watchlist.</p>
+      <label>Shared edit password
+        <input name="password" type="password" required autocomplete="current-password" aria-describedby="loginError" />
+      </label>
+      <p class="error hidden" id="loginError" role="alert">Incorrect password.</p>
       <div class="dialog-actions">
         <button type="button" id="loginCancelBtn" class="btn btn-ghost">Cancel</button>
         <button type="submit" class="btn btn-primary">Unlock</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="memberDialog" aria-labelledby="memberTitle">
+    <form id="memberForm">
+      <h2 id="memberTitle">Member sign-in</h2>
+      <p class="muted small">Sign in with your PIN to vote on pitches and write them under your name. Ask a fund officer if you don't have one yet.</p>
+      <label>Your name <select name="memberId" id="memberSelect" required></select></label>
+      <label>PIN <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" required maxlength="8" aria-describedby="memberError" /></label>
+      <p class="error hidden" id="memberError" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" id="memberCancel" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="memberMenu" aria-labelledby="memberMenuTitle">
+    <h2 id="memberMenuTitle">Signed in</h2>
+    <p id="memberMenuBody"></p>
+    <div class="dialog-actions">
+      <button type="button" id="memberMenuClose" class="btn btn-ghost">Close</button>
+      <button type="button" id="memberSignOut" class="btn btn-primary">Sign out</button>
+    </div>
+  </dialog>
+
+  <dialog id="confirmDialog" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
+    <h2 id="confirmTitle">Are you sure?</h2>
+    <p id="confirmBody" class="muted"></p>
+    <div class="dialog-actions">
+      <button type="button" id="confirmCancel" class="btn btn-ghost">Cancel</button>
+      <button type="button" id="confirmOk" class="btn btn-primary">Confirm</button>
+    </div>
   </dialog>
 
   <script type="module" src="app.js"></script>

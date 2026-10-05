@@ -21,8 +21,12 @@ router.get("/insiders", async (req, res) => {
   );
 
   const bySymbol = {};
+  // Only open-market purchases (P) and sales (S) are discretionary signals; option
+  // exercises (M), grants (A), tax withholding (F) etc. would swamp the net figure.
   let netShares = 0;
   let netValue = 0;
+  let buys = 0;
+  let sells = 0;
   const recent = [];
 
   results.forEach((r, i) => {
@@ -34,8 +38,12 @@ router.get("/insiders", async (req, res) => {
     const transactions = r.value.transactions;
     bySymbol[symbol] = { count: transactions.length };
     for (const t of transactions) {
-      netShares += t.change || 0;
-      netValue += (t.change || 0) * (t.transactionPrice || 0);
+      if (t.transactionCode === "P" || t.transactionCode === "S") {
+        netShares += t.change || 0;
+        netValue += (t.change || 0) * (t.transactionPrice || 0);
+        if (t.transactionCode === "P") buys++;
+        else sells++;
+      }
       recent.push({ symbol, ...t });
     }
   });
@@ -43,10 +51,13 @@ router.get("/insiders", async (req, res) => {
   recent.sort((a, b) => new Date(b.transactionDate) - new Date(a.transactionDate));
 
   res.json({
+    holdingsCount: holdings.length,
     netShares,
     netValue,
+    buys,
+    sells,
     bySymbol,
-    recent: recent.slice(0, 40),
+    recent: recent.slice(0, 100),
   });
 });
 

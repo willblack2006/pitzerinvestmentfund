@@ -23,7 +23,11 @@ router.get("/screener", async (req, res) => {
     }
   });
 
-  const candidates = Object.keys(candidateSources).slice(0, 40);
+  // Rank by how many holdings suggested each candidate BEFORE capping, so the cap drops
+  // the weakest candidates rather than arbitrary ones.
+  const candidates = Object.keys(candidateSources)
+    .sort((a, b) => candidateSources[b].size - candidateSources[a].size)
+    .slice(0, 40);
   const metricResults = await Promise.allSettled(candidates.map((s) => finnhub.getMetrics(s)));
 
   const ranked = candidates.map((symbol, i) => {
@@ -41,7 +45,7 @@ router.get("/screener", async (req, res) => {
 
   ranked.sort((a, b) => b.sourcedFrom.length - a.sourcedFrom.length);
 
-  res.json({ candidates: ranked });
+  res.json({ holdingsCount: holdings.length, candidates: ranked });
 });
 
 module.exports = router;

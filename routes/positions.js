@@ -1,12 +1,17 @@
 const express = require("express");
 const db = require("../db");
-const { requireAuth, EDIT_PASSWORD } = require("../middleware/auth");
+const { requireAuth, EDIT_PASSWORD, safeEqual } = require("../middleware/auth");
+const { loginLimiter } = require("../middleware/rateLimit");
 
 const router = express.Router();
 
-router.post("/login", (req, res) => {
+router.post("/login", loginLimiter("edit"), (req, res) => {
   const { password } = req.body || {};
-  if (password === EDIT_PASSWORD) return res.json({ ok: true });
+  if (typeof password === "string" && safeEqual(password, EDIT_PASSWORD)) {
+    req.loginSucceeded();
+    return res.json({ ok: true });
+  }
+  req.loginFailed();
   res.status(401).json({ error: "Incorrect password." });
 });
 
@@ -17,8 +22,8 @@ router.get("/positions", (req, res) => {
 
 router.post("/positions", requireAuth, (req, res) => {
   const { symbol, shares, lastPrice, avgCost, totalCost, marketValue, divIncome, notes } = req.body || {};
-  if (!symbol || typeof shares !== "number") {
-    return res.status(400).json({ error: "symbol and shares are required." });
+  if (!symbol || typeof shares !== "number" || !(shares > 0)) {
+    return res.status(400).json({ error: "A ticker and a positive share count are required." });
   }
   try {
     const stmt = db.prepare(`
@@ -49,6 +54,9 @@ router.put("/positions/:id", requireAuth, (req, res) => {
   if (!existing) return res.status(404).json({ error: "Position not found." });
 
   const merged = { ...existing, ...req.body };
+  if (typeof merged.shares !== "number" || !(merged.shares > 0)) {
+    return res.status(400).json({ error: "Shares must be a positive number." });
+  }
   db.prepare(`
     UPDATE positions SET
       symbol = @symbol, shares = @shares, lastPrice = @lastPrice, avgCost = @avgCost,
