@@ -22,28 +22,87 @@ function matchRoute(routes, segments) {
   return null;
 }
 
+// Which top-level nav section a route belongs to (each section groups several pages).
+const SECTION_OF = {
+  "": "portfolio",
+  performance: "portfolio",
+  allocation: "portfolio",
+  transactions: "portfolio",
+  alerts: "portfolio",
+  research: "research",
+  screener: "ideas",
+  watchlist: "ideas",
+  pitches: "ideas",
+  macro: "market",
+  insiders: "market",
+  settings: "settings",
+};
+
+const SITE = "Pitzer Investment Fund";
+
 export function initRouter(routeMap) {
   const routes = Object.entries(routeMap);
   const view = document.getElementById("view");
+  const announcer = document.getElementById("routeAnnouncer");
+  let firstRender = true;
+  let renderToken = 0;
 
   async function render() {
+    const token = ++renderToken;
     const segments = parseHash();
     const match = matchRoute(routes, segments);
-    document.querySelectorAll(".nav-link").forEach((a) => {
-      a.classList.toggle("active", a.getAttribute("href") === `#/${segments[0] || ""}`);
+    const section = SECTION_OF[segments[0] || ""];
+
+    document.querySelectorAll("[data-section]").forEach((a) => {
+      const active = a.dataset.section === section;
+      a.classList.toggle("active", active);
+      if (active) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
     });
+
     if (!match) {
-      view.innerHTML = `<p class="error">Page not found.</p>`;
+      document.title = `Page not found · ${SITE}`;
+      view.innerHTML = `
+        <div class="page-head"><h2 tabindex="-1">Page not found</h2></div>
+        <p class="muted page-pad">That link doesn't match any page. Try
+          <a href="#/">Portfolio</a>, <a href="#/research">Research</a>, or <a href="#/screener">Ideas</a>.</p>`;
+      focusHeading();
       return;
     }
+
     view.innerHTML = "";
+    view.setAttribute("aria-busy", "true");
     try {
       await match.handler.mount(view, match.params);
     } catch (err) {
-      view.innerHTML = `<p class="error">Failed to load: ${err.message}</p>`;
+      if (token !== renderToken) return;
+      view.innerHTML = `<div class="page-head"><h2 tabindex="-1">Something went wrong</h2></div>
+        <p class="error">Failed to load this page: ${String(err.message).replace(/[<>&]/g, "")}</p>`;
     }
+    if (token !== renderToken) return; // user navigated away mid-load
+    view.setAttribute("aria-busy", "false");
+
+    const title = typeof match.handler.title === "function" ? match.handler.title(match.params) : match.handler.title;
+    document.title = title ? `${title} · ${SITE}` : SITE;
+    focusHeading();
+  }
+
+  // Move focus to the new page's heading so keyboard and screen-reader users land on the
+  // content (not left at the top of the document) and hear which page loaded.
+  function focusHeading() {
+    if (firstRender) { firstRender = false; return; }
+    const h = view.querySelector("h2");
+    if (h) {
+      h.setAttribute("tabindex", "-1");
+      h.focus({ preventScroll: true });
+      announcer.textContent = h.textContent.trim();
+    } else {
+      view.focus({ preventScroll: true });
+    }
+    window.scrollTo({ top: 0 });
   }
 
   window.addEventListener("hashchange", render);
   render();
+  return { rerender: render };
 }

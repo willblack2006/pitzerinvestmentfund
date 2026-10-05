@@ -1,65 +1,99 @@
-import { el, fmtCompact, fmtPct, api, isUnlocked } from "../shared.js";
+import {
+  esc, fmtCompact, fmtPct, api, isUnlocked, toast, lockedHint, signed,
+  sortHeader, sortRows, bindSort, pageHead, loading, errorBox, subTabs, invalidateContext,
+} from "../shared.js";
 
-async function addToWatchlist(symbol, sourcedFrom) {
+export const title = "Discovery";
+export const IDEAS_TABS = [["#/screener", "Discovery"], ["#/watchlist", "Watchlist"], ["#/pitches", "Pitches"]];
+
+const state = { rows: [], sort: { key: "suggestedBy", dir: -1 } };
+
+const tickerLink = (s) => `<a href="#/research/${encodeURIComponent(s)}">${esc(s)}</a>`;
+
+function renderTable() {
+  const unlocked = isUnlocked();
+  const s = state.sort;
+  document.getElementById("scrThead").innerHTML = `<tr>
+    ${sortHeader("symbol", "Ticker", s, { align: "left sticky-col" })}
+    ${sortHeader("suggestedBy", "Peer of", s, { align: "left" })}
+    ${sortHeader("peTTM", "P/E (TTM)", s)}
+    ${sortHeader("marketCap", "Market cap", s)}
+    ${sortHeader("revenueGrowthTTM", "Revenue growth", s)}
+    ${sortHeader("priceChange1Y", "1Y return", s)}
+    <th scope="col"><span class="sr-only">Watchlist</span></th>
+  </tr>`;
+  document.getElementById("scrTbody").innerHTML = sortRows(state.rows, s).map((r) => `
+    <tr>
+      <th scope="row" class="left sticky-col"><a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a></th>
+      <td class="left small"><span class="count-pill" title="Suggested by ${r.suggestedBy} holdings">${r.suggestedBy}</span> ${r.sourcedFrom.map(tickerLink).join(", ")}</td>
+      <td>${r.peTTM?.toFixed(1) ?? `<span class="muted">—</span>`}</td>
+      <td>${r.marketCap ? fmtCompact(r.marketCap * 1e6) : `<span class="muted">—</span>`}</td>
+      <td>${r.revenueGrowthTTM === null ? `<span class="muted">—</span>` : signed(r.revenueGrowthTTM, fmtPct(r.revenueGrowthTTM))}</td>
+      <td>${r.priceChange1Y === null ? `<span class="muted">—</span>` : signed(r.priceChange1Y, fmtPct(r.priceChange1Y))}</td>
+      <td class="watch-cell">${r.watched
+        ? `<span class="badge badge-watch">Watching</span>`
+        : unlocked ? `<button class="btn btn-ghost btn-sm" data-watch="${esc(r.symbol)}" aria-label="Add ${esc(r.symbol)} to watchlist">+ Watch</button>` : ""}</td>
+    </tr>`).join("");
+}
+
+async function addToWatchlist(btn) {
+  const row = state.rows.find((r) => r.symbol === btn.dataset.watch);
+  btn.disabled = true;
   try {
     await api("/api/watchlist", {
       method: "POST",
-      body: JSON.stringify({ symbol, sourcedFrom: sourcedFrom.join(", ") }),
+      body: JSON.stringify({ symbol: row.symbol, sourcedFrom: `Discovery: peer of ${row.sourcedFrom.join(", ")}` }),
     });
-    mount(document.getElementById("view"));
+    row.watched = true;
+    invalidateContext();
+    // Update just this cell so scroll position and focus are preserved.
+    const cell = btn.closest(".watch-cell");
+    cell.innerHTML = `<span class="badge badge-watch" tabindex="-1">Watching</span>`;
+    cell.firstElementChild.focus();
+    toast(`${row.symbol} added to the watchlist.`, {
+      type: "success",
+      action: { label: "View watchlist", onClick: () => (location.hash = "#/watchlist") },
+    });
   } catch (err) {
-    alert(err.message);
+    btn.disabled = false;
+    toast(err.message, { type: "error" });
   }
 }
 
 export async function mount(container) {
-  container.innerHTML = `<p class="muted">Scanning peers of your 32 holdings for adjacent candidates...</p>`;
+  container.innerHTML = subTabs(IDEAS_TABS, "#/screener") +
+    loading("Scanning competitors of every holding for new ideas… the first scan can take ~30 seconds; results are cached after that.");
 
   let data;
   try {
     data = await api("/api/screener");
   } catch (err) {
-    container.innerHTML = `<p class="error">Could not load screener: ${err.message}</p>`;
+    container.innerHTML = subTabs(IDEAS_TABS, "#/screener") + pageHead("Discovery") + errorBox(`Could not load ideas: ${err.message}`);
     return;
   }
-
-  const unlocked = isUnlocked();
-  const rows = data.candidates;
+  state.rows = data.candidates.map((r) => ({ ...r, suggestedBy: r.sourcedFrom.length }));
 
   container.innerHTML = `
-    <h2>Discovery</h2>
-    <p class="muted">Stocks that show up as peers/competitors across the fund's 32 holdings, not yet owned or watched. Ranked by how many holdings suggested them.</p>
+    ${subTabs(IDEAS_TABS, "#/screener")}
+    ${pageHead("Discovery", `Companies that show up as competitors of our ${data.holdingsCount} holdings but that we don't own. The more holdings that point to a company, the higher it ranks.`)}
+    <section class="toolbar">
+      <span class="muted small">${state.rows.length} candidates · click any ticker for full research</span>
+      ${isUnlocked() ? "" : lockedHint("Unlock to add ideas to the watchlist.")}
+    </section>
     <section class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Ticker</th>
-            <th>Sourced From</th>
-            <th>P/E (TTM)</th>
-            <th>Market Cap</th>
-            <th>Rev Growth (TTM)</th>
-            <th>1Y Return</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((r) => `
-            <tr>
-              <td><a class="symbol-cell" href="#/research/${r.symbol}">${r.symbol}</a></td>
-              <td class="left muted small">${r.sourcedFrom.join(", ")}</td>
-              <td>${r.peTTM?.toFixed(1) ?? "—"}</td>
-              <td>${fmtCompact(r.marketCap ? r.marketCap * 1e6 : null)}</td>
-              <td>${r.revenueGrowthTTM !== null ? fmtPct(r.revenueGrowthTTM) : "—"}</td>
-              <td class="${(r.priceChange1Y ?? 0) >= 0 ? "gain-pos" : "gain-neg"}">${r.priceChange1Y !== null ? fmtPct(r.priceChange1Y) : "—"}</td>
-              <td>${unlocked ? (r.watched ? `<span class="muted small">Watching</span>` : `<button class="btn btn-ghost" data-watch="${r.symbol}" data-from="${r.sourcedFrom.join("|")}">+ Watch</button>`) : ""}</td>
-            </tr>
-          `).join("")}
-        </tbody>
+      <table id="scrTable">
+        <caption class="sr-only">Idea candidates. Column headers are buttons that sort the table.</caption>
+        <thead id="scrThead"></thead>
+        <tbody id="scrTbody"></tbody>
       </table>
+      ${state.rows.length ? "" : `<p class="empty">No new candidates found — every peer is already owned or watched.</p>`}
     </section>
   `;
 
-  container.querySelectorAll("[data-watch]").forEach((btn) => {
-    btn.addEventListener("click", () => addToWatchlist(btn.dataset.watch, btn.dataset.from.split("|")));
+  renderTable();
+  bindSort(document.getElementById("scrTable"), state.sort, renderTable);
+  document.getElementById("scrTbody").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-watch]");
+    if (btn) addToWatchlist(btn);
   });
 }
