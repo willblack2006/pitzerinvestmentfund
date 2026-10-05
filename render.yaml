@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: pitzer-investment-fund
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: EDIT_PASSWORD
+        sync: false
+      - key: DB_PATH
+        value: /data/pif.db
+    disk:
+      name: pif-data
+      mountPath: /data
+      sizeGB: 1

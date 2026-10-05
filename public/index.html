@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pitzer Investment Fund — Holdings Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Pitzer Investment Fund</h1>
+    <div class="auth-area">
+      <span id="authStatus" class="auth-status">Viewing only</span>
+      <button id="loginBtn" class="btn btn-ghost">Unlock editing</button>
+      <button id="logoutBtn" class="btn btn-ghost hidden">Lock</button>
+    </div>
+  </header>
+
+  <section class="summary" id="summary"></section>
+
+  <section class="toolbar">
+    <input id="search" type="search" placeholder="Filter by ticker..." />
+    <button id="addBtn" class="btn btn-primary hidden">+ Add position</button>
+  </section>
+
+  <section class="table-wrap">
+    <table id="table">
+      <thead>
+        <tr>
+          <th data-sort="symbol">Ticker</th>
+          <th data-sort="shares">Shares</th>
+          <th data-sort="lastPrice">Last Price</th>
+          <th data-sort="avgCost">Avg Cost</th>
+          <th data-sort="totalCost">Total Cost</th>
+          <th data-sort="marketValue">Market Value</th>
+          <th data-sort="gain">Gain $</th>
+          <th data-sort="gainPct">Gain %</th>
+          <th data-sort="divIncome">Div Income</th>
+          <th class="edit-col hidden"></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+
+  <dialog id="dialog">
+    <form id="posForm">
+      <h2 id="dialogTitle">Add position</h2>
+      <input type="hidden" name="id" />
+      <label>Ticker <input name="symbol" required maxlength="10" style="text-transform:uppercase" /></label>
+      <label>Shares <input name="shares" type="number" step="any" required /></label>
+      <label>Last Price <input name="lastPrice" type="number" step="any" /></label>
+      <label>Avg Cost / Share <input name="avgCost" type="number" step="any" /></label>
+      <label>Total Cost ($) <input name="totalCost" type="number" step="any" /></label>
+      <label>Market Value ($) <input name="marketValue" type="number" step="any" /></label>
+      <label>Dividend Income ($) <input name="divIncome" type="number" step="any" /></label>
+      <label>Notes <input name="notes" /></label>
+      <div class="dialog-actions">
+        <button type="button" id="cancelBtn" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="loginDialog">
+    <form id="loginForm">
+      <h2>Unlock editing</h2>
+      <label>Shared edit password <input name="password" type="password" required /></label>
+      <p class="error hidden" id="loginError">Incorrect password.</p>
+      <div class="dialog-actions">
+        <button type="button" id="loginCancelBtn" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Unlock</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
