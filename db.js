@@ -1,12 +1,57 @@
-const Database = require("better-sqlite3");
+// SQLite via libsql (a better-sqlite3-compatible driver). Two modes:
+//   - Local file (default): DB_PATH or data/pif.db.
+//   - Turso (serverless hosting such as Vercel, where the filesystem is temporary): set
+//     TURSO_DATABASE_URL + TURSO_AUTH_TOKEN. The app keeps a local replica for fast reads,
+//     sends writes to the Turso primary, and re-syncs so every server instance sees them.
+const Database = require("libsql");
+
+// libsql picks its native build with a computed require(), which serverless bundlers can't
+// see. Naming the Linux builds here makes Vercel's file tracer ship them with the function.
+if (process.env.VERCEL) {
+  for (const load of [() => require("@libsql/linux-x64-gnu"), () => require("@libsql/linux-arm64-gnu")]) {
+    try { load(); } catch { /* only the build for this CPU can load */ }
+  }
+}
 const path = require("path");
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, "data", "pif.db");
+const turso = process.env.TURSO_DATABASE_URL
+  ? { syncUrl: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
+  : null;
+// Vercel's app directory is read-only; only /tmp is writable (and temporary — hence Turso).
+const dbPath = process.env.DB_PATH || (process.env.VERCEL ? "/tmp/pif.db" : path.join(__dirname, "data", "pif.db"));
 require("fs").mkdirSync(path.dirname(dbPath), { recursive: true });
 
-const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
+const db = turso ? new Database(dbPath, turso) : new Database(dbPath);
+if (turso) db.sync();
+else db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+
+// libsql adds a `_metadata` field to every row; strip it so rows serialize and spread
+// exactly like plain objects (they're returned as API JSON and reused as named params).
+const clean = (row) => {
+  if (row && typeof row === "object" && "_metadata" in row) {
+    const { _metadata, ...rest } = row;
+    return rest;
+  }
+  return row;
+};
+const rawPrepare = db.prepare.bind(db);
+db.prepare = (sql) => {
+  const stmt = rawPrepare(sql);
+  const get = stmt.get.bind(stmt), all = stmt.all.bind(stmt);
+  stmt.get = (...args) => clean(get(...args));
+  stmt.all = (...args) => all(...args).map(clean);
+  return stmt;
+};
+
+// Pull other instances' writes from Turso, at most every couple of seconds.
+let lastSync = Date.now();
+db.syncIfStale = (maxAgeMs = 2000) => {
+  if (!turso || Date.now() - lastSync < maxAgeMs) return;
+  try { db.sync(); } catch (err) { console.error("[db] sync failed:", err.message); }
+  lastSync = Date.now();
+};
+db.isTurso = !!turso;
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS positions (
