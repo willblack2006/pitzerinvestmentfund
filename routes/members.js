@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const db = require("../db");
 const { requireAuth, optionalMember, hashPin, verifyPin } = require("../middleware/auth");
 const { loginLimiter } = require("../middleware/rateLimit");
-const { getSettings, setSettings } = require("../lib/settings");
+const { getSettings, setSettings, OPTIONAL } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
 
 const router = express.Router();
@@ -24,6 +24,7 @@ router.get("/benchmarks", (req, res) => {
 router.put("/settings", requireAuth, (req, res) => {
   const patch = req.body || {};
   for (const [k, v] of Object.entries(patch)) {
+    if (OPTIONAL.has(k) && (v === null || v === "")) { patch[k] = null; continue; } // "not set"
     if (k !== "benchmark" && (typeof v !== "number" || !Number.isFinite(v) || v < 0)) {
       return res.status(400).json({ error: `${k} must be a non-negative number.` });
     }

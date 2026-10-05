@@ -72,6 +72,7 @@ test("watchlist: add, duplicate, remove", async () => {
 
 test("settings: validation and benchmark normalization", async () => {
   const g = await s.api("/api/settings");
+  assert.equal(g.body.maxPositionPct, null, "new installs start with no policy limits");
   assert.equal(g.body.benchmark, "SPY");
   assert.equal(g.body.benchmarkLabel, "S&P 500");
   assert.equal((await s.api("/api/settings", { method: "PUT", body: { maxPositionPct: 5 } })).status, 401);
@@ -283,4 +284,14 @@ test("edit-password guessing is rate limited", async () => {
   let last;
   for (let i = 0; i < 12; i++) last = await s.api("/api/login", { method: "POST", body: { password: `guess${i}` } });
   assert.equal(last.status, 429);
+});
+
+test("policy limits can be left unset; unset limits produce no breaches", async () => {
+  const set = await s.api("/api/settings", { method: "PUT", auth: true, body: { maxPositionPct: 1 } });
+  assert.equal(set.body.maxPositionPct, 1);
+  const cleared = await s.api("/api/settings", { method: "PUT", auth: true, body: { maxPositionPct: null, maxSectorPct: "" } });
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.body.maxPositionPct, null);
+  assert.equal(cleared.body.maxSectorPct, null);
+  assert.equal((await s.api("/api/settings", { method: "PUT", auth: true, body: { cash: null } })).status, 400, "cash isn't optional");
 });

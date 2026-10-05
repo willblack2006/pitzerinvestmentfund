@@ -31,7 +31,7 @@ export async function mount(container) {
       <section class="panel" aria-labelledby="ips-h">
         <h3 id="ips-h">Investment policy limits</h3>
         <form id="policyForm" class="stack-form">
-          ${POLICY.map(([k, label, hint]) => `<label>${label}<input name="${k}" type="number" step="any" min="0" value="${s[k]}" ${dis} inputmode="decimal" /><span class="field-hint">${hint}</span></label>`).join("")}
+          ${POLICY.map(([k, label, hint]) => `<label>${label}<input name="${k}" type="number" step="any" min="0" value="${s[k] ?? ""}" placeholder="Not set" ${dis} inputmode="decimal" /><span class="field-hint">${hint} Leave blank for no limit.</span></label>`).join("")}
           ${unlocked ? `<button class="btn btn-primary">Save limits</button>` : lockedHint("These are read-only until you unlock editing.")}
         </form>
         <p class="muted small">Breaches show on <a href="#/allocation">Allocation &amp; policy</a> and in <a href="#/alerts">Alerts</a>.</p>
@@ -80,7 +80,10 @@ export async function mount(container) {
   const saveForm = (id) => el(id).addEventListener("submit", async (e) => {
     e.preventDefault();
     const body = {};
-    for (const [k, v] of new FormData(e.target).entries()) if (!k.startsWith("fundBench")) body[k] = Number(v);
+    for (const [k, v] of new FormData(e.target).entries()) {
+      if (k.startsWith("fundBench")) continue;
+      body[k] = v.trim() === "" && id === "policyForm" ? null : Number(v); // blank policy limit = not set
+    }
     if (id === "voteForm") body.benchmark = readBenchmark("fundBench");
     try {
       await api("/api/settings", { method: "PUT", body: JSON.stringify(body) });

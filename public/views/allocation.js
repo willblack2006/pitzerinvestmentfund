@@ -25,11 +25,19 @@ export async function mount(container) {
       isUnlocked() ? `<a class="btn btn-ghost" href="#/settings">Edit policy limits</a>` : "")}
 
     <section class="compliance ${breaches.length ? "has-breach" : "ok"}" aria-labelledby="ips-h">
-      <h3 id="ips-h">${breaches.length ? `<span aria-hidden="true">⚠</span> ${breaches.length} policy breach${breaches.length > 1 ? "es" : ""}` : `<span aria-hidden="true">✓</span> Within policy`}</h3>
+      <h3 id="ips-h">${breaches.length ? `<span aria-hidden="true">⚠</span> ${breaches.length} policy breach${breaches.length > 1 ? "es" : ""}` : [s.maxPositionPct, s.maxSectorPct, s.minPositions, s.maxPositions, s.minCashPct].every((v) => v == null) ? "Policy limits not set" : `<span aria-hidden="true">✓</span> Within policy`}</h3>
       ${a.checks.length ? `<ul class="check-list">
         ${[...breaches, ...watches].map((c) => `<li class="check-${c.level}"><strong>${esc(c.rule)}:</strong> ${esc(c.detail)}${c.symbol ? ` <a href="#/research/${encodeURIComponent(c.symbol)}">Research ${esc(c.symbol)}</a>` : ""}</li>`).join("")}
       </ul>` : ""}
-      <p class="muted small">Limits: ≤${s.maxPositionPct}% per position · ≤${s.maxSectorPct}% per sector · ${s.minPositions}–${s.maxPositions} holdings · ≥${s.minCashPct}% cash.</p>
+      <p class="muted small">${(() => {
+        const parts = [
+          s.maxPositionPct != null && `≤${s.maxPositionPct}% per position`,
+          s.maxSectorPct != null && `≤${s.maxSectorPct}% per sector`,
+          (s.minPositions != null || s.maxPositions != null) && `${s.minPositions ?? "any"}–${s.maxPositions ?? "any"} holdings`,
+          s.minCashPct != null && `≥${s.minCashPct}% cash`,
+        ].filter(Boolean);
+        return parts.length ? `Limits: ${parts.join(" · ")}.` : `No policy limits set yet — <a href="#/settings">add your IPS limits in Settings</a> to enable compliance checks.`;
+      })()}</p>
     </section>
 
     <section class="summary" aria-label="Allocation summary">

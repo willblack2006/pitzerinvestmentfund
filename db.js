@@ -148,13 +148,14 @@ addColumn("research_notes", "targetPrice", "REAL");
 addColumn("research_notes", "priceAtThesis", "REAL");
 addColumn("positions", "sector", "TEXT NOT NULL DEFAULT ''");
 
-// Defaults for the fund's investment policy (editable on the Settings page).
+// Defaults (editable on the Settings page). Policy limits start unset ("") so the fund
+// enters its own IPS rather than inheriting placeholder numbers.
 const DEFAULT_SETTINGS = {
-  maxPositionPct: "10",
-  maxSectorPct: "35",
-  minPositions: "15",
-  maxPositions: "40",
-  minCashPct: "0",
+  maxPositionPct: "",
+  maxSectorPct: "",
+  minPositions: "",
+  maxPositions: "",
+  minCashPct: "",
   cash: "0",
   benchmark: "SPY",
   voteThresholdPct: "50",
