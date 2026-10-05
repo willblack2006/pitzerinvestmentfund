@@ -7,6 +7,7 @@ const macroRouter = require("./routes/macro");
 const screenerRouter = require("./routes/screener");
 const insidersRouter = require("./routes/insiders");
 const watchlistRouter = require("./routes/watchlist");
+const scheduler = require("./lib/scheduler");
 
 const PORT = process.env.PORT || 3000;
 
@@ -20,4 +21,7 @@ app.use("/api", screenerRouter);
 app.use("/api", insidersRouter);
 app.use("/api", watchlistRouter);
 
-app.listen(PORT, () => console.log(`PIF tracker running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`PIF tracker running on http://localhost:${PORT}`);
+  scheduler.start();
+});
