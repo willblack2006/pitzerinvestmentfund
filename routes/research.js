@@ -85,15 +85,17 @@ function streetView(qs, price) {
 router.get("/research/:symbol", async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
 
-  const [chart, quoteSummary, peers, facts, news] = await Promise.allSettled([
+  const [chart, quoteSummary, peers, facts, news, live] = await Promise.allSettled([
     yahoo.getChart(symbol),
     yahoo.getQuoteSummary(symbol),
     yahoo.getPeers(symbol),
     sec.getCompanyFacts(symbol),
     finnhub.getCompanyNews(symbol),
+    yahoo.getQuotes([symbol]),
   ]);
 
   const qs = settledValue(quoteSummary);
+  const quote = settledValue(live)?.[symbol] || null;
   const note = db.prepare("SELECT * FROM research_notes WHERE symbol = ?").get(symbol);
   const position = db.prepare("SELECT * FROM positions WHERE symbol = ?").get(symbol) || null;
   const watch = db.prepare("SELECT * FROM watchlist WHERE symbol = ?").get(symbol) || null;
@@ -101,13 +103,15 @@ router.get("/research/:symbol", async (req, res) => {
   const alerts = db.prepare("SELECT * FROM price_alerts WHERE symbol = ?").all(symbol);
   const chartPoints = settledValue(chart) || [];
   const factsValue = settledValue(facts);
-  const price = raw(qs?.financialData?.currentPrice) ?? chartPoints.at(-1)?.close ?? null;
+  // Live quote first; the quoteSummary price can be hours old (that module is cached 6h).
+  const price = quote?.price ?? raw(qs?.financialData?.currentPrice) ?? chartPoints.at(-1)?.close ?? null;
   const marketCap = raw(qs?.summaryDetail?.marketCap) ?? raw(qs?.price?.marketCap);
   const closes = chartPoints.map((p) => p.close);
 
   res.json({
     symbol,
-    notFound: !qs && !chartPoints.length && !position && !watch,
+    notFound: !qs && !chartPoints.length && !quote && !position && !watch,
+    quote,
     name: qs?.price?.longName || qs?.price?.shortName || factsValue?.companyName || null,
     quoteType: qs?.price?.quoteType || null,
     position,
