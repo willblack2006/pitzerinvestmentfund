@@ -5,10 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pitzer Investment Fund — Holdings Tracker</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
   <header class="topbar">
     <h1>Pitzer Investment Fund</h1>
+    <nav class="nav">
+      <a class="nav-link" href="#/">Holdings</a>
+      <a class="nav-link" href="#/macro">Macro</a>
+    </nav>
+    <form id="jumpForm" class="jump-form">
+      <input id="jumpInput" type="text" placeholder="Research a ticker..." maxlength="10" />
+    </form>
     <div class="auth-area">
       <span id="authStatus" class="auth-status">Viewing only</span>
       <button id="loginBtn" class="btn btn-ghost">Unlock editing</button>
@@ -16,32 +24,7 @@
     </div>
   </header>
 
-  <section class="summary" id="summary"></section>
-
-  <section class="toolbar">
-    <input id="search" type="search" placeholder="Filter by ticker..." />
-    <button id="addBtn" class="btn btn-primary hidden">+ Add position</button>
-  </section>
-
-  <section class="table-wrap">
-    <table id="table">
-      <thead>
-        <tr>
-          <th data-sort="symbol">Ticker</th>
-          <th data-sort="shares">Shares</th>
-          <th data-sort="lastPrice">Last Price</th>
-          <th data-sort="avgCost">Avg Cost</th>
-          <th data-sort="totalCost">Total Cost</th>
-          <th data-sort="marketValue">Market Value</th>
-          <th data-sort="gain">Gain $</th>
-          <th data-sort="gainPct">Gain %</th>
-          <th data-sort="divIncome">Div Income</th>
-          <th class="edit-col hidden"></th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-  </section>
+  <main id="view"></main>
 
   <dialog id="dialog">
     <form id="posForm">
@@ -74,6 +57,6 @@
     </form>
   </dialog>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
