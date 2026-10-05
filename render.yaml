@@ -8,6 +8,14 @@ services:
     envVars:
       - key: EDIT_PASSWORD
         sync: false
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
+      - key: SEC_USER_AGENT
+        sync: false
+      - key: AUTO_REFRESH_PRICES
+        value: "false"
       - key: DB_PATH
         value: /data/pif.db
     disk:
