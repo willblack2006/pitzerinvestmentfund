@@ -3,11 +3,17 @@ import { initRouter } from "./router.js";
 import * as holdings from "./views/holdings.js";
 import * as research from "./views/research.js";
 import * as macro from "./views/macro.js";
+import * as screener from "./views/screener.js";
+import * as insiders from "./views/insiders.js";
+import * as watchlist from "./views/watchlist.js";
 
 initRouter({
   "/": holdings,
   "/research/:symbol": research,
   "/macro": macro,
+  "/screener": screener,
+  "/insiders": insiders,
+  "/watchlist": watchlist,
 });
 
 function updateAuthUI() {

@@ -111,7 +111,10 @@ export async function mount(container, params) {
         <h2>${symbol} <span class="muted">${profile.sector ? `· ${profile.sector}` : ""}</span></h2>
         <p class="muted">${profile.industry || ""}</p>
       </div>
-      <div class="price-tag">${price !== null ? fmtUSD(price) : "—"}</div>
+      <div class="research-header-right">
+        <div class="price-tag">${price !== null ? fmtUSD(price) : "—"}</div>
+        ${unlocked ? `<button id="watchBtn" class="btn btn-ghost">+ Watch</button>` : ""}
+      </div>
     </section>
 
     <section class="summary">
@@ -156,5 +159,14 @@ export async function mount(container, params) {
 
   if (unlocked) {
     el("saveThesisBtn").addEventListener("click", () => saveThesis(symbol));
+    el("watchBtn").addEventListener("click", async () => {
+      try {
+        await api("/api/watchlist", { method: "POST", body: JSON.stringify({ symbol, sourcedFrom: "research page" }) });
+        el("watchBtn").textContent = "Watching";
+        el("watchBtn").disabled = true;
+      } catch (err) {
+        alert(err.message);
+      }
+    });
   }
 }
