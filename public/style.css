@@ -980,3 +980,11 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
 .bench-picker input { margin-top: 4px; }
 .page-actions .bench-picker { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
 .page-actions .bench-picker select { max-width: 280px; }
+
+/* Live prices */
+.market-line { display: inline-flex; align-items: center; gap: 6px; white-space: normal; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+.live-dot.on { background: var(--green); box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 60%, transparent); animation: live-pulse 2s infinite; }
+@keyframes live-pulse { 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.stale-dot { color: var(--warn); margin-left: 2px; cursor: help; }
+.nowrap { white-space: nowrap; }

@@ -10,6 +10,23 @@ const benchmarks = require("../lib/benchmarks");
 
 const router = express.Router();
 
+// ---- Live quotes (holdings page polls this during market hours) ----
+
+const yahooSrc = require("../lib/sources/yahoo");
+router.get("/quotes", async (req, res) => {
+  const symbols = String(req.query.symbols || "").toUpperCase().split(",").map((x) => x.trim())
+    .filter((x) => /^[A-Z0-9.\-^=]{1,12}$/.test(x)).slice(0, 150);
+  if (!symbols.length) return res.status(400).json({ error: "Pass ?symbols=AAPL,MSFT" });
+  try {
+    const quotes = await yahooSrc.getQuotes([...symbols, "SPY"]);
+    const spy = quotes.SPY;
+    if (!symbols.includes("SPY")) delete quotes.SPY;
+    res.json({ quotes, marketState: spy?.marketState || null, asOf: spy?.time || null, fetchedAt: new Date().toISOString() });
+  } catch (e) {
+    res.status(502).json({ error: `Live prices unavailable: ${e.message}` });
+  }
+});
+
 // ---- Transactions ----
 
 router.get("/transactions", (req, res) => {

@@ -7,9 +7,28 @@ import { alertItem } from "./alerts.js";
 
 export const title = "Portfolio";
 
-const state = { positions: [], sort: { key: "marketValue", dir: -1 }, filter: "" };
+const state = { positions: [], quotes: {}, market: null, sort: { key: "marketValue", dir: -1 }, filter: "" };
+
+// Overlay live quotes on the stored positions: price, market value and today's move. The
+// stored price/value remain the fallback when a quote is unavailable.
+function withLive(positions) {
+  return positions.map((p) => {
+    const q = state.quotes[p.symbol];
+    if (!q) return { ...p, live: false, dayChange: null, dayChangePct: null };
+    return {
+      ...p,
+      live: true,
+      lastPrice: q.price,
+      marketValue: q.price * p.shares,
+      dayChange: q.change != null ? q.change * p.shares : null,
+      dayChangePct: q.changePct ?? null,
+      prevValue: q.previousClose != null ? q.previousClose * p.shares : null,
+    };
+  });
+}
 
 function withDerived(positions) {
+  positions = withLive(positions);
   const totalValue = positions.reduce((s, p) => s + p.marketValue, 0);
   return positions.map((p) => {
     const gain = p.marketValue - p.totalCost;
@@ -29,10 +48,14 @@ function renderSummary(rows) {
   const totalGainPct = totalCost ? (totalGain / totalCost) * 100 : 0;
   const totalDiv = rows.reduce((s, r) => s + (r.divIncome || 0), 0);
   const winners = rows.filter((r) => r.gain > 0).length;
+  const liveRows = rows.filter((r) => r.dayChange != null && r.prevValue);
+  const dayChange = liveRows.reduce((s, r) => s + r.dayChange, 0);
+  const dayBase = liveRows.reduce((s, r) => s + r.prevValue, 0);
+  const dayPct = dayBase ? (dayChange / dayBase) * 100 : null;
 
   el("summary").innerHTML = `
     <div class="stat stat-lg"><div class="label">Market value</div><div class="value">${fmtUSD(totalValue)}</div>
-      <div class="sub">${rows.length} positions</div></div>
+      <div class="sub">${rows.length} positions${liveRows.length ? ` · <span class="nowrap">${dayLabel()} ${signed(dayChange, fmtUSD(dayChange))} (${fmtPct(dayPct)})</span>` : ""}</div></div>
     <div class="stat"><div class="label">Total gain</div><div class="value">${signed(totalGain, fmtUSD(totalGain))}</div>
       <div class="sub">${signed(totalGainPct, fmtPct(totalGainPct))} on ${fmtUSD(totalCost)} cost</div></div>
     <div class="stat"><div class="label">Dividend income</div><div class="value">${fmtUSD(totalDiv)}</div>
@@ -78,7 +101,8 @@ function renderTable() {
     ${sortHeader("symbol", "Ticker", s, { align: "left sticky-col" })}
     ${sortHeader("weight", "Weight", s)}
     ${sortHeader("shares", "Shares", s)}
-    ${sortHeader("lastPrice", "Last price", s)}
+    ${sortHeader("lastPrice", "Price", s)}
+    ${sortHeader("dayChangePct", "Day", s)}
     ${sortHeader("avgCost", "Avg cost", s)}
     ${sortHeader("marketValue", "Market value", s)}
     ${sortHeader("gain", "Gain $", s)}
@@ -95,7 +119,8 @@ function renderTable() {
       </th>
       <td>${r.weight.toFixed(1)}%</td>
       <td>${r.shares.toLocaleString()}</td>
-      <td>${fmtUSD(r.lastPrice)}</td>
+      <td>${fmtUSD(r.lastPrice)}${r.live ? "" : `<span class="stale-dot" title="Live price unavailable — showing the last saved price" aria-label="saved price, not live">*</span>`}</td>
+      <td>${r.dayChangePct == null ? `<span class="muted">—</span>` : signed(r.dayChangePct, fmtPct(r.dayChangePct))}</td>
       <td>${fmtUSD(r.avgCost)}</td>
       <td>${fmtUSD(r.marketValue)}</td>
       <td>${signed(r.gain, fmtUSD(r.gain))}</td>
@@ -128,6 +153,62 @@ async function loadPositions() {
   state.positions = await api("/api/positions");
   renderTable();
 }
+
+// ---- Live prices ----
+
+// The quote's daily change is today's move only while the regular session is running or just
+// closed; before the open it still describes the previous session.
+function dayLabel() {
+  return ["REGULAR", "POST"].includes(state.market?.marketState) ? "today" : "last session";
+}
+
+const LIVE_STATES = new Set(["REGULAR", "PRE", "POST"]);
+const STATE_LABEL = { REGULAR: "Market open", PRE: "Pre-market", POST: "After hours", CLOSED: "Market closed", PREPRE: "Market closed", POSTPOST: "Market closed" };
+
+function marketLine() {
+  const m = state.market;
+  if (!m) return "Loading live prices…";
+  if (m.error) return `Live prices unavailable — showing last saved prices. <button type="button" class="btn-link" id="retryQuotes">Retry</button>`;
+  const t = m.asOf ? new Date(m.asOf).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }) : null;
+  const live = LIVE_STATES.has(m.marketState);
+  return `<span class="live-dot ${live ? "on" : ""}" aria-hidden="true"></span>${STATE_LABEL[m.marketState] || "Live prices"}${t ? ` · prices as of ${t} ET` : ""}${live ? " · updates every minute" : ""}`;
+}
+
+async function refreshQuotes() {
+  const symbols = state.positions.map((p) => p.symbol);
+  if (!symbols.length) return;
+  try {
+    const r = await api(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`);
+    state.quotes = r.quotes;
+    state.market = { marketState: r.marketState, asOf: r.asOf };
+  } catch (err) {
+    state.market = { error: err.message };
+  }
+  if (!el("tbody")) return; // navigated away
+  // Re-render without losing the user's place: keep focus on the same control.
+  const active = document.activeElement;
+  const key = active?.closest?.("#table") ? (active.dataset.edit && `[data-edit="${active.dataset.edit}"]`) || (active.dataset.delete && `[data-delete="${active.dataset.delete}"]`) || (active.dataset.sort && `.sort-btn[data-sort="${active.dataset.sort}"]`) || (active.getAttribute("href") && `a[href="${active.getAttribute("href")}"]`) : null;
+  renderTable();
+  if (key) document.querySelector(`#table ${key}`)?.focus();
+  el("marketLine").innerHTML = marketLine();
+  el("retryQuotes")?.addEventListener("click", refreshQuotes);
+}
+
+let pollTimer = null;
+function startPolling() {
+  clearTimeout(pollTimer);
+  const tick = async () => {
+    if (!el("tbody")) return; // stop once the user leaves the page
+    const dialogOpen = document.querySelector("dialog[open]");
+    if (document.visibilityState === "visible" && !dialogOpen) await refreshQuotes();
+    const live = LIVE_STATES.has(state.market?.marketState);
+    pollTimer = setTimeout(tick, live ? 60 * 1000 : 10 * 60 * 1000);
+  };
+  pollTimer = setTimeout(tick, 60 * 1000);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && el("tbody")) refreshQuotes();
+});
 
 async function loadAlertPreview() {
   const box = el("alertPreview");
@@ -270,13 +351,12 @@ export async function mount(container) {
     return;
   }
   const unlocked = isUnlocked();
-  const lastUpdated = state.positions.map((p) => p.updatedAt).filter(Boolean).sort().pop();
 
   container.innerHTML = `
     ${subTabs(PORTFOLIO_TABS, "#/")}
     ${pageHead(
       "Portfolio",
-      `The fund's current holdings.${lastUpdated ? ` Prices last updated ${esc(lastUpdated.slice(0, 10))}.` : ""}`,
+      `The fund's current holdings, valued at live prices. <span id="marketLine" class="market-line" role="status">${marketLine()}</span>`,
       unlocked ? `<button id="addBtn" class="btn btn-primary">+ Add position</button>` : ""
     )}
     <section class="summary" id="summary" aria-label="Portfolio summary"></section>
@@ -308,6 +388,7 @@ export async function mount(container) {
   wireGlobalOnce();
   renderTable();
   loadAlertPreview();
+  refreshQuotes().then(startPolling);
 
   el("addBtn")?.addEventListener("click", () => openPositionDialog(null));
   bindSort(el("table"), state.sort, renderTable);

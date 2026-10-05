@@ -31,7 +31,8 @@ export const title = (params) => {
 // One fetch per ticker; switching tabs reuses it (5-minute freshness).
 let cache = null;
 async function loadData(symbol, force = false) {
-  if (!force && cache?.symbol === symbol && Date.now() - cache.at < 5 * 60 * 1000) return cache;
+  // Reuse across tab switches for a minute, so the price stays near-live.
+  if (!force && cache?.symbol === symbol && Date.now() - cache.at < 60 * 1000) return cache;
   const [data, fund] = await Promise.all([api(`/api/research/${encodeURIComponent(symbol)}`), fundContext()]);
   cache = { symbol, data, fund, at: Date.now() };
   return cache;
@@ -395,7 +396,11 @@ export async function mount(container, params) {
       </div>
       <div class="research-price">
         <div class="price-tag">${price !== null ? fmtUSD(price) : "—"}</div>
-        ${cs ? `<div class="small">${signed(cs.chg, fmtPct(cs.chg))} <span class="muted">1Y</span></div>` : ""}
+        <div class="small">
+          ${data.quote?.changePct != null ? `${signed(data.quote.changePct, fmtPct(data.quote.changePct))} <span class="muted">${["REGULAR", "POST"].includes(data.quote.marketState) ? "today" : "last session"}</span>` : ""}
+          ${cs ? `${data.quote?.changePct != null ? " · " : ""}${signed(cs.chg, fmtPct(cs.chg))} <span class="muted">1Y</span>` : ""}
+        </div>
+        ${data.quote?.time ? `<div class="muted small">${{ REGULAR: "Live", PRE: "Pre-market", POST: "After hours" }[data.quote.marketState] || "At close"} · ${esc(new Date(data.quote.time).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }))} ET</div>` : ""}
       </div>
       <div class="page-actions">${actions.join("")}</div>
     </div>

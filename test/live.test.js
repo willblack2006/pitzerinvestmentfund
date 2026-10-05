@@ -93,6 +93,18 @@ live("market pages: macro, screener, insiders", async () => {
   assert.ok(Number.isFinite(ins.netValue) && ins.recent.length);
 }, 240000);
 
+live("live quotes: batched prices, today's change and market state", async () => {
+  const r = await s.api("/api/quotes?symbols=AAPL,MSFT,ZZZZQX");
+  assert.equal(r.status, 200);
+  assert.ok(r.body.quotes.AAPL.price > 0 && r.body.quotes.MSFT.price > 0);
+  assert.ok("changePct" in r.body.quotes.AAPL);
+  assert.equal(r.body.quotes.ZZZZQX, undefined, "unknown tickers are omitted");
+  assert.ok(r.body.marketState);
+  assert.equal((await s.api("/api/quotes")).status, 400);
+  const research = (await s.api("/api/research/AAPL")).body;
+  assert.equal(research.technicals.price, research.quote.price, "research uses the live quote");
+});
+
 live("server log has no crashes after live run", () => {
   assert.ok(!/TypeError|ReferenceError|SqliteError|Unhandled/.test(s.log()), s.log().slice(-3000));
 });
