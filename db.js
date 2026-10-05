@@ -14,7 +14,10 @@ if (process.env.VERCEL) {
 }
 const path = require("path");
 
-const turso = process.env.TURSO_DATABASE_URL
+// Turso is used on Vercel, or anywhere USE_TURSO=true. Having the keys in a local .env alone
+// does NOT switch local development (or tests) onto the live fund database.
+const useTurso = process.env.TURSO_DATABASE_URL && (process.env.VERCEL || process.env.USE_TURSO === "true");
+const turso = useTurso
   ? { syncUrl: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
   : null;
 // Vercel's app directory is read-only; only /tmp is writable (and temporary — hence Turso).
@@ -35,14 +38,45 @@ const clean = (row) => {
   }
   return row;
 };
+// Turso replicas drop *named* parameters (@name) when forwarding writes to the primary, so
+// rewrite them to numbered positional ones (?1, ?2 …) and convert the object argument to an
+// array. Repeated names reuse the same number. Applied everywhere so both modes behave alike.
+function toPositional(sql) {
+  const names = [];
+  const text = sql.replace(/@([A-Za-z_][A-Za-z0-9_]*)/g, (_, name) => {
+    let i = names.indexOf(name);
+    if (i < 0) { names.push(name); i = names.length - 1; }
+    return `?${i + 1}`;
+  });
+  return { text, names };
+}
+const isPlainObject = (v) => v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Buffer);
+
 const rawPrepare = db.prepare.bind(db);
 db.prepare = (sql) => {
-  const stmt = rawPrepare(sql);
-  const get = stmt.get.bind(stmt), all = stmt.all.bind(stmt);
-  stmt.get = (...args) => clean(get(...args));
-  stmt.all = (...args) => all(...args).map(clean);
+  const { text, names } = toPositional(sql);
+  const stmt = rawPrepare(text);
+  const bind = (args) => {
+    if (!names.length || !(args.length === 1 && isPlainObject(args[0]))) return args;
+    const obj = args[0];
+    return names.map((n) => {
+      if (!(n in obj)) throw new Error(`Missing named parameter "${n}"`);
+      return obj[n] === undefined ? null : obj[n];
+    });
+  };
+  const run = stmt.run.bind(stmt), get = stmt.get.bind(stmt), all = stmt.all.bind(stmt);
+  stmt.run = (...args) => run(...bind(args));
+  stmt.get = (...args) => clean(get(...bind(args)));
+  stmt.all = (...args) => all(...bind(args)).map(clean);
   return stmt;
 };
+
+// Turso replicas forward each write to the primary over HTTP, where BEGIN/COMMIT don't span
+// statements (they fail, and a failed batch is applied partially anyway). In that mode run
+// "transactions" as plain sequential writes; locally they stay real SQLite transactions.
+if (turso) {
+  db.transaction = (fn) => (...args) => fn(...args);
+}
 
 // Pull other instances' writes from Turso, at most every couple of seconds.
 let lastSync = Date.now();
