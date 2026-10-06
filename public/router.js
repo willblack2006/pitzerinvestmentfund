@@ -29,12 +29,20 @@ const SECTION_OF = {
   allocation: "portfolio",
   transactions: "portfolio",
   alerts: "portfolio",
+  factors: "portfolio",
   research: "research",
   screener: "ideas",
   watchlist: "ideas",
   pitches: "ideas",
+  "track-record": "ideas",
+  "forced-sellers": "ideas",
   macro: "market",
   insiders: "market",
+  "short-interest": "market",
+  backtest: "market",
+  "13f": "market",
+  calendar: "market",
+  "index-radar": "market",
   settings: "settings",
 };
 
@@ -73,7 +81,9 @@ export function initRouter(routeMap) {
     view.innerHTML = "";
     view.setAttribute("aria-busy", "true");
     try {
-      await match.handler.mount(view, match.params);
+      const handler = await loadHandler(match.handler);
+      if (token !== renderToken) return; // user navigated away while the view's code was loading
+      await handler.mount(view, match.params);
     } catch (err) {
       if (token !== renderToken) return;
       view.innerHTML = `<div class="page-head"><h2 tabindex="-1">Something went wrong</h2></div>
@@ -82,9 +92,19 @@ export function initRouter(routeMap) {
     if (token !== renderToken) return; // user navigated away mid-load
     view.setAttribute("aria-busy", "false");
 
-    const title = typeof match.handler.title === "function" ? match.handler.title(match.params) : match.handler.title;
+    const handler = moduleCache.get(match.handler);
+    const title = typeof handler.title === "function" ? handler.title(match.params) : handler.title;
     document.title = title ? `${title} · ${SITE}` : SITE;
     focusHeading();
+  }
+
+  // Route modules are dynamic imports (for code-splitting); resolve each loader once and
+  // reuse the module after that, since a repeat dynamic import() is already cached by the
+  // browser but still costs a microtask round trip we'd rather skip.
+  const moduleCache = new Map();
+  async function loadHandler(loader) {
+    if (!moduleCache.has(loader)) moduleCache.set(loader, await loader());
+    return moduleCache.get(loader);
   }
 
   // Move focus to the new page's heading so keyboard and screen-reader users land on the

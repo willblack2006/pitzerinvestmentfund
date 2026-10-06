@@ -18,8 +18,8 @@ function requireAuthor(req, res, next) {
   res.status(401).json({ error: "Sign in as a member (or unlock editing) to write pitches.", code: "member_required" });
 }
 
-const FIELDS = ["symbol", "direction", "title", "thesis", "catalysts", "risks", "valuation", "bullCase", "baseCase", "bearCase", "bullPrice", "basePrice", "bearPrice", "sizePct"];
-const NUM = new Set(["bullPrice", "basePrice", "bearPrice", "sizePct"]);
+const FIELDS = ["symbol", "direction", "title", "thesis", "catalysts", "risks", "valuation", "bullCase", "baseCase", "bearCase", "bullPrice", "basePrice", "bearPrice", "sizePct", "confidencePct", "horizonMonths", "preMortem", "bearChecklist"];
+const NUM = new Set(["bullPrice", "basePrice", "bearPrice", "sizePct", "confidencePct", "horizonMonths"]);
 
 function clean(body) {
   const out = {};
@@ -28,6 +28,7 @@ function clean(body) {
     if (NUM.has(f)) {
       const v = body[f] === "" || body[f] === null ? null : Number(body[f]);
       if (v !== null && (!Number.isFinite(v) || v < 0)) throw Object.assign(new Error(`${f} must be a positive number.`), { status: 400 });
+      if (f === "confidencePct" && v !== null && v > 100) throw Object.assign(new Error("Confidence must be 0-100."), { status: 400 });
       out[f] = v;
     } else out[f] = String(body[f]);
   }
@@ -85,10 +86,10 @@ router.post("/pitches", requireAuthor, async (req, res) => {
   try { data = clean(req.body || {}); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
   if (!data.symbol) return res.status(400).json({ error: "A ticker is required." });
   const prices = await latestPrices([data.symbol]);
-  const row = { direction: "buy", title: "", thesis: "", catalysts: "", risks: "", valuation: "", bullCase: "", baseCase: "", bearCase: "", bullPrice: null, basePrice: null, bearPrice: null, sizePct: null, ...data };
+  const row = { direction: "buy", title: "", thesis: "", catalysts: "", risks: "", valuation: "", bullCase: "", baseCase: "", bearCase: "", bullPrice: null, basePrice: null, bearPrice: null, sizePct: null, confidencePct: null, horizonMonths: null, preMortem: "", bearChecklist: "[]", ...data };
   const info = db.prepare(`
-    INSERT INTO pitches (symbol, direction, title, author, thesis, catalysts, risks, valuation, bullCase, baseCase, bearCase, bullPrice, basePrice, bearPrice, sizePct, priceAtPitch)
-    VALUES (@symbol, @direction, @title, @author, @thesis, @catalysts, @risks, @valuation, @bullCase, @baseCase, @bearCase, @bullPrice, @basePrice, @bearPrice, @sizePct, @priceAtPitch)
+    INSERT INTO pitches (symbol, direction, title, author, thesis, catalysts, risks, valuation, bullCase, baseCase, bearCase, bullPrice, basePrice, bearPrice, sizePct, confidencePct, horizonMonths, preMortem, bearChecklist, priceAtPitch)
+    VALUES (@symbol, @direction, @title, @author, @thesis, @catalysts, @risks, @valuation, @bullCase, @baseCase, @bearCase, @bullPrice, @basePrice, @bearPrice, @sizePct, @confidencePct, @horizonMonths, @preMortem, @bearChecklist, @priceAtPitch)
   `).run({ ...row, author: req.authorName, priceAtPitch: prices[data.symbol]?.price ?? null });
   res.status(201).json(db.prepare("SELECT * FROM pitches WHERE id = ?").get(info.lastInsertRowid));
 });
@@ -103,7 +104,8 @@ router.put("/pitches/:id", requireAuthor, (req, res) => {
   db.prepare(`
     UPDATE pitches SET symbol=@symbol, direction=@direction, title=@title, thesis=@thesis, catalysts=@catalysts, risks=@risks,
       valuation=@valuation, bullCase=@bullCase, baseCase=@baseCase, bearCase=@bearCase, bullPrice=@bullPrice, basePrice=@basePrice,
-      bearPrice=@bearPrice, sizePct=@sizePct, updatedAt=datetime('now') WHERE id=@id
+      bearPrice=@bearPrice, sizePct=@sizePct, confidencePct=@confidencePct, horizonMonths=@horizonMonths, preMortem=@preMortem,
+      bearChecklist=@bearChecklist, updatedAt=datetime('now') WHERE id=@id
   `).run(merged);
   res.json(db.prepare("SELECT * FROM pitches WHERE id = ?").get(p.id));
 });
@@ -116,6 +118,7 @@ router.post("/pitches/:id/status", requireAuthor, (req, res) => {
   let status;
   if (action === "open" && p.status === "draft") {
     if (!p.thesis.trim() || p.basePrice === null) return res.status(400).json({ error: "Add a thesis and a base-case price target before opening the vote." });
+    if (!p.preMortem?.trim()) return res.status(400).json({ error: "Add a pre-mortem (\"it's a year later and this lost 40% — why?\") before opening the vote." });
     status = "voting";
     db.prepare("UPDATE pitches SET status='voting', votingOpenedAt=datetime('now'), updatedAt=datetime('now') WHERE id=?").run(p.id);
   } else if (action === "close" && p.status === "voting") {

@@ -1,4 +1,4 @@
-import { esc, api, pageHead, loading, errorBox, subTabs, fmtMoneyCompact } from "../shared.js";
+import { esc, api, isUnlocked, toast, pageHead, loading, errorBox, subTabs, fmtMoneyCompact } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Alerts";
@@ -55,5 +55,28 @@ export async function mount(container) {
             </tr>`).join("")}</tbody>
           </table></div>` : `<p class="muted">${earnings.error ? "The earnings calendar needs a Finnhub API key." : "No reports scheduled in the next 45 days."}</p>`}
       </section>
+      <section class="panel span-full" aria-labelledby="news-h">
+        <div class="panel-head"><h3 id="news-h">AI news triage</h3>${isUnlocked() ? `<button type="button" class="btn btn-ghost btn-sm" id="runTriageBtn">Run today's triage</button>` : ""}</div>
+        <div id="triageBody" class="small muted">Click "Run today's triage" to score each holding's recent headlines for materiality with Claude (one batched call per stock; costs a little API credit).</div>
+      </section>
     </div>`;
+
+  document.getElementById("runTriageBtn")?.addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = "Scoring headlines…";
+    const body = document.getElementById("triageBody");
+    body.innerHTML = loading("Triaging news for every holding — this can take a minute.");
+    try {
+      const r = await api("/api/news-triage/run", { method: "POST" });
+      const withTop = r.bySymbol.filter((s) => s.top?.length);
+      body.innerHTML = withTop.length ? `<ul class="link-list small">${withTop.flatMap((s) => s.top.map((t) => `
+        <li><a class="symbol-cell" href="#/research/${encodeURIComponent(s.symbol)}">${esc(s.symbol)}</a> — materiality ${t.materiality}/10, ${esc(t.direction)}: ${esc(t.reason)}</li>`)).join("")}</ul>`
+        : `<p class="muted small">No material news found across holdings today.</p>`;
+    } catch (err) {
+      body.innerHTML = `<p class="error small">${esc(err.message)}</p>`;
+    } finally {
+      e.target.disabled = false;
+      e.target.textContent = "Run today's triage";
+    }
+  });
 }

@@ -190,6 +190,8 @@ test("pitches: lifecycle, quorum, threshold, permissions", async () => {
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).status, 400);
   assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ben, body: { vote: "yes" } })).status, 409);
   await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { thesis: "x", basePrice: 50, bullPrice: 70, bearPrice: 30 } });
+  assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).status, 400, "needs a pre-mortem too");
+  await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { preMortem: "Thesis broke because of X." } });
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).body.status, "voting");
 
   assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", body: { vote: "yes" } })).status, 401, "anonymous can't vote");

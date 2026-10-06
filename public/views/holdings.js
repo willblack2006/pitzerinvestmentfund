@@ -4,6 +4,7 @@ import {
 } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { alertItem } from "./alerts.js";
+import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
 
 export const title = "Portfolio";
 
@@ -383,11 +384,13 @@ export async function mount(container) {
       </table>
       <div id="tableEmpty"></div>
     </section>
+    ${crowdingPanelHtml("crowdPanel")}
   `;
 
   wireGlobalOnce();
   renderTable();
   loadAlertPreview();
+  loadCrowdingPanel("crowdPanel", "holdings");
   refreshQuotes().then(startPolling);
 
   el("addBtn")?.addEventListener("click", () => openPositionDialog(null));

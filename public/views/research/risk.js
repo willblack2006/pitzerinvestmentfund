@@ -1,5 +1,6 @@
-import { el, esc, api, fmtUSD, fmtPct, fmtRatio, loading, signed, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker } from "../../shared.js";
+import { el, esc, api, fmtUSD, fmtPct, fmtRatio, fmtX, loading, signed, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker } from "../../shared.js";
 import { lineChart } from "../../charts.js";
+import { shortBadge, shortMeter } from "../shortSignal.js";
 
 // Server stats can be null (e.g. a flat price series has no volatility); never call toFixed on them.
 const f2 = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "—");
@@ -7,6 +8,51 @@ const f2 = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "—");
 const pct = (v) => (v === null || v === undefined ? "—" : signed(v * 100, fmtPct(v * 100)));
 
 let compareWith = null;
+
+async function loadShortPressure(symbol) {
+  const box = el("shortPressureBody");
+  if (!box) return;
+  let sp;
+  try {
+    sp = await api(`/api/short-pressure/${encodeURIComponent(symbol)}`);
+  } catch (err) {
+    if (el("shortPressureBody")) box.innerHTML = `<p class="muted">Couldn't score short pressure: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!el("shortPressureBody")) return;
+  if (sp.error) {
+    box.innerHTML = `<p class="muted">Short-pressure data unavailable: ${esc(sp.error)}</p>`;
+    return;
+  }
+  box.innerHTML = `
+    <div class="sig-head">
+      ${shortBadge(sp.score, sp.label)}
+      ${shortMeter(sp.score)}
+      <span class="muted small">0 low short interest · 100 heavily crowded short</span>
+    </div>
+    <ul class="sig-reasons">${sp.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    <div class="kv-grid kv-4">
+      <div><span class="muted small">Days to cover</span><strong>${fmtX(sp.daysToCover, 1)}</strong></div>
+      <div><span class="muted small">Short % of float</span><strong>${fmtRatio(sp.shortPctFloat)}</strong></div>
+      <div><span class="muted small">Change vs prior month</span><strong>${sp.shortChangePct === null ? "—" : signed(sp.shortChangePct * 100, fmtPct(sp.shortChangePct * 100))}</strong></div>
+      <div><span class="muted small">As of</span><strong>${esc(sp.asOf || "—")}</strong></div>
+    </div>
+    ${sp.finra.length >= 5 ? `
+      <div class="chart-box"><canvas id="finraChart" role="img" aria-label="FINRA daily short-volume ratio, ${esc(symbol)}, over the last ${sp.finra.length} trading days."></canvas></div>
+    ` : `<p class="muted small">Not enough recent FINRA short-volume data for a trend chart.</p>`}
+    <details class="explainer small">
+      <summary>How this score works</summary>
+      <p>Combines days-to-cover (short interest ÷ average daily volume) and short interest as a share of the float, both from Yahoo, plus whether short interest is rising or falling vs the prior month. A crowded short — high days-to-cover and rising short interest — has historically predicted underperformance (Hong, Li, Ni, Scheinkman &amp; Wang, NBER w21166); a long-only fund that simply avoids or trims these names can capture that without paying a short-seller's borrow fees (Muravyev, Pearson &amp; Pollet, <em>Journal of Financial Economics</em>, 2025).
+      The FINRA daily short-volume line is <strong>not</strong> the same thing as short interest — it's mostly market-maker and arbitrage order flow required to be marked "short," not a bet against the stock — so it's shown only as a secondary trend, not scored heavily. A statistical tendency across many stocks, not a prediction for this one.</p>
+    </details>`;
+  if (sp.finra.length >= 5) {
+    lineChart(el("finraChart"), {
+      labels: sp.finra.map((p) => p.date),
+      datasets: [{ label: "Short-volume ratio", data: sp.finra.map((p) => p.ratio * 100), color: "--s1" }],
+      yFormat: (v) => `${Number(v).toFixed(0)}%`,
+    });
+  }
+}
 
 export async function render(c, ctx) {
   const { symbol, data, price } = ctx;
@@ -76,6 +122,14 @@ export async function render(c, ctx) {
           </dl>
           <p class="muted small">${si.pctFloat > 0.1 ? "Heavily shorted — many investors are betting against it; expect sharp moves either way." : "Normal level of short interest."}${si.asOf ? ` As of ${esc(si.asOf)}.` : ""}</p>` : `<p class="muted">No short-interest data.</p>`}
       </section>
+      <section class="panel span-full" aria-labelledby="sp-h">
+        <div class="panel-head"><h3 id="sp-h">Short-pressure "avoid" signal</h3><span class="muted small">Crowded shorts tend to underperform · <a href="#/short-interest">compare across holdings →</a></span></div>
+        <div id="shortPressureBody">${loading("Scoring short pressure…")}</div>
+      </section>
+      <section class="panel span-full" aria-labelledby="br-h">
+        <div class="panel-head"><h3 id="br-h">Base rate: stocks like this one</h3><span class="muted small">1-year forward returns for similar sector/size/valuation names</span></div>
+        <div id="baseRateBody">${loading("Finding comparable stocks and pooling their history…")}</div>
+      </section>
       <section class="panel" aria-labelledby="te-h">
         <h3 id="te-h">How it fits the fund</h3>
         <dl class="facts">
@@ -93,4 +147,29 @@ export async function render(c, ctx) {
   ];
   if (p.series.sector) ds.push({ label: `${r.sectorEtf} (sector)`, data: p.series.sector, color: "--s3", dash: [2, 3] });
   lineChart(el("relChart"), { labels: p.series.dates, datasets: ds, yFormat: (v) => Number(v).toFixed(0) });
+  loadShortPressure(symbol);
+  loadBaseRate(symbol);
+}
+
+async function loadBaseRate(symbol) {
+  const box = el("baseRateBody");
+  if (!box) return;
+  let r;
+  try {
+    r = await api(`/api/research/${encodeURIComponent(symbol)}/base-rate`);
+  } catch (err) {
+    if (el("baseRateBody")) box.innerHTML = `<p class="muted">Couldn't build a base rate: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!el("baseRateBody")) return;
+  if (!r.available || !r.stats) { box.innerHTML = `<p class="muted small">${esc(r.reason || "Not enough comparable stocks with 5-year price history to build a base rate.")}</p>`; return; }
+  const s = r.stats;
+  box.innerHTML = `
+    <div class="kv-grid kv-4">
+      <div><span class="muted small">Median 1Y return</span><strong>${fmtPct(s.median * 100)}</strong></div>
+      <div><span class="muted small">% of windows positive</span><strong>${fmtPct(s.pctPositive * 100)}</strong></div>
+      <div><span class="muted small">10th–90th percentile</span><strong>${fmtPct(s.p10 * 100)} to ${fmtPct(s.p90 * 100)}</strong></div>
+      <div><span class="muted small">Sample</span><strong>${s.n} overlapping 1-year windows</strong></div>
+    </div>
+    <p class="muted small">Comparable set (${r.target.sector}, ${r.target.sizeBucket}-cap, ${r.target.valuationBucket}): ${r.matchedSymbols.map(esc).join(", ") || "none found"}. Mainly for calibration — not a prediction for ${esc(symbol)} itself.</p>`;
 }

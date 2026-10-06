@@ -1,4 +1,44 @@
 import { esc, fmtUSD, fmtNum, api, signed, pageHead, loading, errorBox, subTabs } from "../shared.js";
+import { scoreMeter, signalBadge } from "./insiderSignal.js";
+
+let signalScope = "all";
+
+// Ranked insider signal for every holding and watchlist name.
+async function loadSignals() {
+  const box = document.getElementById("sigBody");
+  if (!box) return;
+  box.innerHTML = loading("Scoring insider history for each stock… (first load can take ~20 seconds)");
+  let r;
+  try {
+    r = await api(`/api/insider-signals?scope=${signalScope}`);
+  } catch (err) {
+    box.innerHTML = `<p class="muted">Couldn't load insider signals: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!document.getElementById("sigBody")) return;
+  if (r.error) {
+    box.innerHTML = `<p class="muted">Insider signals need a Finnhub API key on the server.</p>`;
+    return;
+  }
+  const notable = r.rows.filter((x) => x.score !== undefined && Math.abs(x.score) >= 25).length;
+  box.innerHTML = `
+    <p class="small">${notable ? `<strong>${notable}</strong> of ${r.rows.length} stocks have a notable insider signal.` : `No notable insider signals across these ${r.rows.length} stocks right now.`} Ranked from strongest informed buying to heaviest informed selling.</p>
+    <div class="table-scroll"><table class="mini-table sig-table">
+      <caption class="sr-only">Insider signal by stock, strongest buying first</caption>
+      <thead><tr><th scope="col">Ticker</th><th scope="col">Signal</th><th scope="col" class="num">Cluster</th><th scope="col" class="num">Informed buys</th><th scope="col" class="num">Non-routine sales</th><th scope="col">Why</th></tr></thead>
+      <tbody>${r.rows.map((x) => x.error ? `
+        <tr><th scope="row"><a class="symbol-cell" href="#/research/${encodeURIComponent(x.symbol)}/ownership">${esc(x.symbol)}</a></th><td colspan="5" class="muted small">No insider data</td></tr>` : `
+        <tr>
+          <th scope="row"><a class="symbol-cell" href="#/research/${encodeURIComponent(x.symbol)}/ownership">${esc(x.symbol)}</a>${x.owned ? "" : ` <span class="badge badge-watch">Watch</span>`}</th>
+          <td class="nowrap">${signalBadge(x.score, x.label)} ${scoreMeter(x.score)}</td>
+          <td class="num">${x.cluster >= 2 ? `<strong>${x.cluster}</strong>` : x.cluster || "—"}</td>
+          <td class="num">${x.counts.opportunisticBuys + x.counts.newBuys || "—"}</td>
+          <td class="num">${x.counts.sells || "—"}</td>
+          <td class="small muted">${esc(x.topReason || "")}</td>
+        </tr>`).join("")}</tbody>
+    </table></div>
+    <p class="muted small">Score: −100 (heavy informed selling) to +100 (strong informed buying). Routine traders — insiders who trade in the same month every year — are ignored. Click a ticker for the full breakdown.</p>`;
+}
 
 export const title = "Insider activity";
 
@@ -25,7 +65,7 @@ export function insiderShares(t) {
   return `<span class="muted">${t.change > 0 ? "+" : ""}${fmtNum(t.change)}</span>`;
 }
 
-export const MARKET_TABS = [["#/macro", "Macro backdrop"], ["#/insiders", "Insider activity"]];
+export const MARKET_TABS = [["#/macro", "Macro backdrop"], ["#/insiders", "Insider activity"], ["#/short-interest", "Short interest"], ["#/backtest", "Backtester"], ["#/13f", "13F tracker"], ["#/calendar", "Calendar"], ["#/index-radar", "Index radar"]];
 
 const state = { data: null, symbol: "", signalsOnly: true };
 
@@ -73,6 +113,17 @@ export async function mount(container) {
     ${subTabs(MARKET_TABS, "#/insiders")}
     ${pageHead("Insider activity", `What officers and directors at our ${data.holdingsCount} holdings are doing with their own shares (SEC Form 4, via Finnhub).`)}
 
+    <section class="panel page-pad-panel" aria-labelledby="sig-h">
+      <div class="panel-head">
+        <h3 id="sig-h">Insider signals</h3>
+        <div class="seg seg-sm" role="group" aria-label="Which stocks">
+          ${[["all", "Holdings + watchlist"], ["holdings", "Holdings"], ["watchlist", "Watchlist"]].map(([v, l]) => `<button type="button" class="seg-btn" data-scope="${v}" aria-pressed="${signalScope === v}">${l}</button>`).join("")}
+        </div>
+      </div>
+      <div id="sigBody"></div>
+    </section>
+
+    <h3 class="section-title page-pad">Recent filings across holdings</h3>
     <section class="summary" aria-label="Insider summary">
       <div class="stat"><div class="label">Open-market buys</div><div class="value">${data.buys}</div><div class="sub">code P — the strongest signal</div></div>
       <div class="stat"><div class="label">Open-market sales</div><div class="value">${data.sells}</div><div class="sub">code S — often routine (diversification, taxes)</div></div>
@@ -112,6 +163,12 @@ export async function mount(container) {
   `;
 
   renderRows();
+  loadSignals();
+  container.querySelectorAll("[data-scope]").forEach((b) => b.addEventListener("click", () => {
+    signalScope = b.dataset.scope;
+    container.querySelectorAll("[data-scope]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    loadSignals();
+  }));
   document.getElementById("insSymbol").addEventListener("change", (e) => { state.symbol = e.target.value; renderRows(); });
   document.getElementById("signalsOnly").addEventListener("change", (e) => { state.signalsOnly = e.target.checked; renderRows(); });
 }

@@ -78,9 +78,12 @@ if (turso) {
   db.transaction = (fn) => (...args) => fn(...args);
 }
 
-// Pull other instances' writes from Turso, at most every couple of seconds.
+// Pull other instances' writes from Turso. db.sync() is a blocking synchronous network
+// round-trip (not a promise), so every request that triggers it pays that latency directly —
+// widened from 2s to 30s since this fund has few concurrent editors, trading a bit of
+// cross-instance read freshness for much faster typical request times on Vercel.
 let lastSync = Date.now();
-db.syncIfStale = (maxAgeMs = 2000) => {
+db.syncIfStale = (maxAgeMs = 30_000) => {
   if (!turso || Date.now() - lastSync < maxAgeMs) return;
   try { db.sync(); } catch (err) { console.error("[db] sync failed:", err.message); }
   lastSync = Date.now();
@@ -226,6 +229,22 @@ function addColumn(table, column, ddl) {
 addColumn("research_notes", "targetPrice", "REAL");
 addColumn("research_notes", "priceAtThesis", "REAL");
 addColumn("positions", "sector", "TEXT NOT NULL DEFAULT ''");
+// Calibration & decision journal (feature 6): a confidence level and time horizon on each
+// pitch, so outcomes can be graded later.
+addColumn("pitches", "confidencePct", "REAL");
+addColumn("pitches", "horizonMonths", "INTEGER");
+// Pre-mortem prompt (feature 16): required before a pitch can go to a vote.
+addColumn("pitches", "preMortem", "TEXT NOT NULL DEFAULT ''");
+addColumn("pitches", "bearChecklist", "TEXT NOT NULL DEFAULT '[]'");
+
+// 13F "best ideas" tracker (feature 11): managers the fund follows, by CIK.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS thirteenf_managers (
+    cik TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    addedAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund
 // enters its own IPS rather than inheriting placeholder numbers.

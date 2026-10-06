@@ -1,5 +1,6 @@
 import { el, esc, fmtUSD, fmtPct, fmtMoneyCompact, signed } from "../../shared.js";
 import { barChart } from "../../charts.js";
+import { scoreMeter, signalBadge } from "../insiderSignal.js";
 
 const PERIOD = { "0q": "This quarter", "+1q": "Next quarter", "0y": "This fiscal year", "+1y": "Next fiscal year" };
 
@@ -110,6 +111,16 @@ export async function render(c, { symbol, data, price }) {
           ${(() => { const q = st.estimates.find((e) => e.period === "0q"); return q?.revisions ? `<li>${q.revisions.up30 ?? 0} upward vs ${q.revisions.down30 ?? 0} downward EPS revisions this month.</li>` : ""; })()}
           ${st.history.length ? `<li>Beat EPS estimates in ${beats} of the last ${st.history.length} quarters.</li>` : ""}
         </ul>
+      </section>
+      <section class="panel span-full" aria-labelledby="rev-h">
+        <div class="panel-head"><h3 id="rev-h">Estimate revision score</h3></div>
+        <div class="sig-head">
+          ${signalBadge(st.revisionScore.score, st.revisionScore.label)}
+          ${scoreMeter(st.revisionScore.score)}
+          <span class="muted small">−100 estimates falling · +100 estimates rising</span>
+        </div>
+        <ul class="sig-reasons">${st.revisionScore.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+        <p class="muted small">Combines revision breadth (analysts raising vs cutting estimates, 7 &amp; 30 days) and EPS-estimate drift (current vs 30/90 days ago) across this and next quarter/year, weighted toward the nearer periods. A statistical tendency, not a forecast.</p>
       </section>
       <section class="panel span-full" aria-labelledby="est-h">
         <h3 id="est-h">Consensus estimates &amp; revisions</h3>

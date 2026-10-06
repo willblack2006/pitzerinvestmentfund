@@ -10,6 +10,74 @@ function summaryBlock(s) {
     </div>`;
 }
 
+const FLAG_LABEL = { auditor_change: "Auditor change", restatement: "Restatement", departure: "Departure", late_filing: "Late filing", going_concern: "Going concern", material_weakness: "Material weakness" };
+
+async function loadRedFlags(symbol) {
+  const box = document.getElementById("flagsBody");
+  if (!box) return;
+  let r;
+  try {
+    r = await api(`/api/research/${encodeURIComponent(symbol)}/red-flags`);
+  } catch (err) {
+    box.innerHTML = `<p class="muted">Couldn't scan for red flags: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!document.getElementById("flagsBody")) return;
+  if (!r.flags.length) {
+    box.innerHTML = `<p class="small">No red flags in the last two years — no auditor changes, restatements, late filings, going-concern language or material-weakness disclosures found.</p>`;
+    return;
+  }
+  box.innerHTML = `
+    <ul class="link-list">${r.flags.map((f) => `
+      <li><span class="badge ${f.severity === "high" ? "badge-danger" : "badge-watch"}">${esc(FLAG_LABEL[f.type] || f.type)}</span>
+        ${f.url ? `<a href="${safeUrl(f.url)}" target="_blank" rel="noopener">${esc(f.detail)}<span class="sr-only"> (opens SEC.gov in new tab)</span></a>` : esc(f.detail)}
+        <div class="muted small">${esc(f.date || "")}</div></li>`).join("")}</ul>`;
+}
+
+function diffSectionBlock(s) {
+  return `
+    <details class="filing-diff-section">
+      <summary>${esc(s.label)} — ${s.hasPrior ? `${Math.round((s.similarity ?? 0) * 100)}% similar to the prior filing` : "no matching section in the prior filing"}</summary>
+      ${s.added.length ? `<p class="small"><strong>Added:</strong></p><ul class="small">${s.added.slice(0, 5).map((p) => `<li>${esc(p.slice(0, 400))}${p.length > 400 ? "…" : ""}</li>`).join("")}</ul>` : ""}
+      ${s.removed.length ? `<p class="small"><strong>Removed:</strong></p><ul class="small">${s.removed.slice(0, 5).map((p) => `<li>${esc(p.slice(0, 400))}${p.length > 400 ? "…" : ""}</li>`).join("")}</ul>` : ""}
+      ${!s.added.length && !s.removed.length ? `<p class="muted small">No paragraph-level changes detected.</p>` : ""}
+    </details>`;
+}
+
+async function loadFilingDiff(symbol) {
+  const box = document.getElementById("diffBody");
+  if (!box) return;
+  let d;
+  try {
+    d = await api(`/api/research/${encodeURIComponent(symbol)}/filing-diff`);
+  } catch (err) {
+    box.innerHTML = `<p class="muted">Couldn't compare filings: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!document.getElementById("diffBody")) return;
+  if (!d.available) { box.innerHTML = `<p class="small muted">${esc(d.reason || d.error || "Not enough 10-K filings to compare.")}</p>`; return; }
+  box.innerHTML = `
+    <p class="muted small">Comparing the 10-K filed ${esc(d.latest.filingDate)} vs the one filed ${esc(d.prior.filingDate)}.
+      ${d.aiEnabled === false ? "" : ""}</p>
+    ${d.sections.map(diffSectionBlock).join("") || `<p class="muted small">No comparable sections found.</p>`}
+    <div id="diffAiBody"></div>`;
+  const aiBox = document.getElementById("diffAiBody");
+  if (isUnlocked()) {
+    aiBox.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="diffSummarizeBtn">Summarize the change with Claude</button>`;
+    document.getElementById("diffSummarizeBtn").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = "Reading the sections…";
+      aiBox.innerHTML = loading("Claude is comparing the two filings…");
+      try {
+        const s = await api(`/api/research/${encodeURIComponent(symbol)}/filing-diff/summary`, { method: "POST" });
+        aiBox.innerHTML = summaryBlock(s);
+      } catch (err) {
+        aiBox.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+      }
+    });
+  }
+}
+
 export async function render(c, { symbol }) {
   c.innerHTML = loading("Loading SEC filings…");
   let data;
@@ -25,6 +93,14 @@ export async function render(c, { symbol }) {
   }
   const unlocked = isUnlocked();
   c.innerHTML = `
+    <section class="panel page-pad-panel" aria-labelledby="flags-h">
+      <div class="panel-head"><h3 id="flags-h">Red-flag scan</h3><span class="muted small">Auditor changes, restatements, late filings, going-concern &amp; material-weakness language</span></div>
+      <div id="flagsBody">${loading("Scanning filings and EDGAR full-text search…")}</div>
+    </section>
+    <section class="panel page-pad-panel" aria-labelledby="diff-h">
+      <div class="panel-head"><h3 id="diff-h">What changed in the latest 10-K</h3><span class="muted small">Risk Factors, MD&amp;A &amp; Legal Proceedings vs the prior year ("Lazy Prices")</span></div>
+      <div id="diffBody">${loading("Comparing this year's filing with last year's…")}</div>
+    </section>
     <section class="panel page-pad-panel" aria-labelledby="fil-h">
       <div class="panel-head"><h3 id="fil-h">Recent SEC filings</h3><span class="muted small">From EDGAR</span></div>
       ${!data.aiEnabled ? `<p class="notice small">AI filing briefs are off: the server needs an <code>ANTHROPIC_API_KEY</code>. Filings are still linked below.</p>`
@@ -77,4 +153,6 @@ export async function render(c, { symbol }) {
       btn.textContent = "Try again";
     }
   });
+  loadRedFlags(symbol);
+  loadFilingDiff(symbol);
 }

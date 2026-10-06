@@ -4,6 +4,14 @@ const { requireAuth, memberFromRequest } = require("../middleware/auth");
 const portfolio = require("../lib/portfolio");
 const analytics = require("../lib/analytics");
 const finnhub = require("../lib/sources/finnhub");
+const { scoreInsiders } = require("../lib/insiderSignals");
+const { shortPressureFor } = require("./shortPressure");
+const sec = require("../lib/sources/sec");
+const { scanRedFlags } = require("../lib/redFlags");
+const { revisionScoreFor } = require("./estimateRevisions");
+const { filingDiffFor } = require("./research");
+const { crowdingFor } = require("./crowding");
+const { activistFilingsFor } = require("./research");
 const { latestPrices, histories } = require("../lib/prices");
 const { getSettings } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
@@ -189,6 +197,7 @@ router.delete("/price-alerts/:id", requireAuth, (req, res) => {
 router.get("/alerts", async (req, res) => {
   const alerts = [];
   const positions = db.prepare("SELECT symbol FROM positions").all().map((r) => r.symbol);
+  const watched = db.prepare("SELECT symbol FROM watchlist").all().map((r) => r.symbol);
   const priceAlerts = db.prepare("SELECT * FROM price_alerts").all();
   const notes = db.prepare("SELECT symbol, targetPrice, author FROM research_notes WHERE targetPrice IS NOT NULL").all();
   const prices = await latestPrices([...new Set([...priceAlerts.map((a) => a.symbol), ...notes.map((n) => n.symbol)])]);
@@ -225,18 +234,102 @@ router.get("/alerts", async (req, res) => {
     }
   } catch { /* needs Finnhub key */ }
 
+  // Insider signal (routine traders filtered out, clusters weighted up) for each holding.
   try {
-    const cutoff = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-    const results = await Promise.allSettled(positions.map(async (sym) => ({ sym, tx: await finnhub.getInsiderTransactions(sym) })));
-    for (const r of results) {
-      if (r.status !== "fulfilled") continue;
-      const buys = r.value.tx.filter((t) => t.transactionCode === "P" && t.transactionDate >= cutoff);
-      if (buys.length) {
-        const shares = buys.reduce((s, t) => s + (t.change || 0), 0);
-        alerts.push({ type: "insider", level: "watch", symbol: r.value.sym, title: `Insider buying in ${r.value.sym}`, detail: `${buys.length} open-market purchase${buys.length > 1 ? "s" : ""} (+${shares.toLocaleString()} shares) in the last 30 days.` });
+    if (finnhub.apiKey()) {
+      const results = await Promise.allSettled(positions.map(async (sym) => ({ sym, sig: scoreInsiders(await finnhub.getInsiderHistory(sym)) })));
+      for (const r of results) {
+        if (r.status !== "fulfilled") continue;
+        const { sym, sig } = r.value;
+        if (sig.score >= 25) {
+          alerts.push({ type: "insider", level: "watch", symbol: sym, title: `${sig.label}: ${sym} (${sig.score > 0 ? "+" : ""}${sig.score})`, detail: sig.reasons[0] });
+        } else if (sig.score <= -50) { // selling is a weak signal; only flag broad non-routine selling
+          alerts.push({ type: "insider", level: "watch", symbol: sym, title: `Insider ${sig.label.toLowerCase()}: ${sym} (${sig.score})`, detail: sig.reasons.find((x) => /sold/.test(x)) || sig.reasons[0] });
+        }
       }
     }
   } catch { /* needs Finnhub key */ }
+
+  // Short-pressure "avoid" flag for each holding: high days-to-cover plus rising short
+  // interest has historically predicted underperformance, so flag it even though we're not
+  // shorting anything ourselves.
+  try {
+    const results = await Promise.allSettled(positions.map((sym) => shortPressureFor(sym)));
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const sp = r.value;
+      if (sp.score >= 45) {
+        alerts.push({ type: "short", level: "watch", symbol: sp.symbol, title: `${sp.label}: ${sp.symbol} (${sp.score})`, detail: sp.reasons[0] });
+      }
+    }
+  } catch { /* best effort */ }
+
+  // Red flags: 8-K items (auditor change, restatement, exec departure) and late-filing
+  // notices, across holdings and the watchlist. Cheap (item codes only, no full-text search)
+  // so it's safe in the alerts hot path; the Filings tab endpoint does the deeper scan.
+  try {
+    const symbols = [...new Set([...positions, ...watched])];
+    const results = await Promise.allSettled(symbols.map(async (sym) => ({ sym, filings: await sec.getRecentFilings(sym, ["8-K", "NT 10-K", "NT 10-Q"]) })));
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const { sym, filings } = r.value;
+      const flags = scanRedFlags(filings).filter((f) => new Date(f.date) >= new Date(Date.now() - 30 * 864e5));
+      for (const f of flags) {
+        alerts.push({ type: "redflag", level: f.severity === "high" ? "action" : "watch", symbol: sym, title: `${sym}: ${f.detail}`, detail: `Filed ${f.date}.`, url: f.url });
+      }
+    }
+  } catch { /* best effort */ }
+
+  // Estimate-revision score: flag holdings where analysts are meaningfully raising or
+  // cutting estimates (breadth + EPS drift), in either direction.
+  try {
+    const results = await Promise.allSettled(positions.map((sym) => revisionScoreFor(sym)));
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const rv = r.value;
+      if (Math.abs(rv.score) >= 40) {
+        alerts.push({ type: "revision", level: "watch", symbol: rv.symbol, title: `${rv.label}: ${rv.symbol} (${rv.score > 0 ? "+" : ""}${rv.score})`, detail: rv.reasons[0] });
+      }
+    }
+  } catch { /* best effort */ }
+
+  // Filing-change detector: flag holdings whose most recent 10-K rewrote Risk Factors, MD&A
+  // or Legal Proceedings substantially vs the prior year's filing ("Lazy Prices").
+  try {
+    const results = await Promise.allSettled(positions.map(async (sym) => ({ sym, diff: await filingDiffFor(sym, "10-K") })));
+    for (const r of results) {
+      if (r.status !== "fulfilled" || !r.value.diff.available) continue;
+      const { sym, diff } = r.value;
+      const changed = diff.sections.filter((s) => s.hasPrior && Number.isFinite(s.similarity) && s.similarity < 0.75);
+      for (const s of changed) {
+        alerts.push({ type: "filingchange", level: "watch", symbol: sym, title: `${sym}: ${s.label} rewritten`, detail: `Similarity to the prior 10-K is ${Math.round(s.similarity * 100)}% (${s.added.length} paragraphs added, ${s.removed.length} removed). Filed ${diff.latest.filingDate}.`, url: diff.latest.url });
+      }
+    }
+  } catch { /* best effort */ }
+
+  // Crowding / hype monitor: unusual volume, a big opening gap, or a news spike on a holding.
+  try {
+    const results = await Promise.allSettled(positions.map((sym) => crowdingFor(sym)));
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const c = r.value;
+      if (c.score >= 60) alerts.push({ type: "crowding", level: "watch", symbol: c.symbol, title: `${c.label}: ${c.symbol}`, detail: c.reasons[0] });
+    }
+  } catch { /* best effort */ }
+
+  // Activist / 5%-owner alerts: new 13D/13G filings on holdings and watchlist names in the
+  // last 14 days.
+  try {
+    const symbols = [...new Set([...positions, ...watched])];
+    const results = await Promise.allSettled(symbols.map(async (sym) => ({ sym, filings: await activistFilingsFor(sym, { withCoverPages: false, sinceDays: 14 }) })));
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const { sym, filings } = r.value;
+      for (const f of filings) {
+        alerts.push({ type: "activist", level: "watch", symbol: sym, title: `${sym}: new ${f.form} filed`, detail: `Filed ${f.filingDate}.${f.isAmendment ? " Amendment to a prior filing." : ""}`, url: f.url });
+      }
+    }
+  } catch { /* best effort */ }
 
   const voting = db.prepare("SELECT id, symbol, direction FROM pitches WHERE status = 'voting'").all();
   for (const p of voting) alerts.push({ type: "vote", level: "action", symbol: p.symbol, pitchId: p.id, title: `Vote open: ${p.direction} ${p.symbol}`, detail: "Members can cast their vote on the pitch page." });

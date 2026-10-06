@@ -2,9 +2,10 @@ import {
   esc, fmtCompact, fmtPct, api, isUnlocked, toast, lockedHint, signed,
   sortHeader, sortRows, bindSort, pageHead, loading, errorBox, subTabs, invalidateContext,
 } from "../shared.js";
+import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
 
 export const title = "Discovery";
-export const IDEAS_TABS = [["#/screener", "Discovery"], ["#/watchlist", "Watchlist"], ["#/pitches", "Pitches"]];
+export const IDEAS_TABS = [["#/screener", "Discovery"], ["#/watchlist", "Watchlist"], ["#/pitches", "Pitches"], ["#/track-record", "Track record"], ["#/forced-sellers", "Forced sellers"]];
 
 const state = { rows: [], sort: { key: "suggestedBy", dir: -1 } };
 
@@ -88,6 +89,7 @@ export async function mount(container) {
       </table>
       ${state.rows.length ? "" : `<p class="empty">No new candidates found — every peer is already owned or watched.</p>`}
     </section>
+    ${state.rows.length ? crowdingPanelHtml("crowdPanel") : ""}
   `;
 
   renderTable();
@@ -96,4 +98,5 @@ export async function mount(container) {
     const btn = e.target.closest("[data-watch]");
     if (btn) addToWatchlist(btn);
   });
+  if (state.rows.length) loadCrowdingPanel("crowdPanel", state.rows.slice(0, 20).map((r) => r.symbol));
 }

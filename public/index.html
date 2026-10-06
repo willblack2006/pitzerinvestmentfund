@@ -6,7 +6,12 @@
   <meta name="color-scheme" content="dark light" />
   <title>Pitzer Investment Fund</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <link rel="icon" href="data:," />
+  <!-- The default route's module is a dynamic import() (see app.js), which the browser can't
+       discover until app.js actually runs. Preloading it lets the two fetches happen in
+       parallel instead of in sequence, so lazy-loading other routes didn't cost the common
+       path (the portfolio homepage) anything. -->
+  <link rel="modulepreload" href="views/holdings.js" />
 </head>
 <body>
   <a class="skip-link" href="#view">Skip to main content</a>

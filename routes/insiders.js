@@ -1,8 +1,35 @@
 const express = require("express");
 const db = require("../db");
 const finnhub = require("../lib/sources/finnhub");
+const { scoreInsiders } = require("../lib/insiderSignals");
 
 const router = express.Router();
+
+// Insider signal for one ticker (classified history + score + reasons).
+router.get("/insiders/:symbol/signal", async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase().trim();
+  try {
+    const rows = await finnhub.getInsiderHistory(symbol);
+    res.json({ symbol, ...scoreInsiders(rows) });
+  } catch (err) {
+    res.json({ symbol, error: err.message });
+  }
+});
+
+// Insider signals ranked across holdings and/or the watchlist.
+router.get("/insider-signals", async (req, res) => {
+  const scope = ["holdings", "watchlist", "all"].includes(req.query.scope) ? req.query.scope : "all";
+  const owned = db.prepare("SELECT symbol FROM positions").all().map((r) => r.symbol);
+  const watched = db.prepare("SELECT symbol FROM watchlist").all().map((r) => r.symbol);
+  const symbols = [...new Set([...(scope !== "watchlist" ? owned : []), ...(scope !== "holdings" ? watched : [])])];
+  if (!finnhub.apiKey()) return res.json({ scope, rows: [], error: "FINNHUB_API_KEY not configured" });
+  const results = await Promise.allSettled(symbols.map(async (s) => ({ symbol: s, ...scoreInsiders(await finnhub.getInsiderHistory(s)) })));
+  const rows = results.map((r, i) => (r.status === "fulfilled"
+    ? (({ symbol, score, label, cluster, counts, reasons }) => ({ symbol, score, label, cluster, counts, topReason: reasons[0], owned: owned.includes(symbol) }))(r.value)
+    : { symbol: symbols[i], error: r.reason?.message || String(r.reason), owned: owned.includes(symbols[i]) }));
+  rows.sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  res.json({ scope, rows });
+});
 
 router.get("/insiders/:symbol", async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();

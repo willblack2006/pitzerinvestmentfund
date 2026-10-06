@@ -1,38 +1,35 @@
 import { el, esc, api, isUnlocked, toast, fundContext, getMember, setMember } from "./shared.js";
 import { initRouter } from "./router.js";
-import * as holdings from "./views/holdings.js";
-import * as performance from "./views/performance.js";
-import * as allocation from "./views/allocation.js";
-import * as transactions from "./views/transactions.js";
-import * as alerts from "./views/alerts.js";
-import * as research from "./views/research.js";
-import * as researchHome from "./views/researchHome.js";
-import * as macro from "./views/macro.js";
-import * as screener from "./views/screener.js";
-import * as insiders from "./views/insiders.js";
-import * as watchlist from "./views/watchlist.js";
-import * as pitches from "./views/pitches.js";
-import * as pitch from "./views/pitch.js";
-import * as settings from "./views/settings.js";
 
+// Each page's code only downloads when the user actually navigates there, instead of every
+// view in the app loading up front (the old eager imports were the biggest contributor to
+// slow first loads, especially on phones).
 const router = initRouter({
-  "/": holdings,
-  "/performance": performance,
-  "/allocation": allocation,
-  "/transactions": transactions,
-  "/alerts": alerts,
-  "/research": researchHome,
-  "/research/:symbol": research,
-  "/research/:symbol/:tab": research,
-  "/screener": screener,
-  "/watchlist": watchlist,
-  "/pitches": pitches,
-  "/pitches/new": pitch,
-  "/pitches/new/:symbol": pitch,
-  "/pitches/:id": pitch,
-  "/macro": macro,
-  "/insiders": insiders,
-  "/settings": settings,
+  "/": () => import("./views/holdings.js"),
+  "/performance": () => import("./views/performance.js"),
+  "/allocation": () => import("./views/allocation.js"),
+  "/transactions": () => import("./views/transactions.js"),
+  "/alerts": () => import("./views/alerts.js"),
+  "/factors": () => import("./views/factors.js"),
+  "/research": () => import("./views/researchHome.js"),
+  "/research/:symbol": () => import("./views/research.js"),
+  "/research/:symbol/:tab": () => import("./views/research.js"),
+  "/screener": () => import("./views/screener.js"),
+  "/watchlist": () => import("./views/watchlist.js"),
+  "/pitches": () => import("./views/pitches.js"),
+  "/pitches/new": () => import("./views/pitch.js"),
+  "/pitches/new/:symbol": () => import("./views/pitch.js"),
+  "/pitches/:id": () => import("./views/pitch.js"),
+  "/track-record": () => import("./views/trackRecord.js"),
+  "/forced-sellers": () => import("./views/forcedSellers.js"),
+  "/macro": () => import("./views/macro.js"),
+  "/insiders": () => import("./views/insiders.js"),
+  "/short-interest": () => import("./views/shortInterest.js"),
+  "/backtest": () => import("./views/backtest.js"),
+  "/13f": () => import("./views/thirteenF.js"),
+  "/calendar": () => import("./views/calendar.js"),
+  "/index-radar": () => import("./views/indexRadar.js"),
+  "/settings": () => import("./views/settings.js"),
 });
 
 // ---- Edit lock (shared fund password) ----

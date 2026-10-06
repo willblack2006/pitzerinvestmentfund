@@ -12,6 +12,18 @@ const SECTIONS = [
   ["valuation", "Valuation", "Multiples vs peers, DCF assumptions, how the target was derived", 3],
 ];
 
+const BEAR_CHECKLIST = [
+  "Checked the balance sheet for debt coming due or covenant risk",
+  "Considered what a key competitor could do to undercut this thesis",
+  "Checked insider selling and short interest",
+  "Considered a recession / multiple-compression scenario, not just a company-specific miss",
+  "Identified the single metric that would prove this thesis wrong fastest",
+];
+
+function parseChecklist(raw) {
+  try { const v = JSON.parse(raw || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+
 function scenarioBar(p, current) {
   const pts = [["Bear", p.bearPrice, "bear"], ["Base", p.basePrice, "base"], ["Bull", p.bullPrice, "bull"]].filter(([, v]) => v);
   if (!pts.length) return "";
@@ -43,6 +55,11 @@ function editor(p, isNew) {
         </label>
         <label>Proposed size (% of fund) <input name="sizePct" type="number" step="0.5" min="0" value="${p.sizePct ?? ""}" inputmode="decimal" /></label>
       </div>
+      <div class="form-row">
+        <label>Confidence (%) <input name="confidencePct" type="number" step="1" min="0" max="100" value="${p.confidencePct ?? ""}" inputmode="decimal" placeholder="e.g. 65" /></label>
+        <label>Time horizon (months) <input name="horizonMonths" type="number" step="1" min="1" value="${p.horizonMonths ?? ""}" inputmode="numeric" placeholder="e.g. 12" /></label>
+      </div>
+      <p class="muted small">Confidence and horizon feed the fund's <a href="#/track-record">track record</a> — how often calls at a given confidence level actually play out.</p>
       <label class="field-block">One-line pitch <input name="title" value="${esc(p.title || "")}" maxlength="140" placeholder="e.g. Margin expansion the market isn't pricing in" /></label>
       ${SECTIONS.map(field).join("")}
       <fieldset class="scenarios">
@@ -58,6 +75,18 @@ function editor(p, isNew) {
           <label>Bull scenario <textarea name="bullCase" rows="2">${esc(p.bullCase || "")}</textarea></label>
         </div>
       </fieldset>
+      <label class="field-block">Pre-mortem <span class="req" aria-hidden="true">*</span>
+        <textarea name="preMortem" rows="3" placeholder="It's a year from now and this position lost 40%. Write the post-mortem: what happened?">${esc(p.preMortem || "")}</textarea>
+      </label>
+      <p class="muted small">Required before the pitch can go to a vote.</p>
+      <fieldset class="bear-checklist">
+        <legend>Bear-case checklist</legend>
+        ${BEAR_CHECKLIST.map((label, i) => {
+          const checked = parseChecklist(p.bearChecklist).includes(i);
+          return `<label class="check"><input type="checkbox" name="bearChecklistItem" value="${i}" ${checked ? "checked" : ""} /> ${esc(label)}</label>`;
+        }).join("")}
+        <input type="hidden" name="bearChecklist" value="${esc(p.bearChecklist || "[]")}" />
+      </fieldset>
       ${!getMember() ? `<label class="field-block">Author name <input name="author" value="${esc(p.author || "")}" placeholder="Your name" /></label>` : ""}
       <div class="dialog-actions">
         ${isNew ? `<a class="btn btn-ghost" href="#/pitches">Cancel</a>` : `<button type="button" class="btn btn-ghost" id="cancelEdit">Cancel</button>`}
@@ -69,8 +98,11 @@ function editor(p, isNew) {
 function readView(p) {
   const blocks = SECTIONS.filter(([k]) => p[k]?.trim()).map(([k, label]) => `<section class="pitch-section"><h3>${label}</h3><div class="prose">${esc(p[k])}</div></section>`).join("");
   const cases = [["Bear", p.bearCase, p.bearPrice], ["Base", p.baseCase, p.basePrice], ["Bull", p.bullCase, p.bullPrice]].filter(([, t, v]) => t?.trim() || v);
+  const checklist = parseChecklist(p.bearChecklist);
   return `${blocks || `<p class="muted">No write-up yet.</p>`}
-    ${cases.length ? `<section class="pitch-section"><h3>Scenarios</h3><div class="case-grid">${cases.map(([l, t, v]) => `<div class="case case-${l.toLowerCase()}"><strong>${l}${v ? ` · ${fmtUSD(v)}` : ""}</strong><p class="small">${esc(t || "")}</p></div>`).join("")}</div></section>` : ""}`;
+    ${cases.length ? `<section class="pitch-section"><h3>Scenarios</h3><div class="case-grid">${cases.map(([l, t, v]) => `<div class="case case-${l.toLowerCase()}"><strong>${l}${v ? ` · ${fmtUSD(v)}` : ""}</strong><p class="small">${esc(t || "")}</p></div>`).join("")}</div></section>` : ""}
+    ${p.preMortem?.trim() ? `<section class="pitch-section"><h3>Pre-mortem</h3><p class="prose">${esc(p.preMortem)}</p></section>` : ""}
+    ${checklist.length ? `<section class="pitch-section"><h3>Bear-case checklist</h3><ul class="link-list small">${BEAR_CHECKLIST.map((label, i) => checklist.includes(i) ? `<li>✓ ${esc(label)}</li>` : "").join("")}</ul></section>` : ""}`;
 }
 
 function votePanel(p) {
@@ -160,6 +192,7 @@ export async function mount(container, params) {
       <div class="stat"><div class="label">Price now</div><div class="value">${current ? fmtUSD(current) : "—"}</div><div class="sub">${since !== null ? `${signed(since * 100, fmtPct(since * 100))} since pitch` : ""}</div></div>
       <div class="stat"><div class="label">Base-case target</div><div class="value">${p.basePrice ? fmtUSD(p.basePrice) : "—"}</div><div class="sub">${baseUpside !== null ? `${fmtPct(baseUpside * 100)} from here` : ""}</div></div>
       <div class="stat"><div class="label">Proposed size</div><div class="value">${p.sizePct ? `${p.sizePct}%` : "—"}</div><div class="sub">of the fund</div></div>
+      <div class="stat"><div class="label">Confidence</div><div class="value">${p.confidencePct != null ? `${p.confidencePct}%` : "—"}</div><div class="sub">${p.horizonMonths ? `${p.horizonMonths}-month horizon` : ""}</div></div>
     </section>` : ""}
     <div class="research-layout">
       <div class="research-main">
@@ -175,7 +208,10 @@ export async function mount(container, params) {
 
   el("pitchForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const checked = [...e.target.querySelectorAll('[name="bearChecklistItem"]:checked')].map((x) => Number(x.value));
     const body = Object.fromEntries(new FormData(e.target).entries());
+    delete body.bearChecklistItem;
+    body.bearChecklist = JSON.stringify(checked);
     if (!body.symbol?.trim()) {
       e.target.symbol.setAttribute("aria-invalid", "true");
       e.target.symbol.focus();

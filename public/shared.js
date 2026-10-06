@@ -46,23 +46,40 @@ export function setMember(session) {
   window.dispatchEvent(new CustomEvent("pif:member-changed"));
 }
 
+// A page load routinely asks for the same GET twice at once — e.g. a view's own
+// "/api/positions" fetch alongside fundContext()'s, or "/api/alerts" for both the page body
+// and the header badge. Sharing one in-flight request for duplicate concurrent GETs halves
+// that round-trip cost without caching anything beyond the moment both callers are waiting.
+const inflightGets = new Map();
+
 export async function api(path, options = {}) {
-  const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
-  if (isUnlocked()) headers["x-edit-password"] = getPassword();
-  const member = getMember();
-  if (member?.token) headers["x-member-token"] = member.token;
-  const res = await fetch(path, { ...options, headers });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    // A stale/changed password: re-lock so the UI stops pretending editing works.
-    if (res.status === 401 && isUnlocked()) {
-      sessionStorage.removeItem("pif_edit_password");
-      window.dispatchEvent(new CustomEvent("pif:auth-expired"));
+  const method = (options.method || "GET").toUpperCase();
+  if (method === "GET" && inflightGets.has(path)) return inflightGets.get(path);
+
+  const promise = (async () => {
+    const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+    if (isUnlocked()) headers["x-edit-password"] = getPassword();
+    const member = getMember();
+    if (member?.token) headers["x-member-token"] = member.token;
+    const res = await fetch(path, { ...options, headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      // A stale/changed password: re-lock so the UI stops pretending editing works.
+      if (res.status === 401 && isUnlocked()) {
+        sessionStorage.removeItem("pif_edit_password");
+        window.dispatchEvent(new CustomEvent("pif:auth-expired"));
+      }
+      if (body.code === "member_required" && member?.token) setMember(null); // session revoked
+      throw Object.assign(new Error(body.error || `Request failed (${res.status})`), { code: body.code, status: res.status });
     }
-    if (body.code === "member_required" && member?.token) setMember(null); // session revoked
-    throw Object.assign(new Error(body.error || `Request failed (${res.status})`), { code: body.code, status: res.status });
+    return res.status === 204 ? null : res.json();
+  })();
+
+  if (method === "GET") {
+    inflightGets.set(path, promise);
+    promise.finally(() => inflightGets.delete(path)).catch(() => {});
   }
-  return res.status === 204 ? null : res.json();
+  return promise;
 }
 
 // ---- Feedback: toasts (announced via role=status) and an in-app confirm dialog ----

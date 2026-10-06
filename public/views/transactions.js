@@ -13,9 +13,30 @@ function formFields(type) {
     ${trade || type === "dividend" ? `<label>Ticker <input name="symbol" required maxlength="10" autocapitalize="characters" /></label>` : ""}
     ${trade ? `<label>Shares <input name="shares" type="number" step="any" min="0" required inputmode="decimal" /></label>
       <label>Price per share ($) <input name="price" type="number" step="any" min="0" required inputmode="decimal" /></label>
-      <label>Commission / fees ($) <input name="amount" type="number" step="any" min="0" value="0" inputmode="decimal" /></label>`
+      <label>Commission / fees ($) <input name="amount" type="number" step="any" min="0" value="0" inputmode="decimal" /></label>
+      <div id="execHint" class="field-block small muted"></div>`
       : `<label>Amount ($) <input name="amount" type="number" step="any" min="0" required inputmode="decimal" /></label>`}
   `;
+}
+
+let execTimer = null;
+function refreshExecHint(form) {
+  const hint = el("execHint");
+  if (!hint) return;
+  const symbol = form.symbol?.value?.trim().toUpperCase();
+  const shares = form.shares?.value;
+  const direction = form.type.value;
+  if (!symbol || !["buy", "sell"].includes(direction)) { hint.innerHTML = ""; return; }
+  clearTimeout(execTimer);
+  execTimer = setTimeout(async () => {
+    hint.textContent = "Checking spread and volume…";
+    try {
+      const r = await api(`/api/execution/${encodeURIComponent(symbol)}?direction=${direction}${shares ? `&shares=${encodeURIComponent(shares)}` : ""}`);
+      if (!el("execHint")) return;
+      if (r.error || r.mid === null) { hint.innerHTML = ""; return; }
+      hint.innerHTML = `Bid/ask ${fmtUSD(r.bid)} / ${fmtUSD(r.ask)}${r.suggestedLimitPrice ? ` · suggested limit ${fmtUSD(r.suggestedLimitPrice)}` : ""}${r.warnings?.length ? `<br>${r.warnings.map((w) => `⚠ ${esc(w)}`).join("<br>")}` : ""}`;
+    } catch { if (el("execHint")) hint.innerHTML = ""; }
+  }, 350);
 }
 
 export async function mount(container) {
@@ -82,6 +103,9 @@ export async function mount(container) {
   if (!unlocked) return;
 
   el("txType").addEventListener("change", (e) => { el("txFields").innerHTML = formFields(e.target.value); });
+  el("txFields").addEventListener("input", (e) => {
+    if (e.target.name === "symbol" || e.target.name === "shares") refreshExecHint(el("txForm"));
+  });
   el("txForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);

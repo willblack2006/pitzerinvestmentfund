@@ -14,9 +14,9 @@ const POLICY = [
 
 export async function mount(container) {
   container.innerHTML = loading("Loading settings…");
-  let s, members, presets;
+  let s, members, presets, managers;
   try {
-    [s, members, presets] = await Promise.all([api("/api/settings"), api("/api/members"), benchmarkPresets()]);
+    [s, members, presets, managers] = await Promise.all([api("/api/settings"), api("/api/members"), benchmarkPresets(), api("/api/13f/managers")]);
   } catch (err) {
     container.innerHTML = pageHead("Settings") + errorBox(err.message);
     return;
@@ -72,6 +72,19 @@ export async function mount(container) {
             <button class="btn btn-primary btn-sm">Add member</button>
           </form>
           <p class="muted small">Give each member their PIN privately. Marking someone alumni signs them out and keeps their past votes on record — use it at the end of each semester.</p>` : ""}
+      </section>
+      <section class="panel span-full" aria-labelledby="13f-h">
+        <div class="panel-head"><h3 id="13f-h">13F tracker: managers followed</h3><a class="small" href="#/13f">Open tracker →</a></div>
+        ${managers.length ? `
+          <ul class="link-list">${managers.map((m) => `<li>${esc(m.name || m.cik)} <span class="muted small">(CIK ${esc(m.cik)})</span>${unlocked ? ` <button class="btn-link small" data-del-manager="${esc(m.cik)}">Remove</button>` : ""}</li>`).join("")}</ul>`
+          : `<p class="muted">No managers followed yet.</p>`}
+        ${unlocked ? `
+          <form id="addManager" class="inline-form">
+            <label>CIK <input name="cik" required placeholder="e.g. 0001067983" maxlength="10" /></label>
+            <label>Name <input name="name" placeholder="e.g. Berkshire Hathaway" maxlength="120" /></label>
+            <button class="btn btn-primary btn-sm">Follow</button>
+          </form>
+          <p class="muted small">Find a manager's CIK on <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type=13F-HR" target="_blank" rel="noopener">SEC EDGAR's 13F filer search<span class="sr-only"> (opens in new tab)</span></a>. Up to 20 managers.</p>` : ""}
       </section>
     </div>`;
 
@@ -154,4 +167,20 @@ export async function mount(container) {
       } catch (err) { toast(err.message, { type: "error" }); }
     }
   });
+
+  el("addManager")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.target).entries());
+    try {
+      await api("/api/13f/managers", { method: "POST", body: JSON.stringify(body) });
+      toast("Manager added.", { type: "success" });
+      mount(container);
+    } catch (err) { toast(err.message, { type: "error" }); }
+  });
+  container.querySelectorAll("[data-del-manager]").forEach((b) => b.addEventListener("click", async () => {
+    try {
+      await api(`/api/13f/managers/${b.dataset.delManager}`, { method: "DELETE" });
+      mount(container);
+    } catch (err) { toast(err.message, { type: "error" }); }
+  }));
 }

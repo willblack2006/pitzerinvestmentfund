@@ -3,6 +3,7 @@ import {
 } from "../shared.js";
 import { IDEAS_TABS } from "./screener.js";
 import { openPositionDialog } from "./holdings.js";
+import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
 
 export const title = "Watchlist";
 
@@ -93,8 +94,10 @@ export async function mount(container) {
       </table>
       <div id="wlEmpty"></div>
     </section>
+    ${crowdingPanelHtml("crowdPanel")}
   `;
   renderRows(container);
+  loadCrowdingPanel("crowdPanel", "watchlist");
 
   container.querySelector("#wlTbody").addEventListener("click", (e) => {
     const removeId = e.target.closest("[data-remove]")?.dataset.remove;

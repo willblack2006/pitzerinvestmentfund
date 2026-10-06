@@ -93,6 +93,22 @@ live("market pages: macro, screener, insiders", async () => {
   assert.ok(Number.isFinite(ins.netValue) && ins.recent.length);
 }, 240000);
 
+live("short pressure: single-symbol detail and ranked list", async () => {
+  const one = (await s.api("/api/short-pressure/AAPL")).body;
+  assert.ok(!one.error, one.error);
+  assert.ok(Number.isFinite(one.score) && one.score >= 0 && one.score <= 100);
+  assert.ok(Array.isArray(one.reasons) && one.reasons.length);
+  assert.ok(Array.isArray(one.finra));
+
+  const ranked = (await s.api("/api/short-pressure?scope=holdings")).body;
+  assert.equal(ranked.scope, "holdings");
+  assert.ok(Array.isArray(ranked.rows));
+  for (let i = 1; i < ranked.rows.length; i++) {
+    const a = ranked.rows[i - 1].score ?? -1, b = ranked.rows[i].score ?? -1;
+    assert.ok(a >= b, "ranked most crowded first");
+  }
+}, 240000);
+
 live("live quotes: batched prices, today's change and market state", async () => {
   const r = await s.api("/api/quotes?symbols=AAPL,MSFT,ZZZZQX");
   assert.equal(r.status, 200);
