@@ -2,7 +2,9 @@ services:
   - type: web
     name: pitzer-investment-fund
     env: node
-    plan: free
+    plan: starter # free instances can't attach a disk, and the database lives on the disk
+    region: oregon
+    healthCheckPath: /api/positions
     buildCommand: npm install
     startCommand: npm start
     envVars:
