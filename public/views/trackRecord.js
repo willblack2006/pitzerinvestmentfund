@@ -40,7 +40,7 @@ export async function mount(container) {
       <div class="tab-grid page-pad">
         <section class="panel span-full" aria-labelledby="cal-h">
           <div class="panel-head"><h3 id="cal-h">Calibration: predicted vs actual</h3><span class="muted small">Dots on the diagonal are well-calibrated</span></div>
-          <div class="chart-box"><canvas id="calChart" role="img" aria-label="${esc(`Calibration chart: ${r.buckets.map((b) => `confidence ~${Math.round(b.avgPredicted * 100)}% actually hit ${Math.round(b.actualHitRate * 100)}% of the time (${b.n} calls)`).join("; "))}"></canvas></div>
+          <div class="chart-box"><canvas id="calChart" role="img" aria-label="${esc(`Calibration chart: ${r.buckets.map((b) => `confidence ~${Math.round(b.avgPredicted * 100)}% actually hit ${Math.round(b.actualHitRate * 100)}% of the time (${b.n} calls)`).join("; ")}`)}"></canvas></div>
         </section>
         ${groupTable("By analyst", r.byAnalyst)}
         ${groupTable("By sector", r.bySector)}

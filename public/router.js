@@ -93,7 +93,7 @@ export function initRouter(routeMap) {
     view.setAttribute("aria-busy", "false");
 
     const handler = moduleCache.get(match.handler);
-    const title = typeof handler.title === "function" ? handler.title(match.params) : handler.title;
+    const title = typeof handler?.title === "function" ? handler.title(match.params) : handler?.title;
     document.title = title ? `${title} · ${SITE}` : SITE;
     focusHeading();
   }
