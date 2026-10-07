@@ -3,6 +3,7 @@ const db = require("../db");
 const yahoo = require("../lib/sources/yahoo");
 const finnhub = require("../lib/sources/finnhub");
 const { volumeZScore, latestGapPct, newsAttentionRatio, scoreCrowding } = require("../lib/crowding");
+const { storedSignals } = require("../lib/signals");
 
 const router = express.Router();
 
@@ -40,7 +41,10 @@ router.get("/crowding", async (req, res) => {
   // aren't on the watchlist yet) overrides the holdings/watchlist scope.
   const explicit = String(req.query.symbols || "").toUpperCase().split(",").map((s) => s.trim()).filter((s) => /^[A-Z0-9.\-]{1,10}$/.test(s)).slice(0, 40);
   const symbols = explicit.length ? [...new Set(explicit)] : [...new Set([...(scope !== "watchlist" ? owned : []), ...(scope !== "holdings" ? watched : [])])];
-  const results = await Promise.allSettled(symbols.map(crowdingFor));
+  // Holdings/watchlist scopes read what lib/signals.js stored in the background; only symbols
+  // with nothing stored yet (e.g. just added) are computed live.
+  const stored = explicit.length ? new Map() : new Map(storedSignals().filter((s) => s.crowding).map((s) => [s.symbol, s.crowding]));
+  const results = await Promise.allSettled(symbols.map((s) => (stored.has(s) ? stored.get(s) : crowdingFor(s))));
   const rows = results.map((r, i) => (r.status === "fulfilled"
     ? { ...r.value, owned: owned.includes(r.value.symbol) }
     : { symbol: symbols[i], error: r.reason?.message || String(r.reason), owned: owned.includes(symbols[i]) }));

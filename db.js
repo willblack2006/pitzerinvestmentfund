@@ -246,6 +246,16 @@ db.exec(`
   );
 `);
 
+// Per-symbol alert signals computed in the background (lib/signals.js), so /api/alerts reads
+// stored results instead of fanning out to hundreds of external calls per page load.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS signals (
+    symbol TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    computed_at TEXT NOT NULL
+  );
+`);
+
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund
 // enters its own IPS rather than inheriting placeholder numbers.
 const DEFAULT_SETTINGS = {

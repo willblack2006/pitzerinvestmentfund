@@ -27,6 +27,7 @@ const membersRouter = require("./routes/members");
 const scheduler = require("./lib/scheduler");
 const db = require("./db");
 const portfolio = require("./lib/portfolio");
+const signals = require("./lib/signals");
 const path = require("path");
 
 const PORT = process.env.PORT || 3000;
@@ -60,6 +61,14 @@ app.get("/api/cron/snapshot", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized." });
   }
   res.json(await portfolio.snapshot());
+});
+
+// Background refresh of the heavy alert signals (Vercel Cron calls this daily).
+app.get("/api/cron/signals", async (req, res) => {
+  if (process.env.CRON_SECRET && req.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: "Unauthorized." });
+  }
+  res.json(await signals.refreshSignals());
 });
 app.use("/api", positionsRouter);
 app.use("/api", researchRouter);

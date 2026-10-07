@@ -731,3 +731,57 @@ test("FINRA short-volume file parsing", () => {
   assert.equal(rows.GOOG, undefined);
   assert.deepEqual(parseShortVolumeFile("Date|Symbol|ShortVolume|ShortExemptVolume|TotalVolume|Market\n"), {});
 });
+
+test("signals refresh: stops at the time budget and resumes stalest-first", async () => {
+  const db = require("../db");
+  const { refreshSignals, storedSignals } = require("../lib/signals");
+  db.prepare("DELETE FROM positions").run();
+  db.prepare("DELETE FROM watchlist").run();
+  db.prepare("INSERT INTO positions (symbol, shares) VALUES (?, ?)").run("AAA", 1);
+  db.prepare("INSERT INTO positions (symbol, shares) VALUES (?, ?)").run("BBB", 1);
+  db.prepare("INSERT INTO watchlist (symbol) VALUES (?)").run("CCC");
+
+  // Fake clock: each compute takes 10 "seconds".
+  let clock = Date.parse("2026-01-05T12:00:00Z");
+  const now = () => clock;
+  const calls = [];
+  const compute = async (symbol, { owned }) => {
+    calls.push(symbol);
+    clock += 10000;
+    return { alerts: [{ type: "short", level: "watch", symbol, title: `${symbol} flagged`, owned }], crowding: null };
+  };
+
+  const first = await refreshSignals({ budgetMs: 15000, compute, now });
+  assert.equal(first.refreshed, 2); // second compute starts at 10s < 15s budget, third at 20s does not
+  assert.equal(first.remaining, 1);
+  assert.equal(first.total, 3);
+
+  const second = await refreshSignals({ budgetMs: 15000, compute, now });
+  assert.equal(second.refreshed, 1);
+  assert.equal(second.remaining, 0);
+  assert.equal(new Set(calls).size, 3, "every tracked symbol computed exactly once across runs");
+
+  // Fresh results are not recomputed until they age past maxAgeMs.
+  const third = await refreshSignals({ budgetMs: 15000, compute, now });
+  assert.equal(third.refreshed, 0);
+
+  // A manual refresh (`since`) recomputes everything older than the click, stalest first.
+  clock += 60000;
+  const since = clock;
+  const manual = await refreshSignals({ budgetMs: 100000, since, compute, now });
+  assert.equal(manual.refreshed, 3);
+  assert.deepEqual(calls.slice(-3).slice(0, 2), calls.slice(0, 2), "stalest symbols go first");
+  const again = await refreshSignals({ budgetMs: 100000, since, compute, now });
+  assert.equal(again.refreshed, 0, "a manual refresh terminates");
+
+  const stored = storedSignals();
+  assert.equal(stored.length, 3);
+  assert.ok(stored.find((s) => s.symbol === "CCC").alerts[0].owned === false);
+  assert.ok(stored.find((s) => s.symbol === "AAA").alerts[0].owned === true);
+
+  // Sold / unwatched names drop out of the stored view.
+  db.prepare("DELETE FROM watchlist WHERE symbol = ?").run("CCC");
+  assert.deepEqual(storedSignals().map((s) => s.symbol).sort(), ["AAA", "BBB"]);
+  db.prepare("DELETE FROM positions").run();
+  db.prepare("DELETE FROM signals").run();
+});

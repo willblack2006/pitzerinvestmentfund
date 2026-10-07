@@ -5,6 +5,14 @@ export const title = "Alerts";
 
 const ICON = { price: "◎", target: "◎", policy: "⚠", earnings: "📅", insider: "👤", vote: "🗳" };
 
+function timeAgo(iso) {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  return hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)} days ago`;
+}
+
 export function alertItem(a) {
   const href = a.pitchId ? `#/pitches/${a.pitchId}` : a.type === "policy" ? "#/allocation" : a.symbol ? `#/research/${encodeURIComponent(a.symbol)}${a.type === "earnings" ? "/street" : a.type === "insider" ? "/ownership" : a.type === "target" ? "/thesis" : ""}` : null;
   return `<li class="alert-item alert-${esc(a.level)}">
@@ -30,6 +38,10 @@ export async function mount(container) {
   container.innerHTML = `
     ${subTabs(PORTFOLIO_TABS, "#/alerts")}
     ${pageHead("Alerts", "Everything that needs the fund's attention: price targets hit, policy breaches, open votes, upcoming earnings and insider buying.")}
+    <p class="small muted page-pad" id="signalsStatus">
+      Insider, short-interest, filing, revision and attention signals: ${alerts.signalsAsOf ? `updated ${esc(timeAgo(alerts.signalsAsOf))}` : "not computed yet"}.
+      ${isUnlocked() ? `<button type="button" class="btn btn-ghost btn-sm" id="refreshSignalsBtn">Refresh signals</button>` : ""}
+    </p>
     <div class="tab-grid">
       <section class="panel" aria-labelledby="act-h">
         <h3 id="act-h">Needs action <span class="count-pill">${action.length}</span></h3>
@@ -60,6 +72,28 @@ export async function mount(container) {
         <div id="triageBody" class="small muted">Click "Run today's triage" to score each holding's recent headlines for materiality with Claude (one batched call per stock; costs a little API credit).</div>
       </section>
     </div>`;
+
+  document.getElementById("refreshSignalsBtn")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const since = Date.now();
+    try {
+      for (;;) {
+        const r = await api("/api/signals/refresh", { method: "POST", body: JSON.stringify({ since }) });
+        if (!btn.isConnected) return;
+        const total = r.refreshed + r.remaining + (btn.dataset.done ? Number(btn.dataset.done) : 0);
+        btn.dataset.done = String((Number(btn.dataset.done) || 0) + r.refreshed);
+        btn.textContent = `Refreshing… ${btn.dataset.done} / ${total}`;
+        if (!r.remaining) break;
+      }
+      toast("Signals refreshed.", { type: "success" });
+      mount(container);
+    } catch (err) {
+      toast(`Couldn't refresh signals: ${err.message}`, { type: "error" });
+      btn.disabled = false;
+      btn.textContent = "Refresh signals";
+    }
+  });
 
   document.getElementById("runTriageBtn")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
