@@ -212,9 +212,9 @@ router.get("/research/:symbol/filing-diff", async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   const form = req.query.form === "10-Q" ? "10-Q" : "10-K";
   try {
-    res.json({ symbol, ...(await filingDiffFor(symbol, form)) });
+    res.json({ symbol, aiEnabled: claude.configured(), ...(await filingDiffFor(symbol, form)) });
   } catch (err) {
-    res.json({ symbol, form, available: false, error: err.message });
+    res.json({ symbol, form, available: false, error: err.message, aiEnabled: claude.configured() });
   }
 });
 

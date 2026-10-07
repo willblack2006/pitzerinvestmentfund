@@ -304,7 +304,9 @@ async function loadNewsTriage(symbol, newsList, errored) {
   const byUrl = Object.fromEntries((r.items || []).map((n) => [n.url, n]));
   const body = el("newsBody");
   if (body) body.innerHTML = renderNews(newsList, errored, byUrl);
-  if (isUnlocked() && r.aiEnabled) {
+  if (r.aiEnabled === false) {
+    actions.innerHTML = `<span class="muted small">AI news scoring: coming soon</span>`;
+  } else if (isUnlocked() && r.aiEnabled) {
     actions.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="triageBtn">Score with Claude</button>`;
     el("triageBtn").addEventListener("click", async (e) => {
       e.target.disabled = true;

@@ -68,8 +68,10 @@ export async function mount(container) {
           </table></div>` : `<p class="muted">${earnings.error ? "The earnings calendar needs a Finnhub API key." : "No reports scheduled in the next 45 days."}</p>`}
       </section>
       <section class="panel span-full" aria-labelledby="news-h">
-        <div class="panel-head"><h3 id="news-h">AI news triage</h3>${isUnlocked() ? `<button type="button" class="btn btn-ghost btn-sm" id="runTriageBtn">Run today's triage</button>` : ""}</div>
-        <div id="triageBody" class="small muted">Click "Run today's triage" to score each holding's recent headlines for materiality with Claude (one batched call per stock; costs a little API credit).</div>
+        <div class="panel-head"><h3 id="news-h">AI news triage</h3>${isUnlocked() && alerts.aiEnabled !== false ? `<button type="button" class="btn btn-ghost btn-sm" id="runTriageBtn">Run today's triage</button>` : ""}</div>
+        <div id="triageBody" class="small muted">${alerts.aiEnabled === false
+          ? "AI news triage isn't available yet (coming soon)."
+          : `Click "Run today's triage" to score each holding's recent headlines for materiality with Claude (one batched call per stock; costs a little API credit).`}</div>
       </section>
     </div>`;
 

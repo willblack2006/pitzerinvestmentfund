@@ -5,6 +5,7 @@ const portfolio = require("../lib/portfolio");
 const analytics = require("../lib/analytics");
 const finnhub = require("../lib/sources/finnhub");
 const { storedSignals, refreshSignals } = require("../lib/signals");
+const claude = require("../lib/sources/claude");
 const { latestPrices, histories } = require("../lib/prices");
 const { getSettings } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
@@ -239,7 +240,7 @@ router.get("/alerts", async (req, res) => {
 
   const order = { action: 0, watch: 1 };
   alerts.sort((a, b) => order[a.level] - order[b.level]);
-  res.json({ alerts, generatedAt: new Date().toISOString(), signalsAsOf });
+  res.json({ alerts, generatedAt: new Date().toISOString(), signalsAsOf, aiEnabled: claude.configured() });
 });
 
 // Manual "Refresh signals" (Alerts page). Short budget per call; the page calls it in a loop
