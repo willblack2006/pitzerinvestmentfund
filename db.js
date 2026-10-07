@@ -1,32 +1,13 @@
-// SQLite via libsql (a better-sqlite3-compatible driver). Two modes:
-//   - Local file (default): DB_PATH or data/pif.db.
-//   - Turso (serverless hosting such as Vercel, where the filesystem is temporary): set
-//     TURSO_DATABASE_URL + TURSO_AUTH_TOKEN. The app keeps a local replica for fast reads,
-//     sends writes to the Turso primary, and re-syncs so every server instance sees them.
+// SQLite via libsql (a better-sqlite3-compatible driver), stored in a file: DB_PATH (on Render,
+// the attached disk at /data/pif.db) or data/pif.db locally.
 const Database = require("libsql");
-
-// libsql picks its native build with a computed require(), which serverless bundlers can't
-// see. Naming the Linux builds here makes Vercel's file tracer ship them with the function.
-if (process.env.VERCEL) {
-  for (const load of [() => require("@libsql/linux-x64-gnu"), () => require("@libsql/linux-arm64-gnu")]) {
-    try { load(); } catch { /* only the build for this CPU can load */ }
-  }
-}
 const path = require("path");
 
-// Turso is used on Vercel, or anywhere USE_TURSO=true. Having the keys in a local .env alone
-// does NOT switch local development (or tests) onto the live fund database.
-const useTurso = process.env.TURSO_DATABASE_URL && (process.env.VERCEL || process.env.USE_TURSO === "true");
-const turso = useTurso
-  ? { syncUrl: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
-  : null;
-// Vercel's app directory is read-only; only /tmp is writable (and temporary — hence Turso).
-const dbPath = process.env.DB_PATH || (process.env.VERCEL ? "/tmp/pif.db" : path.join(__dirname, "data", "pif.db"));
+const dbPath = process.env.DB_PATH || path.join(__dirname, "data", "pif.db");
 require("fs").mkdirSync(path.dirname(dbPath), { recursive: true });
 
-const db = turso ? new Database(dbPath, turso) : new Database(dbPath);
-if (turso) db.sync();
-else db.pragma("journal_mode = WAL");
+const db = new Database(dbPath);
+db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
 // libsql adds a `_metadata` field to every row; strip it so rows serialize and spread
@@ -38,9 +19,9 @@ const clean = (row) => {
   }
   return row;
 };
-// Turso replicas drop *named* parameters (@name) when forwarding writes to the primary, so
-// rewrite them to numbered positional ones (?1, ?2 …) and convert the object argument to an
-// array. Repeated names reuse the same number. Applied everywhere so both modes behave alike.
+// Named parameters (@name) are rewritten to numbered positional ones (?1, ?2 …) and the
+// object argument converted to an array; repeated names reuse the same number. (Added for a
+// past Turso setup; kept because every query in the app now goes through it.)
 function toPositional(sql) {
   const names = [];
   const text = sql.replace(/@([A-Za-z_][A-Za-z0-9_]*)/g, (_, name) => {
@@ -70,25 +51,6 @@ db.prepare = (sql) => {
   stmt.all = (...args) => all(...bind(args)).map(clean);
   return stmt;
 };
-
-// Turso replicas forward each write to the primary over HTTP, where BEGIN/COMMIT don't span
-// statements (they fail, and a failed batch is applied partially anyway). In that mode run
-// "transactions" as plain sequential writes; locally they stay real SQLite transactions.
-if (turso) {
-  db.transaction = (fn) => (...args) => fn(...args);
-}
-
-// Pull other instances' writes from Turso. db.sync() is a blocking synchronous network
-// round-trip (not a promise), so every request that triggers it pays that latency directly —
-// widened from 2s to 30s since this fund has few concurrent editors, trading a bit of
-// cross-instance read freshness for much faster typical request times on Vercel.
-let lastSync = Date.now();
-db.syncIfStale = (maxAgeMs = 30_000) => {
-  if (!turso || Date.now() - lastSync < maxAgeMs) return;
-  try { db.sync(); } catch (err) { console.error("[db] sync failed:", err.message); }
-  lastSync = Date.now();
-};
-db.isTurso = !!turso;
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS positions (

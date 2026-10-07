@@ -190,22 +190,14 @@ The tests cover:
 - All third-party and user text is HTML-escaped before rendering. AI briefs go through a
   restricted Markdown renderer.
 
-## Deploying (Vercel + Turso, free)
-The live app runs on Vercel's free plan, with data in a free [Turso](https://turso.tech) database.
-Vercel's filesystem is temporary, so the app keeps a local replica of the Turso database and
-sends writes to it.
-
-1. In Turso, create a database. Copy its URL (`libsql://…`) and create an auth token.
-2. In Vercel → Project → Settings → Environment Variables, add:
-   `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `EDIT_PASSWORD`, `FINNHUB_API_KEY`, `FRED_API_KEY`,
-   `SEC_USER_AGENT`, `DISABLE_SCHEDULER=true`, and optionally `ANTHROPIC_API_KEY` and
-   `CRON_SECRET`.
-3. Deploy with `vercel deploy --prod`. `vercel.json` sets up the Express function, bundles the
-   Linux builds of the database driver, and adds a weekday cron for the valuation snapshot.
-
 ## Deploying (Render.com)
-`render.yaml` defines a web service with a persistent disk (so the SQLite database survives
-restarts) and the env vars this app needs:
+The live app is https://pitzer-investment-fund.onrender.com, a Render Starter instance (about
+$7/month) with a 1 GB disk ($0.25/month) holding the SQLite database. Pushes to `main` deploy
+automatically; each deploy has ~30-40s of downtime while the instance restarts (disks prevent
+zero-downtime deploys).
+
+`render.yaml` defines the web service, its persistent disk (so the database survives restarts)
+and the env vars this app needs:
 
 1. Push this repo to GitHub.
 2. In Render, choose **New > Blueprint**, point it at the repo — it reads `render.yaml`.

@@ -18,10 +18,6 @@ async function startServer() {
       DB_PATH: path.join(dir, "test.db"),
       EDIT_PASSWORD: PASSWORD,
       DISABLE_SCHEDULER: "true",
-      // Never let tests reach the live database, whatever is in .env.
-      TURSO_DATABASE_URL: "",
-      TURSO_AUTH_TOKEN: "",
-      USE_TURSO: "false",
       AUTO_REFRESH_PRICES: "false",
     },
     stdio: ["ignore", "pipe", "pipe"],

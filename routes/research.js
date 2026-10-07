@@ -184,8 +184,8 @@ router.get("/research/:symbol/red-flags", async (req, res) => {
 // Factors / MD&A / Legal Proceedings sections of the two most recent same-type filings
 // (10-K vs prior 10-K, or 10-Q vs prior 10-Q) and score how much they changed.
 async function filingDiffFor(symbol, form) {
-  // Paragraph lists are capped before caching: uncapped, one diff was up to 1.2 MB, and the
-  // whole cache table gets downloaded by every new Vercel instance. Counts stay exact.
+  // Paragraph lists are capped before caching (uncapped, one diff was up to 1.2 MB); the UI
+  // shows at most 5 paragraphs per section. Counts stay exact.
   const cap = (paras) => paras.slice(0, 40).map((p) => p.slice(0, 2000));
   return cached(`filing_diff_v2_${symbol}_${form}`, 24 * 60 * 60, "filing_diff", async () => {
     const filings = (await sec.getRecentFilings(symbol, [form])).filter((f) => f.form === form);

@@ -25,9 +25,6 @@ const portfolioRouter = require("./routes/portfolio");
 const pitchesRouter = require("./routes/pitches");
 const membersRouter = require("./routes/members");
 const scheduler = require("./lib/scheduler");
-const db = require("./db");
-const portfolio = require("./lib/portfolio");
-const signals = require("./lib/signals");
 const path = require("path");
 
 const PORT = process.env.PORT || 3000;
@@ -52,24 +49,6 @@ app.use(express.static(path.join(__dirname, "public"), {
   maxAge: "10m",
 }));
 
-// On Turso-backed serverless hosts, pick up writes made by other instances.
-app.use("/api", (req, res, next) => { db.syncIfStale(); next(); });
-
-// Daily valuation snapshot for hosts without an always-on process (Vercel Cron calls this).
-app.get("/api/cron/snapshot", async (req, res) => {
-  if (process.env.CRON_SECRET && req.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: "Unauthorized." });
-  }
-  res.json(await portfolio.snapshot());
-});
-
-// Background refresh of the heavy alert signals (Vercel Cron calls this daily).
-app.get("/api/cron/signals", async (req, res) => {
-  if (process.env.CRON_SECRET && req.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: "Unauthorized." });
-  }
-  res.json(await signals.refreshSignals());
-});
 app.use("/api", positionsRouter);
 app.use("/api", researchRouter);
 app.use("/api", macroRouter);
@@ -101,7 +80,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.expose ? err.message : "Something went wrong on the server." });
 });
 
-// Run as a normal server (`npm start`), or export the app for serverless hosts (api/index.js).
+// Run as a normal server (`npm start`).
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`PIF tracker running on http://localhost:${PORT}`);
