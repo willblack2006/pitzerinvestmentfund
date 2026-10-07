@@ -184,7 +184,10 @@ router.get("/research/:symbol/red-flags", async (req, res) => {
 // Factors / MD&A / Legal Proceedings sections of the two most recent same-type filings
 // (10-K vs prior 10-K, or 10-Q vs prior 10-Q) and score how much they changed.
 async function filingDiffFor(symbol, form) {
-  return cached(`filing_diff_${symbol}_${form}`, 24 * 60 * 60, "filing_diff", async () => {
+  // Paragraph lists are capped before caching: uncapped, one diff was up to 1.2 MB, and the
+  // whole cache table gets downloaded by every new Vercel instance. Counts stay exact.
+  const cap = (paras) => paras.slice(0, 40).map((p) => p.slice(0, 2000));
+  return cached(`filing_diff_v2_${symbol}_${form}`, 24 * 60 * 60, "filing_diff", async () => {
     const filings = (await sec.getRecentFilings(symbol, [form])).filter((f) => f.form === form);
     if (filings.length < 2) return { form, available: false, reason: `Need two ${form} filings to compare; only ${filings.length} found.` };
     const [latest, prior] = filings; // newest first
@@ -194,7 +197,7 @@ async function filingDiffFor(symbol, form) {
     const sections = latestSections.map((s) => {
       const match = priorSections.find((p) => p.label === s.label);
       const cmp = compareFilingSections(match?.body, s.body);
-      return { label: s.label, ...cmp, hasPrior: !!match };
+      return { label: s.label, ...cmp, addedCount: cmp.added.length, removedCount: cmp.removed.length, added: cap(cmp.added), removed: cap(cmp.removed), hasPrior: !!match };
     });
     return {
       form, available: true,
