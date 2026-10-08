@@ -3,12 +3,50 @@ import {
   sortHeader, sortRows, bindSort, pageHead, loading, errorBox, invalidateContext, subTabs,
 } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
-import { alertItem } from "./alerts.js";
+import { alertItem, ICON, TAB } from "./alerts.js";
 import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
 
 export const title = "Portfolio";
 
-const state = { positions: [], quotes: {}, market: null, sort: { key: "marketValue", dir: -1 }, filter: "" };
+const state = { positions: [], quotes: {}, market: null, sort: { key: "marketValue", dir: -1 }, filter: "", signals: {}, period: "all", bases: null, basesError: null, cash: null, dividends: null };
+
+// Time frames for the gain columns and summary. "all" = since purchase (vs cost basis);
+// "1d" = live day change; the rest compare the live price with the close before the frame
+// started (bases from /api/portfolio/period-bases), at today's share counts.
+const PERIODS = [["1d", "1D", "today"], ["5d", "5D", "last 5 days"], ["1m", "1M", "last month"], ["3m", "3M", "last 3 months"], ["ytd", "YTD", "year to date"], ["1y", "1Y", "last year"], ["all", "All", "since purchase"]];
+const periodLabel = (k) => PERIODS.find(([p]) => p === k)?.[2] || "";
+try { const saved = localStorage.getItem("pif_holdings_period"); if (PERIODS.some(([p]) => p === saved)) state.period = saved; } catch { /* private mode */ }
+
+async function loadBases() {
+  if (state.bases || ["all", "1d"].includes(state.period)) return;
+  try {
+    state.bases = await api("/api/portfolio/period-bases");
+    state.basesError = null;
+  } catch (err) {
+    state.basesError = err.message;
+  }
+  if (el("tbody")) renderTable();
+}
+
+// Gain for the selected frame: { gain, gainPct, baseValue } (nulls when unknown).
+function periodFigures(p) {
+  if (state.period === "all") return { gain: p.marketValue - p.totalCost, gainPct: p.totalCost ? ((p.marketValue - p.totalCost) / p.totalCost) * 100 : null, baseValue: p.totalCost };
+  if (state.period === "1d") return { gain: p.dayChange, gainPct: p.dayChangePct, baseValue: p.prevValue ?? null };
+  const base = state.bases?.bySymbol?.[p.symbol]?.[state.period]?.close;
+  if (!Number.isFinite(base) || base <= 0) return { gain: null, gainPct: null, baseValue: null };
+  return { gain: (p.lastPrice - base) * p.shares, gainPct: (p.lastPrice / base - 1) * 100, baseValue: base * p.shares };
+}
+
+// Small badges summarizing the background-computed signals for one holding (insider,
+// short-pressure, estimate revisions, red flags, filing changes, activist filings), each
+// linking to the research tab that explains it. Dot color follows alert level.
+function signalBadges(symbol) {
+  const sig = state.signals[symbol];
+  if (!sig?.badges?.length) return "";
+  const seen = new Set();
+  const badges = sig.badges.filter((b) => (seen.has(b.type) ? false : (seen.add(b.type), true)));
+  return badges.map((b) => `<a class="sig-chip sig-chip-${esc(b.level)}" href="#/research/${encodeURIComponent(symbol)}${TAB[b.type] || ""}" title="${esc(b.title)}">${ICON[b.type] || "•"}</a>`).join("");
+}
 
 // Overlay live quotes on the stored positions: price, market value and today's move. The
 // stored price/value remain the fallback when a quote is unavailable.
@@ -31,38 +69,52 @@ function withLive(positions) {
 function withDerived(positions) {
   positions = withLive(positions);
   const totalValue = positions.reduce((s, p) => s + p.marketValue, 0);
-  return positions.map((p) => {
-    const gain = p.marketValue - p.totalCost;
-    return {
-      ...p,
-      gain,
-      gainPct: p.totalCost ? (gain / p.totalCost) * 100 : null,
-      weight: totalValue ? (p.marketValue / totalValue) * 100 : 0,
-    };
-  });
+  return positions.map((p) => ({
+    ...p,
+    ...periodFigures(p),
+    weight: totalValue ? (p.marketValue / totalValue) * 100 : 0,
+  }));
 }
 
 function renderSummary(rows) {
   const totalCost = rows.reduce((s, r) => s + r.totalCost, 0);
   const totalValue = rows.reduce((s, r) => s + r.marketValue, 0);
-  const totalGain = totalValue - totalCost;
-  const totalGainPct = totalCost ? (totalGain / totalCost) * 100 : 0;
-  const totalDiv = rows.reduce((s, r) => s + (r.divIncome || 0), 0);
-  const winners = rows.filter((r) => r.gain > 0).length;
+  const cash = Number.isFinite(state.cash) ? state.cash : 0;
+  const portfolioTotal = totalValue + cash;
+  const share = (v) => (portfolioTotal ? `${((v / portfolioTotal) * 100).toFixed(1)}% of portfolio` : "");
+  const div = state.dividends;
+  // Gain for the selected frame, over the positions that have a figure for it.
+  const known = rows.filter((r) => r.gain != null && r.baseValue);
+  const totalGain = known.reduce((s, r) => s + r.gain, 0);
+  const totalBase = known.reduce((s, r) => s + r.baseValue, 0);
+  const totalGainPct = totalBase ? (totalGain / totalBase) * 100 : 0;
+  const winners = known.filter((r) => r.gain > 0).length;
+  const losers = known.filter((r) => r.gain < 0).length;
+  const pending = !["all", "1d"].includes(state.period) && !state.bases;
+  const since = state.bases?.starts?.[state.period];
+  const gainSub = state.period === "all"
+    ? `${signed(totalGainPct, fmtPct(totalGainPct))} on ${fmtUSD(totalCost)} cost`
+    : `${signed(totalGainPct, fmtPct(totalGainPct))}${since ? ` since the ${since} close` : ""} · today's shares, price only${known.length < rows.length ? ` · ${rows.length - known.length} without data` : ""}`;
   const liveRows = rows.filter((r) => r.dayChange != null && r.prevValue);
   const dayChange = liveRows.reduce((s, r) => s + r.dayChange, 0);
   const dayBase = liveRows.reduce((s, r) => s + r.prevValue, 0);
-  const dayPct = dayBase ? (dayChange / dayBase) * 100 : null;
+  // Day change as a share of the whole portfolio (cash included), the way Schwab reports it.
+  const dayPct = dayBase ? (dayChange / (dayBase + cash)) * 100 : null;
 
   el("summary").innerHTML = `
-    <div class="stat stat-lg"><div class="label">Market value</div><div class="value">${fmtUSD(totalValue)}</div>
-      <div class="sub">${rows.length} positions${liveRows.length ? ` · <span class="nowrap">${dayLabel()} ${signed(dayChange, fmtUSD(dayChange))} (${fmtPct(dayPct)})</span>` : ""}</div></div>
-    <div class="stat"><div class="label">Total gain</div><div class="value">${signed(totalGain, fmtUSD(totalGain))}</div>
-      <div class="sub">${signed(totalGainPct, fmtPct(totalGainPct))} on ${fmtUSD(totalCost)} cost</div></div>
-    <div class="stat"><div class="label">Dividend income</div><div class="value">${fmtUSD(totalDiv)}</div>
-      <div class="sub">${totalValue ? ((totalDiv / totalValue) * 100).toFixed(2) : "0.00"}% of value</div></div>
-    <div class="stat"><div class="label">Winners / losers</div><div class="value">${winners} / ${rows.length - winners}</div>
-      <div class="sub">positions above / below cost</div></div>
+    <div class="stat stat-lg"><div class="label">Total portfolio</div><div class="value">${fmtUSD(portfolioTotal)}</div>
+      <div class="sub">Invested + cash${liveRows.length ? ` · <span class="nowrap">${dayLabel()} ${signed(dayChange, fmtUSD(dayChange))} (${fmtPct(dayPct)})</span>` : ""}</div></div>
+    <div class="stat"><div class="label">Invested</div><div class="value">${fmtUSD(totalValue)}</div>
+      <div class="sub">${rows.length} positions · ${share(totalValue)}</div></div>
+    <div class="stat"><div class="label">Cash</div><div class="value">${state.cash == null ? "…" : fmtUSD(cash)}</div>
+      <div class="sub">${share(cash)}</div></div>
+    <div class="stat"><div class="label">${state.period === "all" ? "Total gain" : `Gain, ${esc(periodLabel(state.period))}`}</div>
+      ${pending ? `<div class="value muted">${state.basesError ? "Unavailable" : "Loading…"}</div><div class="sub">${state.basesError ? esc(state.basesError) : "Fetching price history"}</div>`
+        : `<div class="value">${signed(totalGain, fmtUSD(totalGain))}</div><div class="sub">${gainSub}</div>`}</div>
+    <div class="stat"><div class="label">Dividends, next 12 months</div><div class="value">${div ? `${fmtUSD(div.totals.annualIncome)}` : `<span class="muted">…</span>`}</div>
+      <div class="sub">${div ? `Projected · ${fmtUSD(div.totals.receivedSinceStart)} received since tracking began · <a href="#/dividends">Details</a>` : "Loading dividend rates…"}</div></div>
+    <div class="stat"><div class="label">Winners / losers</div><div class="value">${pending ? "…" : `${winners} / ${losers}`}</div>
+      <div class="sub">${state.period === "all" ? "positions above / below cost" : `positions up / down, ${esc(periodLabel(state.period))}`}</div></div>
   `;
 }
 
@@ -73,7 +125,7 @@ function renderConcentration(rows) {
   const max = top[0]?.weight || 1;
   const topFive = top.slice(0, 5).reduce((s, r) => s + r.weight, 0);
   el("concentration").innerHTML = `
-    <div class="panel-head"><h3>Largest positions</h3><span class="muted small">Top 5 = ${topFive.toFixed(1)}% of fund</span></div>
+    <div class="panel-head"><h3>Largest positions</h3><span class="muted small">Top 5 = ${topFive.toFixed(1)}% of invested</span></div>
     <ol class="bar-list">
       ${top.map((r) => `
         <li>
@@ -100,15 +152,16 @@ function renderTable() {
   const s = state.sort;
   el("thead").innerHTML = `<tr>
     ${sortHeader("symbol", "Ticker", s, { align: "left sticky-col" })}
+    <th scope="col"><span class="sr-only">Signals</span></th>
     ${sortHeader("weight", "Weight", s)}
     ${sortHeader("shares", "Shares", s)}
     ${sortHeader("lastPrice", "Price", s)}
     ${sortHeader("dayChangePct", "Day", s)}
     ${sortHeader("avgCost", "Avg cost", s)}
     ${sortHeader("marketValue", "Market value", s)}
-    ${sortHeader("gain", "Gain $", s)}
-    ${sortHeader("gainPct", "Gain %", s)}
-    ${sortHeader("divIncome", "Dividends", s)}
+    ${sortHeader("gain", state.period === "all" ? "Gain $" : `Gain $ (${PERIODS.find(([p]) => p === state.period)[1]})`, s)}
+    ${sortHeader("gainPct", state.period === "all" ? "Gain %" : `Gain % (${PERIODS.find(([p]) => p === state.period)[1]})`, s)}
+    ${sortHeader("divIncome", "Div. received", s)}
     ${unlocked ? `<th scope="col"><span class="sr-only">Actions</span></th>` : ""}
   </tr>`;
 
@@ -118,14 +171,15 @@ function renderTable() {
         <a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a>
         ${r.notes ? `<div class="muted small cell-note">${esc(r.notes)}</div>` : ""}
       </th>
+      <td class="signals-cell">${signalBadges(r.symbol)}</td>
       <td>${r.weight.toFixed(1)}%</td>
       <td>${r.shares.toLocaleString()}</td>
       <td>${fmtUSD(r.lastPrice)}${r.live ? "" : `<span class="stale-dot" title="Live price unavailable — showing the last saved price" aria-label="saved price, not live">*</span>`}</td>
       <td>${r.dayChangePct == null ? `<span class="muted">—</span>` : signed(r.dayChangePct, fmtPct(r.dayChangePct))}</td>
       <td>${fmtUSD(r.avgCost)}</td>
       <td>${fmtUSD(r.marketValue)}</td>
-      <td>${signed(r.gain, fmtUSD(r.gain))}</td>
-      <td>${r.gainPct === null ? `<span class="muted">—</span>` : signed(r.gainPct, fmtPct(r.gainPct))}</td>
+      <td>${r.gain == null ? `<span class="muted">—</span>` : signed(r.gain, fmtUSD(r.gain))}</td>
+      <td>${r.gainPct == null ? `<span class="muted">—</span>` : signed(r.gainPct, fmtPct(r.gainPct))}</td>
       <td>${fmtUSD(r.divIncome)}</td>
       ${unlocked ? `<td>
         <div class="row-actions">
@@ -152,7 +206,9 @@ function renderTable() {
 
 async function loadPositions() {
   state.positions = await api("/api/positions");
+  state.bases = null; // a new or removed position changes the symbol list
   renderTable();
+  loadBases();
 }
 
 // ---- Live prices ----
@@ -345,6 +401,7 @@ async function deletePosition(p) {
 
 export async function mount(container) {
   container.innerHTML = subTabs(PORTFOLIO_TABS, "#/") + loading("Loading holdings…");
+  state.bases = null; // re-fetched per visit (server caches the histories for 6h)
   try {
     state.positions = await api("/api/positions");
   } catch (err) {
@@ -360,6 +417,12 @@ export async function mount(container) {
       `The fund's current holdings, valued at live prices. <span id="marketLine" class="market-line" role="status">${marketLine()}</span>`,
       unlocked ? `<button id="addBtn" class="btn btn-primary">+ Add position</button>` : ""
     )}
+    <div class="period-bar">
+      <span class="muted small" id="periodLabel">Gains for</span>
+      <div class="seg seg-sm" role="group" aria-labelledby="periodLabel">
+        ${PERIODS.map(([k, short, long]) => `<button type="button" class="seg-btn" data-period="${k}" aria-pressed="${state.period === k}" title="${esc(long)}">${short}</button>`).join("")}
+      </div>
+    </div>
     <section class="summary" id="summary" aria-label="Portfolio summary"></section>
     <div class="two-col">
       <section class="panel" id="concentration" aria-label="Largest positions"></section>
@@ -392,7 +455,18 @@ export async function mount(container) {
   loadAlertPreview();
   loadCrowdingPanel("crowdPanel", "holdings");
   refreshQuotes().then(startPolling);
+  api("/api/signals").then((r) => { state.signals = r.bySymbol; if (el("tbody")) renderTable(); }).catch(() => { /* badges just stay blank */ });
 
+  loadBases();
+  api("/api/settings").then((s) => { state.cash = Number(s.cash) || 0; if (el("tbody")) renderTable(); }).catch(() => { /* cash card shows … */ });
+  api("/api/dividends").then((d) => { state.dividends = d; if (el("tbody")) renderTable(); }).catch(() => { /* card stays loading */ });
+  container.querySelectorAll("[data-period]").forEach((b) => b.addEventListener("click", () => {
+    state.period = b.dataset.period;
+    try { localStorage.setItem("pif_holdings_period", state.period); } catch { /* private mode */ }
+    container.querySelectorAll("[data-period]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    renderTable();
+    loadBases();
+  }));
   el("addBtn")?.addEventListener("click", () => openPositionDialog(null));
   bindSort(el("table"), state.sort, renderTable);
   el("search").addEventListener("input", (e) => {

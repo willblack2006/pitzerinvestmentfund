@@ -38,7 +38,7 @@ router.get("/backtest", async (req, res) => {
   const { rows, summary } = backtestMomentum(usable, benchSeries, { costBps });
 
   res.json({
-    signal, years, costBps,
+    signal, years, costBps, benchmark: benchmarks.shortName(getSettings().benchmark),
     universeSize: Object.keys(usable).length,
     excludedForHistory: symbols.length - Object.keys(usable).length,
     rows, summary,

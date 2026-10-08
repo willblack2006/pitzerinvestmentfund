@@ -297,3 +297,30 @@ test("policy limits can be left unset; unset limits produce no breaches", async 
   assert.equal(cleared.body.maxSectorPct, null);
   assert.equal((await s.api("/api/settings", { method: "PUT", auth: true, body: { cash: null } })).status, 400, "cash isn't optional");
 });
+
+test("paper trading: seasons, member-only trades, validation without live prices", async () => {
+  const token = tokens.Ben; // a fresh PIN login here would trip the rate limiter earlier tests filled
+
+  const board = await s.api("/api/paper");
+  assert.equal(board.status, 200);
+  assert.ok(board.body.season.id && board.body.isOpen);
+  assert.equal(board.body.mine, null, "anonymous visitors have no portfolio");
+  assert.deepEqual(board.body.leaderboard, []);
+
+  const mine = (await s.api("/api/paper", { member: token })).body.mine;
+  assert.equal(mine.cash, board.body.season.startingCash);
+  assert.equal(mine.positions.length, 0);
+
+  assert.equal((await s.api("/api/paper/trades", { method: "POST", body: { symbol: "AAPL", type: "buy", shares: 1 } })).status, 401);
+  assert.equal((await s.api("/api/paper/trades", { method: "POST", member: token, body: { symbol: "!!", type: "buy", shares: 1 } })).status, 400);
+  assert.equal((await s.api("/api/paper/trades", { method: "POST", member: token, body: { symbol: "!!", type: "short", shares: 1 } })).status, 400);
+
+  assert.equal((await s.api("/api/paper/seasons", { method: "POST", body: { name: "Spring 2027" } })).status, 401);
+  assert.equal((await s.api("/api/paper/seasons", { method: "POST", auth: true, body: { startingCash: -5 } })).status, 400);
+  const next = await s.api("/api/paper/seasons", { method: "POST", auth: true, body: { name: "Spring 2027", startingCash: 50000 } });
+  assert.equal(next.status, 201);
+  const seasons = (await s.api("/api/paper/seasons")).body;
+  assert.equal(seasons[0].name, "Spring 2027");
+  assert.ok(seasons[1].endedAt, "the previous season is closed, not deleted");
+  assert.equal((await s.api(`/api/paper?season=${seasons[1].id}`)).body.isOpen, false);
+});

@@ -1,6 +1,7 @@
 import { el, esc, api, fmtPct, fmtRatio, fmtUSD, signed, pageHead, loading, errorBox, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker } from "../shared.js";
 import { lineChart, barChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
+import { term } from "../glossary.js";
 
 // Server stats can be null (e.g. a flat price series has no volatility); never call toFixed on them.
 const f2 = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "—");
@@ -57,10 +58,10 @@ export async function mount(container) {
     ${b ? `
     <section class="summary" aria-label="One-year statistics">
       <div class="stat stat-lg"><div class="label">Holdings, past year</div><div class="value">${pct(b.totalReturn)}</div><div class="sub">${esc(d.benchmark)} ${pct(b.benchReturn)} · <strong>${pct(b.totalReturn - b.benchReturn)}</strong> vs benchmark</div></div>
-      <div class="stat"><div class="label">Beta</div><div class="value">${f2(b.beta, 2)}</div><div class="sub">${b.beta > 1.1 ? "More volatile than the market" : b.beta < 0.9 ? "Less volatile than the market" : "In line with the market"}</div></div>
-      <div class="stat"><div class="label">Volatility</div><div class="value">${fmtRatio(b.volatility, 0)}</div><div class="sub">${esc(d.benchmark)} ${fmtRatio(b.benchVolatility, 0)}</div></div>
-      <div class="stat"><div class="label">Sharpe</div><div class="value">${f2(b.sharpe, 2)}</div><div class="sub">Info ratio ${f2(b.informationRatio, 2)}</div></div>
-      <div class="stat"><div class="label">Max drawdown</div><div class="value">${pct(b.maxDrawdown)}</div><div class="sub">${esc(b.drawdownPeak)} → ${esc(b.drawdownTrough)}</div></div>
+      <div class="stat"><div class="label">${term("beta")}</div><div class="value">${f2(b.beta, 2)}</div><div class="sub">${b.beta > 1.1 ? "More volatile than the market" : b.beta < 0.9 ? "Less volatile than the market" : "In line with the market"}</div></div>
+      <div class="stat"><div class="label">${term("volatility")}</div><div class="value">${fmtRatio(b.volatility, 0)}</div><div class="sub">${esc(d.benchmark)} ${fmtRatio(b.benchVolatility, 0)}</div></div>
+      <div class="stat"><div class="label">${term("sharpe", "Sharpe")}</div><div class="value">${f2(b.sharpe, 2)}</div><div class="sub">${term("informationRatio", "Info ratio")} ${f2(b.informationRatio, 2)}</div></div>
+      <div class="stat"><div class="label">${term("maxDrawdown")}</div><div class="value">${pct(b.maxDrawdown)}</div><div class="sub">${esc(b.drawdownPeak)} → ${esc(b.drawdownTrough)}</div></div>
     </section>` : ""}
 
     <div class="tab-grid">
@@ -75,7 +76,7 @@ export async function mount(container) {
         <div class="panel-head"><h3 id="twr-h">Fund return (time-weighted)</h3><span class="muted small">From daily valuation snapshots + the transaction ledger</span></div>
         ${twr ? `
           <div class="kv-grid kv-4">
-            <div><span class="muted small">Fund (TWR)</span><strong>${pct(twr.totalReturn)}</strong></div>
+            <div><span class="muted small">${term("twr", "Fund (TWR)")}</span><strong>${pct(twr.totalReturn)}</strong></div>
             <div><span class="muted small">${esc(d.benchmark)}</span><strong>${pct(twr.benchReturn)}</strong></div>
             <div><span class="muted small">Realized gains</span><strong>${fmtUSD(d.ledger.realizedGains)}</strong></div>
             <div><span class="muted small">Dividends received</span><strong>${fmtUSD(d.ledger.dividends)}</strong></div>
@@ -85,7 +86,7 @@ export async function mount(container) {
       </section>
 
       <section class="panel span-2" aria-labelledby="contrib-h">
-        <div class="panel-head"><h3 id="contrib-h">What drove the return</h3><span class="muted small">Contribution = 1Y return × starting weight</span></div>
+        <div class="panel-head"><h3 id="contrib-h">What drove the return</h3><span class="muted small">${term("contribution")} = 1Y return × starting weight</span></div>
         <div class="chart-box chart-tall"><canvas id="contribChart" role="img" aria-label="${esc(`Top contributors: ${d.contributions.slice(0, 3).map((c) => `${c.symbol} ${(c.contribution * 100).toFixed(1)} points`).join(", ")}. Biggest detractors: ${d.contributions.slice(-3).reverse().map((c) => `${c.symbol} ${(c.contribution * 100).toFixed(1)} points`).join(", ")}.`)}"></canvas></div>
       </section>
       <section class="panel" aria-labelledby="corr-sum-h">
@@ -95,7 +96,7 @@ export async function mount(container) {
       </section>
 
       <section class="panel span-full" aria-labelledby="corr-h">
-        <div class="panel-head"><h3 id="corr-h">Correlation between the 12 largest holdings</h3></div>
+        <div class="panel-head"><h3 id="corr-h">${term("correlation")} between the 12 largest holdings</h3></div>
         ${heatmap(d.correlation)}
       </section>
     </div>`;

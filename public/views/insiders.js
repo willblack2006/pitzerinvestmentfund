@@ -65,7 +65,11 @@ export function insiderShares(t) {
   return `<span class="muted">${t.change > 0 ? "+" : ""}${fmtNum(t.change)}</span>`;
 }
 
-export const MARKET_TABS = [["#/macro", "Macro backdrop"], ["#/insiders", "Insider activity"], ["#/short-interest", "Short interest"], ["#/backtest", "Backtester"], ["#/13f", "13F tracker"], ["#/calendar", "Calendar"], ["#/index-radar", "Index radar"]];
+export const MARKET_TABS = [
+  ["#/macro", "Macro backdrop", "Backdrop"], ["#/calendar", "Calendar", "Backdrop"],
+  ["#/insiders", "Insider activity", "Signals"], ["#/short-interest", "Short interest", "Signals"], ["#/13f", "13F tracker", "Signals"], ["#/congress", "Congress trades", "Signals"],
+  ["#/index-radar", "Index radar", "Tools"], ["#/backtest", "Backtester", "Tools"],
+];
 
 const state = { data: null, symbol: "", signalsOnly: true };
 

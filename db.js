@@ -208,6 +208,37 @@ db.exec(`
   );
 `);
 
+// Dividends the fund is owed or has received, one row per holding per ex-dividend date,
+// logged automatically from the date holdings were last reconciled with Schwab (lib/dividends.js).
+// status: expected (ex-date passed, not yet confirmed) | received (recorded as a dividend
+// transaction, which credits cash) | skipped (e.g. the shares were sold before the ex-date).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS dividends (
+    symbol TEXT NOT NULL,
+    exDate TEXT NOT NULL,
+    payDate TEXT,
+    perShare REAL NOT NULL,
+    shares REAL NOT NULL,
+    amount REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'expected' CHECK (status IN ('expected','received','skipped')),
+    transactionId INTEGER,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, exDate)
+  );
+`);
+
+// Today page news editions (lib/today.js): premarket / midday / postmarket snapshots of the
+// headlines, holdings news and AI recap, keyed by New York date. Pruned after ~10 days.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS news_editions (
+    date TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (date, slot)
+  );
+`);
+
 // Per-symbol alert signals computed in the background (lib/signals.js), so /api/alerts reads
 // stored results instead of fanning out to hundreds of external calls per page load.
 db.exec(`
@@ -216,6 +247,30 @@ db.exec(`
     payload TEXT NOT NULL,
     computed_at TEXT NOT NULL
   );
+`);
+
+// Paper-trading sandbox (feature 21): one season per semester; each member's portfolio is the
+// replay of their trades in that season (lib/paperTrading.js). Ended seasons are kept.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS paper_seasons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    startingCash REAL NOT NULL DEFAULT 100000,
+    startedAt TEXT NOT NULL DEFAULT (datetime('now')),
+    endedAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS paper_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seasonId INTEGER NOT NULL REFERENCES paper_seasons(id),
+    memberId INTEGER NOT NULL REFERENCES members(id),
+    type TEXT NOT NULL CHECK (type IN ('buy','sell')),
+    symbol TEXT NOT NULL,
+    shares REAL NOT NULL,
+    price REAL NOT NULL,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS paper_trades_member ON paper_trades (seasonId, memberId);
 `);
 
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund

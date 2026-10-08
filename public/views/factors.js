@@ -1,7 +1,11 @@
 import { esc, api, pageHead, loading, errorBox, subTabs, sortHeader, sortRows, bindSort } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
+import { barChart } from "../charts.js";
+import { GLOSSARY, term } from "../glossary.js";
 
-const FACTORS = [["value", "Value"], ["momentum", "Momentum"], ["quality", "Quality"], ["lowVol", "Low volatility"], ["size", "Size"]];
+const DEF_KEY = { value: "valueFactor", momentum: "momentum121", quality: "qualityFactor", lowVol: "lowVolFactor", size: "sizeFactor" };
+
+const FACTORS = [["value", "Value"], ["momentum", "Momentum"], ["quality", "Quality"], ["lowVol", "Low volatility"], ["size", "Size (bigger →)"]];
 
 const pct = (v) => (Number.isFinite(v) ? `${Math.round(v)}` : "—");
 const tiltLabel = (v) => {
@@ -15,8 +19,8 @@ const tiltLabel = (v) => {
 
 function cell(v) {
   if (!Number.isFinite(v)) return `<td class="num muted">—</td>`;
-  const tone = v >= 70 ? "tone-good" : v <= 30 ? "tone-bad" : "";
-  return `<td class="num"><span class="${tone}">${pct(v)}</span></td>`;
+  // No green/red: a high percentile means "more of this trait", not "good".
+  return `<td class="num">${v >= 70 || v <= 30 ? `<strong>${pct(v)}</strong>` : pct(v)}</td>`;
 }
 
 const state = { scope: "all", sort: { key: "value", dir: "desc" } };
@@ -36,9 +40,7 @@ async function load(container) {
   const t = r.tilt;
   box.innerHTML = `
     ${t ? `
-      <section class="summary" aria-label="Fund factor tilt vs neutral">
-        ${FACTORS.map(([k, label]) => `<div class="stat"><div class="label">${esc(label)}</div><div class="value">${pct(t[k])}</div><div class="sub">${esc(tiltLabel(t[k]))}</div></div>`).join("")}
-      </section>
+      <div class="chart-box chart-sm"><canvas id="tiltChart" role="img" aria-label="${esc(`Fund factor tilt, percentile minus 50: ${FACTORS.map(([k, l]) => `${l} ${pct(t[k])} (${tiltLabel(t[k]).toLowerCase()})`).join("; ")}.`)}"></canvas></div>
       <p class="muted small">The fund's holdings, weighted by position size, averaged within each factor's percentile (50 = neutral vs the rest of this universe). ${(() => {
         const entries = FACTORS.filter(([k]) => Number.isFinite(t[k]));
         if (!entries.length) return "";
@@ -51,7 +53,15 @@ async function load(container) {
       <thead id="factorsThead"></thead>
       <tbody id="factorsTbody"></tbody>
     </table></div>
-    <p class="muted small">Percentiles are ranked within the fund's holdings + watchlist (a full market universe is too costly to fetch live). 100 = best in this group for that factor, 0 = worst, 50 = neutral.</p>`;
+    <p class="muted small">Percentiles compare each stock with the fund's own ~${r.rows.length} holdings and watchlist names, not the whole market (fetching a market-wide universe live is too slow). 100 = the most of that trait in this group (cheapest, strongest momentum, highest quality, calmest, biggest), 50 = middle.</p>
+    <details class="explainer small"><summary>What each factor measures</summary><dl class="glossary-list">${FACTORS.map(([k]) => `<dt>${esc(GLOSSARY[DEF_KEY[k]][0])}</dt><dd>${esc(GLOSSARY[DEF_KEY[k]][1])}</dd>`).join("")}</dl></details>`;
+  if (t) {
+    barChart(document.getElementById("tiltChart"), {
+      labels: FACTORS.map(([, l]) => l),
+      datasets: [{ label: "Tilt vs middle of group (percentile − 50)", data: FACTORS.map(([k]) => (Number.isFinite(t[k]) ? Math.round(t[k] - 50) : null)), color: "--s1" }],
+      horizontal: true, legend: false,
+    });
+  }
   renderRows(r.rows);
 }
 
@@ -61,7 +71,7 @@ function renderRows(rows) {
   const s = state.sort;
   thead.innerHTML = `<tr>
     ${sortHeader("symbol", "Ticker", s, { align: "left" })}
-    ${FACTORS.map(([k, label]) => sortHeader(k, label, s)).join("")}
+    ${FACTORS.map(([k, label]) => sortHeader(k, label, s, { after: term(DEF_KEY[k], "") })).join("")}
   </tr>`;
   const sorted = sortRows(rows, s);
   document.getElementById("factorsTbody").innerHTML = sorted.map((r) => `

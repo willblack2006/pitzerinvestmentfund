@@ -6,9 +6,11 @@ import { initRouter } from "./router.js";
 // slow first loads, especially on phones).
 const router = initRouter({
   "/": () => import("./views/holdings.js"),
+  "/today": () => import("./views/today.js"),
   "/performance": () => import("./views/performance.js"),
   "/allocation": () => import("./views/allocation.js"),
   "/transactions": () => import("./views/transactions.js"),
+  "/dividends": () => import("./views/dividends.js"),
   "/alerts": () => import("./views/alerts.js"),
   "/factors": () => import("./views/factors.js"),
   "/research": () => import("./views/researchHome.js"),
@@ -22,6 +24,7 @@ const router = initRouter({
   "/pitches/:id": () => import("./views/pitch.js"),
   "/track-record": () => import("./views/trackRecord.js"),
   "/forced-sellers": () => import("./views/forcedSellers.js"),
+  "/paper": () => import("./views/paper.js"),
   "/macro": () => import("./views/macro.js"),
   "/insiders": () => import("./views/insiders.js"),
   "/short-interest": () => import("./views/shortInterest.js"),
@@ -29,7 +32,9 @@ const router = initRouter({
   "/13f": () => import("./views/thirteenF.js"),
   "/calendar": () => import("./views/calendar.js"),
   "/index-radar": () => import("./views/indexRadar.js"),
+  "/congress": () => import("./views/congressTrades.js"),
   "/settings": () => import("./views/settings.js"),
+  "/glossary": () => import("./views/glossary.js"),
 });
 
 // ---- Edit lock (shared fund password) ----

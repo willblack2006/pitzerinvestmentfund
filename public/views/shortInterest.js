@@ -31,7 +31,7 @@ async function loadRanking() {
           <td class="nowrap">${shortBadge(x.score, x.label)} ${shortMeter(x.score)}</td>
           <td class="num">${fmtX(x.daysToCover, 1)}</td>
           <td class="num">${fmtRatio(x.shortPctFloat)}</td>
-          <td class="num">${x.shortChangePct === null || x.shortChangePct === undefined ? "—" : signed(x.shortChangePct * 100, fmtPct(x.shortChangePct * 100))}</td>
+          <td class="num">${x.shortChangePct === null || x.shortChangePct === undefined ? "—" : signed(x.shortChangePct * 100, fmtPct(x.shortChangePct * 100), { invert: true })}</td>
           <td class="small muted">${esc(x.topReason || "")}</td>
         </tr>`).join("")}</tbody>
     </table></div>

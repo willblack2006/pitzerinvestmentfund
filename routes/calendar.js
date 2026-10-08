@@ -3,6 +3,7 @@ const db = require("../db");
 const finnhub = require("../lib/sources/finnhub");
 const yahoo = require("../lib/sources/yahoo");
 const fred = require("../lib/sources/fred");
+const fed = require("../lib/sources/fed");
 const { buildCalendarEvents, toICS, quarterlyRebalanceDates } = require("../lib/calendar");
 
 const router = express.Router();
@@ -14,7 +15,7 @@ async function gatherEvents(months) {
   const windowStart = new Date().toISOString().slice(0, 10);
   const windowEnd = new Date(Date.now() + months * 31 * 864e5).toISOString().slice(0, 10);
 
-  const [earningsR, exDivR, cpiR, jobsR] = await Promise.allSettled([
+  const [earningsR, exDivR, cpiR, jobsR, fomcR] = await Promise.allSettled([
     finnhub.apiKey() ? finnhub.getEarningsCalendar(symbols, windowStart, windowEnd) : Promise.resolve([]),
     Promise.all(symbols.map(async (s) => {
       try {
@@ -25,6 +26,7 @@ async function gatherEvents(months) {
     })).then((rows) => rows.filter(Boolean)),
     fred.getReleaseDates("cpi", { months }).catch(() => []),
     fred.getReleaseDates("jobs", { months }).catch(() => []),
+    fed.getFomcCalendar(),
   ]);
 
   const events = buildCalendarEvents({
@@ -32,7 +34,7 @@ async function gatherEvents(months) {
     exDividends: exDivR.status === "fulfilled" ? exDivR.value : [],
     cpiDates: cpiR.status === "fulfilled" ? cpiR.value : [],
     jobsDates: jobsR.status === "fulfilled" ? jobsR.value : [],
-    fomcDates: [], // no free, reliable API for the Fed's own meeting calendar; see federalreserve.gov
+    fomcDates: fomcR.status === "fulfilled" ? fomcR.value.meetingDates : [], // decision day of each two-day meeting
   }, { windowStart, windowEnd });
 
   return {

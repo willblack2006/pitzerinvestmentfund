@@ -19,9 +19,12 @@ export const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? esc(u) : "#");
 
 // Gain/loss with a shape cue (▲/▼) so it never relies on red/green alone. Missing values
 // stay neutral instead of defaulting to "positive".
-export function signed(value, formatted) {
+// `invert`: for numbers where up is the bad direction (e.g. rising short interest), so the
+// color matches the meaning while the arrow still shows the direction.
+export function signed(value, formatted, { invert = false } = {}) {
   if (value === null || value === undefined || Number.isNaN(value)) return `<span class="muted">—</span>`;
-  const cls = value > 0 ? "gain-pos" : value < 0 ? "gain-neg" : "";
+  const good = invert ? value < 0 : value > 0, bad = invert ? value > 0 : value < 0;
+  const cls = good ? "gain-pos" : bad ? "gain-neg" : "";
   const icon = value > 0 ? "▲" : value < 0 ? "▼" : "";
   const word = value > 0 ? "up" : value < 0 ? "down" : "";
   return `<span class="${cls}">${icon ? `<span aria-hidden="true">${icon} </span><span class="sr-only">${word} </span>` : ""}${formatted ?? value}</span>`;
@@ -151,12 +154,15 @@ export function lockedHint(text) {
 
 // ---- Sortable tables: real <button>s inside <th> with aria-sort ----
 
-export function sortHeader(key, label, sortState, { align = "" } = {}) {
+// `after` is extra HTML placed after the sort button (e.g. a glossary "?" from term(key, "")),
+// since a button can't sit inside another button.
+export function sortHeader(key, label, sortState, { align = "", after = "" } = {}) {
   const active = sortState.key === key;
   const ariaSort = active ? (sortState.dir === 1 ? "ascending" : "descending") : "none";
   const arrow = active ? (sortState.dir === 1 ? "↑" : "↓") : "↕";
+  const btn = `<button type="button" class="sort-btn" data-sort="${key}">${label}<span class="sort-arrow" aria-hidden="true">${arrow}</span></button>`;
   return `<th scope="col" aria-sort="${ariaSort}" class="${align}">
-    <button type="button" class="sort-btn" data-sort="${key}">${label}<span class="sort-arrow" aria-hidden="true">${arrow}</span></button>
+    ${after ? `<div class="sort-wrap">${btn}${after}</div>` : btn}
   </th>`;
 }
 
@@ -244,9 +250,11 @@ export function errorBox(text, retry = true) {
 }
 
 // Shown at the top of grouped sections (Ideas, Market) so related pages read as one area.
+// Items are [href, label] or [href, label, group]; a group name is shown once, before the
+// first tab in that group, so long tab bars read as a few clusters.
 export function subTabs(items, activeHref) {
   return `<nav class="subtabs" aria-label="Section">
-    ${items.map(([href, label]) => `<a href="${href}" class="subtab" ${href === activeHref ? 'aria-current="page"' : ""}>${label}</a>`).join("")}
+    ${items.map(([href, label, group], i) => `${group && group !== items[i - 1]?.[2] ? `<span class="subtab-group">${esc(group)}</span>` : ""}<a href="${href}" class="subtab" ${href === activeHref ? 'aria-current="page"' : ""}>${label}</a>`).join("")}
   </nav>`;
 }
 

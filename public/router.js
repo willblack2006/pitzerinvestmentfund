@@ -24,10 +24,12 @@ function matchRoute(routes, segments) {
 
 // Which top-level nav section a route belongs to (each section groups several pages).
 const SECTION_OF = {
+  today: "today",
   "": "portfolio",
   performance: "portfolio",
   allocation: "portfolio",
   transactions: "portfolio",
+  dividends: "portfolio",
   alerts: "portfolio",
   factors: "portfolio",
   research: "research",
@@ -36,6 +38,7 @@ const SECTION_OF = {
   pitches: "ideas",
   "track-record": "ideas",
   "forced-sellers": "ideas",
+  paper: "ideas",
   macro: "market",
   insiders: "market",
   "short-interest": "market",
@@ -43,6 +46,7 @@ const SECTION_OF = {
   "13f": "market",
   calendar: "market",
   "index-radar": "market",
+  congress: "market",
   settings: "settings",
 };
 
@@ -95,6 +99,11 @@ export function initRouter(routeMap) {
     const handler = moduleCache.get(match.handler);
     const title = typeof handler?.title === "function" ? handler.title(match.params) : handler?.title;
     document.title = title ? `${title} · ${SITE}` : SITE;
+    // On phones the tab bars scroll sideways; keep the current tab visible.
+    for (const a of view.querySelectorAll(".subtabs [aria-current], .tabnav [aria-current]")) {
+      const bar = a.parentElement, b = bar.getBoundingClientRect(), t = a.getBoundingClientRect();
+      bar.scrollLeft += t.left - b.left - (b.width - t.width) / 2;
+    }
     focusHeading();
   }
 

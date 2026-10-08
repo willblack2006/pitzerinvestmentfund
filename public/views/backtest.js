@@ -30,8 +30,8 @@ async function run(container) {
     <section class="summary" aria-label="Backtest summary">
       <div class="stat"><div class="label">Top tercile (highest momentum)</div><div class="value">${signed(s.topTotalReturn * 100, fmtPct(s.topTotalReturn * 100))}</div><div class="sub">${s.months} months, ${r.universeSize} names, ${r.costBps}bps/rebalance</div></div>
       <div class="stat"><div class="label">Bottom tercile (lowest momentum)</div><div class="value">${signed(s.bottomTotalReturn * 100, fmtPct(s.bottomTotalReturn * 100))}</div></div>
-      <div class="stat"><div class="label">Benchmark (buy &amp; hold)</div><div class="value">${signed(s.benchTotalReturn * 100, fmtPct(s.benchTotalReturn * 100))}</div></div>
-      <div class="stat"><div class="label">Long/short spread</div><div class="value">${signed(s.longShortSpread * 100, fmtPct(s.longShortSpread * 100))}</div><div class="sub">Top minus bottom, cumulative</div></div>
+      <div class="stat"><div class="label">Benchmark: ${esc(r.benchmark || "SPY")} (buy &amp; hold)</div><div class="value">${signed(s.benchTotalReturn * 100, fmtPct(s.benchTotalReturn * 100))}</div></div>
+      <div class="stat"><div class="label">Top minus bottom</div><div class="value">${signed(s.longShortSpread * 100, fmtPct(s.longShortSpread * 100))}</div><div class="sub">Does the signal separate winners from losers?</div></div>
     </section>
     <section class="panel" aria-labelledby="bt-chart-h">
       <div class="panel-head"><h3 id="bt-chart-h">Growth of $100</h3></div>
@@ -62,12 +62,13 @@ export async function mount(container) {
       <div class="panel-head"><h3 id="bt-h">Run a backtest</h3></div>
       <form id="btForm" class="toolbar">
         <label class="field-inline">Signal
-          <select id="btSignal">${SIGNALS.map(([v, l, enabled]) => `<option value="${v}" ${!enabled ? "disabled" : ""} ${v === state.signal ? "selected" : ""}>${l}${enabled ? "" : " (needs historical data we don't store)"}</option>`).join("")}</select>
+          <select id="btSignal">${SIGNALS.filter(([, , enabled]) => enabled).map(([v, l]) => `<option value="${v}" ${v === state.signal ? "selected" : ""}>${l}</option>`).join("")}</select>
         </label>
         <label class="field-inline">Years <input id="btYears" type="number" min="1" max="10" value="${state.years}" inputmode="numeric" /></label>
         <label class="field-inline">Cost (bps/rebalance) <input id="btCost" type="number" min="0" max="200" value="${state.costBps}" inputmode="numeric" /></label>
         <button class="btn btn-primary">Run</button>
       </form>
+      <p class="muted small">Insider, estimate-revision and short-pressure scores can't be backtested yet: the app only has their current values, not what they read in past months.</p>
       <div id="btBody"></div>
     </section>`;
   run(container);

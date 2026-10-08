@@ -7,6 +7,7 @@ const finnhub = require("../lib/sources/finnhub");
 const { storedSignals, refreshSignals } = require("../lib/signals");
 const claude = require("../lib/sources/claude");
 const { latestPrices, histories } = require("../lib/prices");
+const { basesFor, PERIODS } = require("../lib/periods");
 const { getSettings } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
 
@@ -147,6 +148,28 @@ router.get("/portfolio/performance", async (req, res) => {
   });
 });
 
+// ---- Time-frame starting prices for the Holdings table ----
+
+// Every frame's base close for every holding in one response, from the 1-year daily
+// histories the Performance page also uses (cached 6h), so switching frames on the page
+// costs nothing after the first load.
+router.get("/portfolio/period-bases", async (req, res) => {
+  const symbols = db.prepare("SELECT symbol FROM positions").all().map((r) => r.symbol);
+  const hist = await histories(symbols, "2y");
+  const bySymbol = {};
+  for (const s of symbols) bySymbol[s] = basesFor(hist[s]);
+  const latest = Object.values(hist).map((h) => h?.at(-1)?.date).filter(Boolean).sort().at(-1) || null;
+  // The close each frame is measured from (most holdings share it; a stock that didn't trade
+  // that day falls back to its own earlier close).
+  const starts = {};
+  for (const p of PERIODS) {
+    const counts = {};
+    for (const b of Object.values(bySymbol)) if (b[p]) counts[b[p].date] = (counts[b[p].date] || 0) + 1;
+    starts[p] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  }
+  res.json({ latest, starts, bySymbol, missing: symbols.filter((s) => !hist[s]?.length) });
+});
+
 // ---- Earnings calendar for holdings + watchlist ----
 
 router.get("/portfolio/earnings", async (req, res) => {
@@ -187,6 +210,47 @@ router.delete("/price-alerts/:id", requireAuth, (req, res) => {
 });
 
 // ---- Alerts feed: everything that needs the fund's attention, in one place ----
+
+// Meeting brief: what moved since the last meeting, what's waiting on a decision, what's next.
+router.get("/meeting-brief", async (req, res) => {
+  const { movesSince } = require("../lib/meetingBrief");
+  const since = /^\d{4}-\d{2}-\d{2}$/.test(req.query.since || "") ? req.query.since : new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const positions = db.prepare("SELECT symbol, shares FROM positions").all();
+  const symbols = positions.map((p) => p.symbol);
+  const [hist, quotes] = await Promise.all([histories(symbols, "1y"), latestPrices(symbols)]);
+  const prices = Object.fromEntries(Object.entries(quotes).map(([s, q]) => [s, q.price]));
+  const moves = movesSince(hist, positions, since, prices);
+  const startTotal = moves.reduce((s, r) => s + (r.startValue || 0), 0);
+  const endTotal = moves.reduce((s, r) => s + (r.value || 0), 0);
+  let earnings = [];
+  try {
+    const to = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+    earnings = finnhub.apiKey() ? await finnhub.getEarningsCalendar(symbols, new Date().toISOString().slice(0, 10), to) : [];
+  } catch { /* needs Finnhub */ }
+  res.json({
+    since,
+    holdingsChangePct: startTotal ? endTotal / startTotal - 1 : null,
+    moves,
+    voting: db.prepare("SELECT id, symbol, direction, author FROM pitches WHERE status = 'voting'").all(),
+    awaitingExecution: db.prepare("SELECT id, symbol, direction, author, decidedAt FROM pitches WHERE status = 'approved'").all(),
+    decidedSince: db.prepare("SELECT id, symbol, direction, status, decidedAt FROM pitches WHERE decidedAt >= ? ORDER BY decidedAt").all(since),
+    earnings: earnings.sort((a, b) => a.date.localeCompare(b.date)),
+  });
+});
+
+// Compact per-symbol signal badges for the Holdings table (reuses the background-computed
+// signals cache, so this is cheap even for 30+ positions).
+router.get("/signals", (req, res) => {
+  const stored = storedSignals();
+  const bySymbol = {};
+  for (const s of stored) {
+    bySymbol[s.symbol] = {
+      badges: s.alerts.map((a) => ({ type: a.type, level: a.level, title: a.title })),
+      crowdingScore: s.crowding && !s.crowding.error ? s.crowding.score : null,
+    };
+  }
+  res.json({ bySymbol, computedAt: stored.length ? stored.map((s) => s.computedAt).sort().at(-1) : null });
+});
 
 router.get("/alerts", async (req, res) => {
   const alerts = [];
@@ -239,7 +303,11 @@ router.get("/alerts", async (req, res) => {
   for (const p of voting) alerts.push({ type: "vote", level: "action", symbol: p.symbol, pitchId: p.id, title: `Vote open: ${p.direction} ${p.symbol}`, detail: "Members can cast their vote on the pitch page." });
 
   const order = { action: 0, watch: 1 };
-  alerts.sort((a, b) => order[a.level] - order[b.level]);
+  // Action first, then holdings before watchlist names, then grouped by ticker.
+  const ownedSet = new Set(positions);
+  alerts.sort((a, b) => order[a.level] - order[b.level]
+    || (ownedSet.has(b.symbol) ? 1 : 0) - (ownedSet.has(a.symbol) ? 1 : 0)
+    || (a.symbol || "").localeCompare(b.symbol || ""));
   res.json({ alerts, generatedAt: new Date().toISOString(), signalsAsOf, aiEnabled: claude.configured() });
 });
 

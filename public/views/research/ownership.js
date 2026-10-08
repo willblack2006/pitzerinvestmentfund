@@ -1,6 +1,28 @@
 import { el, esc, api, safeUrl, fmtMoneyCompact, fmtRatio, fmtNum, signed, fmtPct, loading } from "../../shared.js";
 import { insiderCodeLabel, insiderShares } from "../insiders.js";
 import { scoreMeter, signalBadge, kindTag } from "../insiderSignal.js";
+import { tradeRows, EVIDENCE_NOTE } from "../congressTrades.js";
+
+async function renderCongress(symbol) {
+  const box = el("congressBody");
+  if (!box) return;
+  let r;
+  try {
+    r = await api(`/api/research/${encodeURIComponent(symbol)}/congress-trades`);
+  } catch (err) {
+    box.innerHTML = `<p class="muted">Couldn't load congressional trades: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!el("congressBody")) return;
+  box.innerHTML = `
+    ${r.error ? `<p class="muted small">The House disclosure site couldn't be read: ${esc(r.error)}</p>`
+      : r.trades.length ? `<div class="table-scroll"><table class="mini-table">
+        <caption class="sr-only">House members' reported trades in ${esc(symbol)}</caption>
+        <thead><tr><th scope="col">Trade date</th><th scope="col">Member</th><th scope="col">Type</th><th scope="col" class="num">Amount</th><th scope="col">Report</th></tr></thead>
+        <tbody>${tradeRows(r.trades, { showTicker: false })}</tbody></table></div>`
+      : `<p class="muted small">No House member reported trading ${esc(symbol)} in the last ${r.days} days of filings.</p>`}
+    <p class="muted small">${EVIDENCE_NOTE}</p>`;
+}
 
 async function renderSignal(symbol) {
   const box = el("signalBody");
@@ -84,6 +106,10 @@ export async function render(c, { symbol, data }) {
           </table></div>
           <p class="muted small">Big index funds (Vanguard, BlackRock, State Street) hold nearly everything; changes by active managers are more telling.</p>` : `<p class="muted">No institutional ownership data.</p>`}
       </section>
+      <section class="panel span-full" aria-labelledby="congress-h">
+        <div class="panel-head"><h3 id="congress-h">Congressional trades</h3><span class="muted small">House members, last 60 days of filings · <a href="#/congress">all holdings →</a></span></div>
+        <div id="congressBody">${loading("Reading House transaction reports…")}</div>
+      </section>
       <section class="panel span-full" aria-labelledby="activist-h">
         <div class="panel-head"><h3 id="activist-h">Activist / 5%-owner filings</h3><span class="muted small">New SC 13D / 13G filings, last 12 months</span></div>
         <div id="activistBody">${loading("Checking EDGAR for 13D/13G filings…")}</div>
@@ -96,6 +122,7 @@ export async function render(c, { symbol, data }) {
 
   renderSignal(symbol);
   renderActivist(symbol);
+  renderCongress(symbol);
   try {
     const res = await api(`/api/insiders/${encodeURIComponent(symbol)}`);
     const tx = res.transactions || [];
@@ -107,7 +134,7 @@ export async function render(c, { symbol, data }) {
     }
     const buys = tx.filter((t) => t.transactionCode === "P"), sells = tx.filter((t) => t.transactionCode === "S");
     target.innerHTML = `
-      <p class="small">${buys.length} open-market buy${buys.length === 1 ? "" : "s"} and ${sells.length} sale${sells.length === 1 ? "" : "s"} in the recent window. ${buys.length ? "<strong>Insider buying is a meaningful signal</strong> — they rarely buy without conviction." : ""}</p>
+      <p class="small">${buys.length} open-market buy${buys.length === 1 ? "" : "s"} and ${sells.length} sale${sells.length === 1 ? "" : "s"} in the recent window. ${buys.length ? "See the insider signal above for which buys come from insiders whose trades have historically carried information." : ""}</p>
       <div class="table-scroll"><table class="mini-table">
         <caption class="sr-only">Recent insider transactions for ${esc(symbol)}</caption>
         <thead><tr><th scope="col">Date</th><th scope="col">Insider</th><th scope="col">Type</th><th scope="col" class="num">Shares</th></tr></thead>

@@ -41,7 +41,13 @@ function scenarioBar(p, current) {
     ${p.bullPrice && p.bearPrice && p.basePrice && ref ? `<p class="small muted">Reward/risk: ${((p.bullPrice - ref) / Math.max(0.01, ref - p.bearPrice)).toFixed(1)}× (upside to bull ÷ downside to bear)</p>` : ""}`;
 }
 
-function editor(p, isNew) {
+function priceInfoHtml(current, basePrice) {
+  if (!current) return `<span class="muted small">Current price unknown — type a ticker or check it on the research page.</span>`;
+  const upside = basePrice ? basePrice / current - 1 : null;
+  return `<span class="small">Current price: <strong>${fmtUSD(current)}</strong>${upside !== null ? ` · Upside to base case: ${signed(upside * 100, fmtPct(upside * 100))}` : ""}</span>`;
+}
+
+function editor(p, isNew, current) {
   const field = ([key, label, hint, rows]) => `
     <label class="field-block">${label}
       <textarea name="${key}" rows="${rows}" placeholder="${esc(hint)}">${esc(p[key] || "")}</textarea>
@@ -63,7 +69,8 @@ function editor(p, isNew) {
       <label class="field-block">One-line pitch <input name="title" value="${esc(p.title || "")}" maxlength="140" placeholder="e.g. Margin expansion the market isn't pricing in" /></label>
       ${SECTIONS.map(field).join("")}
       <fieldset class="scenarios">
-        <legend>Price targets (12-month)</legend>
+        <legend>Price targets <span id="horizonLabel">${p.horizonMonths ? `(${p.horizonMonths}-month)` : "(set a time horizon above)"}</span></legend>
+        <p id="pitchPriceInfo">${priceInfoHtml(current, p.basePrice)}</p>
         <div class="form-row">
           <label>Bear case ($) <input name="bearPrice" type="number" step="any" min="0" value="${p.bearPrice ?? ""}" inputmode="decimal" /></label>
           <label>Base case ($) <span class="req" aria-hidden="true">*</span><input name="basePrice" type="number" step="any" min="0" value="${p.basePrice ?? ""}" inputmode="decimal" /></label>
@@ -169,7 +176,10 @@ export async function mount(container, params) {
     return;
   }
 
-  const current = p.currentPrice;
+  let current = p.currentPrice;
+  if (isNew && p.symbol && !current) {
+    try { current = (await api(`/api/quotes?symbols=${encodeURIComponent(p.symbol)}`)).quotes?.[p.symbol]?.price ?? null; } catch { /* leave unknown */ }
+  }
   const since = current && p.priceAtPitch ? current / p.priceAtPitch - 1 : null;
   const baseUpside = p.basePrice && (current || p.priceAtPitch) ? p.basePrice / (current || p.priceAtPitch) - 1 : null;
 
@@ -196,7 +206,7 @@ export async function mount(container, params) {
     </section>` : ""}
     <div class="research-layout">
       <div class="research-main">
-        <section class="panel">${editing ? editor(p, isNew) : `${scenarioBar(p, current)}${readView(p)}`}</section>
+        <section class="panel">${editing ? editor(p, isNew, current) : `${scenarioBar(p, current)}${readView(p)}`}</section>
       </div>
       ${!isNew ? `<aside class="research-side">${votePanel(p)}
         ${p.status === "approved" ? `<section class="panel"><h3>Next step</h3><p class="small">Place the trade, then record it under <a href="#/transactions">Transactions</a> and mark this pitch executed.</p></section>` : ""}
@@ -205,6 +215,29 @@ export async function mount(container, params) {
 
   el("editBtn")?.addEventListener("click", () => { container.dataset.editing = String(p.id); mount(container, params); });
   el("cancelEdit")?.addEventListener("click", () => { delete container.dataset.editing; mount(container, params); });
+
+  if (editing) {
+    const form = el("pitchForm");
+    let liveCurrent = current;
+    const refreshPriceInfo = () => {
+      const info = el("pitchPriceInfo");
+      if (info) info.innerHTML = priceInfoHtml(liveCurrent, Number(form.basePrice.value) || null);
+      const label = el("horizonLabel");
+      if (label) label.textContent = form.horizonMonths.value ? `(${form.horizonMonths.value}-month)` : "(set a time horizon above)";
+    };
+    form.basePrice.addEventListener("input", refreshPriceInfo);
+    form.horizonMonths.addEventListener("input", refreshPriceInfo);
+    let lastLookup = "";
+    form.symbol.addEventListener("blur", async () => {
+      const sym = form.symbol.value.trim().toUpperCase();
+      if (!sym || sym === lastLookup) return;
+      lastLookup = sym;
+      try {
+        liveCurrent = (await api(`/api/quotes?symbols=${encodeURIComponent(sym)}`)).quotes?.[sym]?.price ?? null;
+      } catch { liveCurrent = null; }
+      if (form.symbol.value.trim().toUpperCase() === sym) refreshPriceInfo();
+    });
+  }
 
   el("pitchForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();

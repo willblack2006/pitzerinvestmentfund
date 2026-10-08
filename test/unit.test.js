@@ -187,7 +187,7 @@ test("insider signal: routine traders are ignored, opportunistic cluster buys sc
   const r = scoreInsiders(rows, { now });
   assert.equal(r.cluster, 3);
   assert.ok(r.score >= 60, `expected strong buy, got ${r.score}`);
-  assert.equal(r.label, "Strong buy signal");
+  assert.equal(r.label, "Strong insider buying");
 
   // The same buying spread out by a lone insider scores lower than the cluster.
   const solo = scoreInsiders([...oppHist("Ann"), t("Ann", "2025-06-20", "P", 5000, 20, 15000)], { now });
@@ -505,6 +505,23 @@ test("13F best-ideas: portfolio weights, name matching and QoQ change", () => {
   assert.equal(smallCo.priorWeightPct, null);
 });
 
+test("13F manager search: keeps filers whose own name matches, one row per CIK", () => {
+  const { parseManagerSearch } = require("../lib/thirteenF");
+  const json = { aggregations: { entity_filter: { buckets: [
+    { key: "BERKSHIRE HATHAWAY INC  (BRK-A, BRK-B)  (CIK 0001067983)", doc_count: 154 },
+    { key: "COBBLESTONE CAPITAL ADVISORS LLC /NY/  (CIK 0001033505)", doc_count: 97 }, // holds BRK, not a match
+    { key: "Berkshire Asset Management LLC/PA  (CIK 0000949012)", doc_count: 50 },
+    { key: "Berkshire Partners (UK) Ltd  (CIK 0000000001)", doc_count: 2 },
+    { key: "Berkshire Hathaway Inc.  (CIK 0001067983)", doc_count: 3 }, // same CIK, older name
+  ] } } };
+  const r = parseManagerSearch(json, "Berkshire");
+  assert.deepEqual(r.map((m) => m.cik), ["0001067983", "0000949012", "0000000001"]);
+  assert.equal(r[0].name, "BERKSHIRE HATHAWAY INC"); // tickers stripped, most-used name kept
+  assert.equal(r[2].name, "Berkshire Partners (UK) Ltd"); // a parenthesis inside the name survives
+  assert.deepEqual(parseManagerSearch(json, "berkshire asset").map((m) => m.cik), ["0000949012"]);
+  assert.deepEqual(parseManagerSearch({}, "x"), []);
+});
+
 test("activist filings: cover-page parsing and alert building", () => {
   const { parseCoverPage, buildActivistAlerts } = require("../lib/activistFilings");
 
@@ -784,4 +801,207 @@ test("signals refresh: stops at the time budget and resumes stalest-first", asyn
   assert.deepEqual(storedSignals().map((s) => s.symbol).sort(), ["AAA", "BBB"]);
   db.prepare("DELETE FROM positions").run();
   db.prepare("DELETE FROM signals").run();
+});
+
+test("Today: market-news filter, tidy, holdings matching and relevance", () => {
+  const mn = require("../lib/marketNews");
+  const items = [
+    { headline: "Oil rises on supply worries - Reuters", source: "Reuters", summary: "Oil rises on supply worries  Reuters", url: "https://a", datetime: "2026-10-07T10:00:00Z" },
+    { headline: "Oil rises on supply worries", source: "CNBC", summary: "", url: "https://b", datetime: "2026-10-07T09:00:00Z" }, // duplicate story
+    { headline: "Prime minister visits flood zone", source: "Reuters", summary: "", url: "https://c", datetime: "2026-10-07T11:00:00Z" },
+    { headline: "Apollo Global Management raises new fund", source: "CNBC", summary: "The firm said...", url: "https://d", datetime: "2026-10-07T08:00:00Z" },
+  ];
+  const kept = mn.filterMarketNews(items);
+  assert.deepEqual(kept.map((h) => h.url), ["https://a", "https://d"]); // politics dropped, duplicate collapsed, newest first
+  assert.equal(kept[0].headline, "Oil rises on supply worries"); // " - Reuters" suffix removed
+  assert.equal(kept[0].summary, ""); // summary that only repeats the headline removed
+  assert.equal(mn.dedupeNews(items).length, 3); // recap input keeps world news
+
+  const holdings = [{ symbol: "APO", name: "Apollo Global Management, Inc." }, { symbol: "ON", name: "ON Semiconductor Corporation" }];
+  assert.deepEqual(mn.mentionedHoldings(items[3], holdings), ["APO"]);
+  assert.deepEqual(mn.mentionedHoldings({ headline: "Turn ON the lights", summary: "" }, holdings), []); // bare ticker words don't match
+  assert.deepEqual(mn.mentionedHoldings({ headline: "Shares of X (ON) jump", summary: "" }, holdings), ["ON"]);
+
+  const now = Date.parse("2026-10-07T12:00:00Z");
+  const news = {
+    APO: [
+      { headline: "SpaceX wants to borrow $40 billion", summary: "Musk's company...", url: "u1", datetime: "2026-10-07T10:00:00Z" }, // loosely tagged, not about Apollo
+      { headline: "APO stock slips after earnings", summary: "", url: "u2", datetime: "2026-10-07T09:00:00Z" },
+      { headline: "Apollo Global Management hires", summary: "", url: "u3", datetime: "2026-10-01T09:00:00Z" }, // too old
+    ],
+  };
+  const r = mn.recentHoldingNews(news, { now, withinHours: 36, names: { APO: "Apollo Global Management, Inc." } });
+  assert.deepEqual(r.map((g) => g.items.map((i) => i.url)), [["u2"]]);
+});
+
+test("Today: Fed calendar and RSS parsing", () => {
+  const { parseFedCalendar, parseRss } = require("../lib/marketNews");
+  const cal = { events: [
+    { type: "FOMC", title: "FOMC Meeting", month: "2026-09", days: "16", time: "2:00 p.m.", description: "&lt;p&gt;Two-day meeting, September 15 - 16&lt;/p&gt;" },
+    { type: "FOMC", title: "FOMC Press Conference", month: "2026-10", days: "28", time: "2:30 p.m." },
+    { type: "FOMC", title: "FOMC Meeting", month: "2026-10", days: "28", time: "2:00 p.m.", description: "&lt;p&gt;Two-day meeting, October 27 - 28&lt;/p&gt;" },
+    { type: "FOMC", title: "FOMC Minutes", month: "2026-11", days: "18" },
+    { type: "Speeches", title: "Speech", month: "2026-10", days: "9" },
+  ] };
+  const f = parseFedCalendar(cal, { today: "2026-10-08" });
+  assert.equal(f.nextMeeting.date, "2026-10-28");
+  assert.equal(f.nextMeeting.detail, "Two-day meeting, October 27 - 28");
+  assert.equal(f.lastMeeting.date, "2026-09-16");
+  assert.equal(f.nextMinutes.date, "2026-11-18");
+  assert.deepEqual(f.meetingDates, ["2026-09-16", "2026-10-28"]);
+  assert.equal(parseFedCalendar(null).nextMeeting, null);
+
+  const xml = `<rss><channel><item><title>Federal Reserve issues FOMC statement</title><link><![CDATA[https://www.federalreserve.gov/a.htm]]></link><pubDate><![CDATA[Wed, 16 Sep 2026 18:00:00 GMT]]></pubDate></item>
+    <item><title>Minutes &amp; more</title><link><![CDATA[https://www.federalreserve.gov/b.htm]]></link><pubDate>Wed, 7 Oct 2026 18:00:00 GMT</pubDate></item>
+    <item><title>Bad link</title><link>javascript:alert(1)</link></item></channel></rss>`;
+  const items = parseRss(xml);
+  assert.deepEqual(items.map((i) => i.title), ["Minutes & more", "Federal Reserve issues FOMC statement"]); // newest first, unsafe link dropped
+});
+
+test("Today: edition schedule (New York time), 3-day window and recap validation", () => {
+  const mn = require("../lib/marketNews");
+  const at = (iso) => new Date(iso);
+  // 2026-10-07 is a Wednesday; New York is UTC-4 in October.
+  assert.equal(mn.dueSlot(at("2026-10-07T11:59:00Z"), []), null); // 7:59 AM
+  assert.deepEqual(mn.dueSlot(at("2026-10-07T12:00:00Z"), []), { date: "2026-10-07", slot: "premarket" });
+  assert.deepEqual(mn.dueSlot(at("2026-10-07T17:00:00Z"), ["premarket"]), { date: "2026-10-07", slot: "midday" });
+  assert.equal(mn.dueSlot(at("2026-10-07T17:00:00Z"), ["midday"]), null); // missed premarket is never back-filled late
+  assert.deepEqual(mn.dueSlot(at("2026-10-08T01:00:00Z"), ["premarket", "midday"]), { date: "2026-10-07", slot: "postmarket" }); // 9 PM NY, still Oct 7
+  assert.equal(mn.dueSlot(at("2026-10-10T15:00:00Z"), []), null); // Saturday
+  assert.deepEqual(mn.slotsStarted("2026-10-07", at("2026-10-07T13:00:00Z")), ["premarket"]);
+  assert.deepEqual(mn.slotsStarted("2026-10-06", at("2026-10-07T13:00:00Z")), ["premarket", "midday", "postmarket"]);
+  assert.deepEqual(mn.slotsStarted("2026-10-08", at("2026-10-07T13:00:00Z")), []);
+  assert.deepEqual(mn.recentWeekdays(at("2026-10-12T15:00:00Z")), ["2026-10-12", "2026-10-09", "2026-10-08", "2026-10-07"]); // Monday skips the weekend
+
+  const input = mn.buildRecapInput({ date: "2026-10-07", edition: "Midday", snapshot: [{ label: "S&P 500", price: 7801.77, changePct: -0.22 }], headlines: [{ headline: "A", url: "https://a", source: "Reuters" }], holdingNews: [{ symbol: "APO", items: [{ headline: "B", url: "https://b", source: "CNBC" }] }], holdings: ["APO"] });
+  assert.equal(input.sources.length, 2);
+  assert.match(input.text, /\[1\] A/);
+  assert.match(input.text, /\[2\] APO: B/);
+  assert.match(input.text, /Midday edition/);
+  const parsed = mn.parseRecap(JSON.stringify({ bullets: [{ text: " Stocks fell. ", sources: [1, 7, 1] }, { text: "", sources: [] }], forUs: [{ text: "APO news", sources: [2] }] }), 2);
+  assert.deepEqual(parsed, { bullets: [{ text: "Stocks fell.", sources: [1] }], forUs: [{ text: "APO news", sources: [2] }] });
+  assert.equal(mn.parseRecap("not json", 2), null);
+  // Inline source markers are removed (the page draws its own); other numbers in parentheses stay.
+  assert.equal(mn.parseRecap({ bullets: [{ text: "Oil rose (1), yields fell [2] (fiscal (2027)).", sources: [1, 2] }], forUs: [] }, 2).bullets[0].text, "Oil rose, yields fell (fiscal (2027)).");
+  assert.equal(mn.parseRecap({ bullets: [], forUs: [] }, 2), null);
+});
+
+test("Today recap: OpenAI request/response handling and provider choice", async () => {
+  const saved = { key: process.env.OPENAI_API_KEY, fetch: globalThis.fetch };
+  process.env.OPENAI_API_KEY = "test-key";
+  const openai = require("../lib/sources/openai");
+  let body = null;
+  globalThis.fetch = async (url, init) => {
+    body = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      status: "completed", model: "gpt-5-nano-2025-08-07",
+      output: [{ type: "reasoning", summary: [] }, { type: "message", content: [{ type: "output_text", text: '{"bullets":[{"text":"x","sources":[1]}],"forUs":[]}' }] }],
+      usage: { input_tokens: 5000, output_tokens: 2000 },
+    }), { status: 200 });
+  };
+  try {
+    const out = await openai.marketRecap("input text");
+    assert.equal(body.model, "gpt-6-luna");
+    assert.equal(body.text.format.type, "json_schema");
+    assert.equal(body.text.format.strict, true);
+    assert.equal(body.input[1].content, "input text");
+    assert.equal(out.text, '{"bullets":[{"text":"x","sources":[1]}],"forUs":[]}');
+    assert.deepEqual(out.usage, { input: 5000, output: 2000 });
+    assert.deepEqual(openai.priceFor(out.model), { input: 0.05, output: 0.40 }); // dated snapshot name still priced
+    assert.equal(openai.priceFor("some-new-model"), null);
+
+    globalThis.fetch = async () => new Response(JSON.stringify({ status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output: [] }), { status: 200 });
+    await assert.rejects(openai.marketRecap("x"), /cut off/);
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: { message: "Incorrect API key" } }), { status: 401 });
+    await assert.rejects(openai.marketRecap("x"), /401.*Incorrect API key/);
+  } finally {
+    globalThis.fetch = saved.fetch;
+    if (saved.key === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = saved.key;
+  }
+
+  const { buildRecapInput } = require("../lib/marketNews");
+  assert.match(buildRecapInput({ date: "d", marketState: "PRE" }).text, /most recent completed session/);
+  assert.match(buildRecapInput({ date: "d", marketState: "REGULAR" }).text, /so far today/);
+});
+
+test("Holdings time frames: base close for 5D / 1M / 3M / YTD / 1Y", () => {
+  const { basesFor, periodStartDates } = require("../lib/periods");
+  // Weekday bars from 2024-09-02 to 2026-10-08, close rising by 1 each session.
+  const bars = [];
+  let c = 100;
+  for (let d = new Date("2024-09-02T12:00:00Z"); d <= new Date("2026-10-08T12:00:00Z"); d = new Date(d.getTime() + 864e5)) {
+    const w = d.getUTCDay();
+    if (w && w < 6) bars.push({ date: d.toISOString().slice(0, 10), close: c++ });
+  }
+  const b = basesFor(bars);
+  assert.equal(b["5d"].date, "2026-10-01"); // 5 sessions before Thu Oct 8
+  assert.equal(b["1m"].date, "2026-09-08");
+  assert.equal(b["3m"].date, "2026-07-08");
+  assert.equal(b.ytd.date, "2025-12-31"); // last close of the prior year
+  assert.equal(b["1y"].date, "2025-10-08");
+  // A start date on a weekend falls back to the Friday before.
+  assert.equal(basesFor(bars.filter((x) => x.date <= "2026-09-07"))["1m"].date, "2026-08-07");
+  assert.deepEqual(periodStartDates("2026-03-31")["1m"], "2026-02-28"); // month-end clamp
+  assert.equal(basesFor(bars.slice(-3))["5d"], null); // not enough history
+  assert.deepEqual(basesFor([]), { "5d": null, "1m": null, "3m": null, ytd: null, "1y": null });
+});
+
+test("Today briefing: real photos only, 30-second read, portfolio day, sparkline points", () => {
+  const mn = require("../lib/marketNews");
+  assert.equal(mn.realImage("https://static2.finnhub.io/file/finnhub/logo/reuters_logo.jpeg"), null); // outlet logo, not a photo
+  assert.equal(mn.realImage("https://s.yimg.com/rz/stage/p/yahoo_finance_en-US_h_p_finance_2.png"), null);
+  assert.equal(mn.realImage("http://insecure.example/a.jpg"), null);
+  assert.equal(mn.realImage("https://image.cnbcfm.com/api/v1/image/1.jpeg?w=1920"), "https://image.cnbcfm.com/api/v1/image/1.jpeg?w=1920");
+  assert.equal(mn.tidyItem({ headline: "x", url: "u", image: "https://static2.finnhub.io/file/finnhub/logo/x.jpeg" }).image, null);
+
+  const pf = mn.portfolioDay(
+    [{ symbol: "A", shares: 10 }, { symbol: "B", shares: 5 }, { symbol: "C", shares: 1 }],
+    { A: { change: 2, changePct: 4, previousClose: 50 }, B: { change: -1, changePct: -2, previousClose: 50 } },
+  );
+  assert.equal(pf.dayChange, 15); // 10×2 − 5×1
+  assert.ok(Math.abs(pf.dayPct - 2) < 1e-9); // 15 / (500 + 250)
+  assert.deepEqual([pf.up, pf.down, pf.covered, pf.total], [1, 1, 2, 3]);
+  assert.deepEqual(pf.best.map((r) => r.symbol), ["A"]);
+  assert.deepEqual(pf.worst.map((r) => r.symbol), ["B"]);
+  assert.equal(mn.portfolioDay([{ symbol: "A", shares: 1 }], {}), null);
+
+  const lines = mn.briefingLines({
+    snapshot: [
+      { symbol: "^GSPC", label: "S&P 500", changePct: -0.22 }, { symbol: "^IXIC", label: "Nasdaq", changePct: 0.1 },
+      { symbol: "CL=F", label: "Oil (WTI)", changePct: 3.5 }, { symbol: "^VIX", label: "VIX", changePct: 0.4 },
+    ],
+    portfolio: { dayPct: 0, dayChange: 0, up: 3, down: 3 }, marketState: "PRE",
+  });
+  assert.equal(lines[0], "The S&P 500 fell 0.22% in the last session; the Nasdaq rose 0.10%.");
+  assert.equal(lines[1], "Oil (WTI) rose 3.50%, the biggest move among the markets tracked here.");
+  assert.equal(lines[2], "Our holdings were flat (+$0): 3 up, 3 down.");
+  assert.match(mn.briefingLines({ snapshot: [{ symbol: "^GSPC", label: "S&P 500", changePct: 1 }], marketState: "REGULAR" })[0], /so far today/);
+  assert.equal(mn.briefingLines({ snapshot: [{ symbol: "^GSPC", label: "S&P 500", changePct: 0.1 }, { symbol: "GC=F", label: "Gold", changePct: 0.5 }] }).length, 1); // small moves aren't called out
+
+  const pts = mn.sparkPoints(Array.from({ length: 131 }, (_, i) => ({ close: i })), 80);
+  assert.equal(pts.length, 80);
+  assert.equal(pts[0], 0);
+  assert.equal(pts.at(-1), 130);
+  assert.deepEqual(mn.sparkPoints([{ close: 1 }, { close: null }, { close: 2 }]), [1, 2]);
+});
+
+test("Dividends: annual rate, payments per year and new ex-dates since tracking began", () => {
+  const { annualRate, paymentsPerYear, newExDates } = require("../lib/dividends");
+  const events = [
+    { exDate: "2025-09-12", amount: 0.825 }, // more than a year before "today"
+    { exDate: "2025-12-05", amount: 0.825 }, { exDate: "2026-03-13", amount: 0.945 },
+    { exDate: "2026-06-05", amount: 0.945 }, { exDate: "2026-09-11", amount: 0.945 },
+    { exDate: "2026-10-09", amount: 0.945 }, { exDate: "2026-12-04", amount: 0.945 },
+  ];
+  const today = "2026-10-09";
+  assert.deepEqual(annualRate({ declaredRate: 3.78, events, today }), { rate: 3.78, basis: "declared" });
+  const trailing = annualRate({ declaredRate: undefined, events, today }); // ETF case: sum of the last 12 months
+  assert.equal(trailing.basis, "trailing 12 months");
+  assert.ok(Math.abs(trailing.rate - (0.825 + 0.945 * 4)) < 1e-9);
+  assert.deepEqual(annualRate({ declaredRate: 0, events: [], today }), { rate: 0, basis: null });
+  assert.equal(paymentsPerYear(events, today), 5);
+  // Only ex-dates from tracking start through today, and not already logged.
+  assert.deepEqual(newExDates(events, { since: "2026-10-08", today, logged: new Set() }).map((e) => e.exDate), ["2026-10-09"]);
+  assert.deepEqual(newExDates(events, { since: "2026-10-08", today, logged: new Set(["2026-10-09"]) }), []);
+  assert.deepEqual(newExDates(events, { since: "2026-10-08", today: "2026-10-07" }), []);
 });

@@ -1,7 +1,7 @@
 const express = require("express");
 const db = require("../db");
 const yahoo = require("../lib/sources/yahoo");
-const { sizeBucket, valuationBucket, matchesBucket, oneYearForwardReturns, distributionStats } = require("../lib/baseRate");
+const { dedupeCompanies, histogram, sizeBucket, valuationBucket, matchesBucket, oneYearForwardReturns, distributionStats } = require("../lib/baseRate");
 
 const router = express.Router();
 const raw = (v) => (v && typeof v === "object" ? ("raw" in v && typeof v.raw !== "object" ? v.raw : null) : v ?? null);
@@ -13,6 +13,7 @@ async function profileFor(symbol) {
   const earningsYield = pe > 0 ? 1 / pe : null;
   return {
     symbol,
+    name: qs.price?.longName || qs.price?.shortName || null,
     sector: qs.assetProfile?.sector || null,
     marketCap,
     earningsYield,
@@ -32,7 +33,7 @@ router.get("/research/:symbol/base-rate", async (req, res) => {
     const universe = [...new Set([...owned, ...watched, ...peers.slice(0, 10)])].filter((s) => s !== symbol).slice(0, 30);
 
     const profiles = await Promise.allSettled(universe.map(profileFor));
-    const matches = profiles.filter((r) => r.status === "fulfilled" && matchesBucket(r.value, target)).map((r) => r.value);
+    const matches = dedupeCompanies(profiles.filter((r) => r.status === "fulfilled" && matchesBucket(r.value, target)).map((r) => r.value), target);
 
     const histories = await Promise.allSettled(matches.map((m) => yahoo.getChart(m.symbol, "5y", "1d")));
     const pooled = histories.flatMap((r) => (r.status === "fulfilled" ? oneYearForwardReturns(r.value) : []));
@@ -43,6 +44,8 @@ router.get("/research/:symbol/base-rate", async (req, res) => {
       matchedSymbols: matches.map((m) => m.symbol),
       universeSize: universe.length,
       stats,
+      companies: matches.length,
+      histogram: pooled.length ? histogram(pooled) : [],
     });
   } catch (err) {
     res.json({ symbol, available: false, error: err.message });

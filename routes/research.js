@@ -10,7 +10,7 @@ const { compareFilingSections } = require("../lib/filingDiff");
 const { parseCoverPage, buildActivistAlerts, FORMS: ACTIVIST_FORMS } = require("../lib/activistFilings");
 const { extractCustomerMentions, economicLinkGap } = require("../lib/supplyChain");
 const { normalizeName } = require("../lib/thirteenF");
-const { putCallRatio, maxPain, expectedMove, ivSkew, dealerGammaByStrike } = require("../lib/options");
+const { chainQuality, putCallRatio, maxPain, expectedMove, ivSkew, dealerGammaByStrike } = require("../lib/options");
 const finnhub = require("../lib/sources/finnhub");
 const claude = require("../lib/sources/claude");
 const fundamentals = require("../lib/fundamentals");
@@ -308,14 +308,17 @@ router.get("/research/:symbol/options", async (req, res) => {
     const atmCall = nearestStrike(calls), atmPut = nearestStrike(puts);
     const yearsToExpiry = expiration ? Math.max(0, (expiration * 1000 - Date.now()) / (365 * 864e5)) : null;
 
+    const q = chainQuality(calls, puts);
+    const pc = putCallRatio(calls, puts);
+    if (!q.hasOI) pc.oiRatio = null;
     res.json({
-      symbol, spot, expiration, expirationDates,
-      pcRatio: putCallRatio(calls, puts),
-      maxPainStrike: maxPain(calls, puts),
-      expectedMovePct: atmCall && atmPut ? expectedMove(mid(atmCall), mid(atmPut), spot) : null,
+      symbol, spot, expiration, expirationDates, quality: q,
+      pcRatio: pc,
+      maxPainStrike: q.hasOI ? maxPain(calls, puts) : null,
+      expectedMovePct: q.hasQuotes && atmCall && atmPut ? expectedMove(mid(atmCall), mid(atmPut), spot) : null,
       atmStrike: atmCall?.strike ?? null,
-      skew: ivSkew(calls, puts, spot),
-      gammaByStrike: yearsToExpiry ? dealerGammaByStrike(calls, puts, spot, yearsToExpiry) : [],
+      skew: q.hasIV ? ivSkew(calls, puts, spot) : null,
+      gammaByStrike: q.hasOI && q.hasIV && yearsToExpiry ? dealerGammaByStrike(calls, puts, spot, yearsToExpiry) : [],
       callOI: calls.map((c) => ({ strike: c.strike, openInterest: c.openInterest })),
       putOI: puts.map((p) => ({ strike: p.strike, openInterest: p.openInterest })),
     });

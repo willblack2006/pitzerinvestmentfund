@@ -1,4 +1,5 @@
 import { el, esc, api, fmtUSD, fmtMoneyCompact, fmtRatio, loading, signed, fmtPct } from "../../shared.js";
+import { term } from "../../glossary.js";
 
 // ---- Peer comparison ----
 
@@ -16,6 +17,8 @@ const COLS = [
   ["revenueGrowth", "Rev growth", (v) => pctPts(v)],
   ["return1Y", "1Y return", (v) => pctPts(v)],
 ];
+// Glossary entry for each column header, where one exists.
+const COL_TERM = { peTTM: "peRatio", forwardPE: "peRatio", evEbitda: "evEbitda", psTTM: "priceToSales", pfcf: "pfcf", roe: "roe" };
 const mult = (v) => (v === null || v === undefined || !Number.isFinite(v) || v <= 0 ? "—" : `${v.toFixed(1)}×`);
 const pctPts = (v) => (v === null || v === undefined || !Number.isFinite(v) ? "—" : `${v.toFixed(1)}%`);
 
@@ -40,14 +43,14 @@ async function loadComps(symbol) {
     const a = self?.[key], m = data.peerMedian[key];
     if (!Number.isFinite(a) || !Number.isFinite(m) || m === 0 || (cheap && (a <= 0 || m <= 0))) return "—";
     const d = (a / m - 1) * 100;
-    if (cheap) return `<span class="${d > 0 ? "tone-bad" : "tone-good"}">${d > 0 ? "+" : ""}${d.toFixed(0)}% ${d > 0 ? "premium" : "discount"}</span>`;
+    if (cheap) return `<span>${d > 0 ? "+" : ""}${d.toFixed(0)}% ${d > 0 ? "premium" : "discount"}</span>`;
     return `${(a - m) >= 0 ? "+" : ""}${(a - m).toFixed(1)} pts`;
   };
   box.innerHTML = `
     <div class="table-scroll">
       <table class="comps-table">
         <caption class="sr-only">${esc(symbol)} compared with peers (trailing twelve months)</caption>
-        <thead><tr><th scope="col" class="left sticky-col">Company</th>${COLS.map(([, l]) => `<th scope="col" class="num">${l}</th>`).join("")}</tr></thead>
+        <thead><tr><th scope="col" class="left sticky-col">Company</th>${COLS.map(([k, l]) => `<th scope="col" class="num">${COL_TERM[k] ? term(COL_TERM[k], l) : l}</th>`).join("")}</tr></thead>
         <tbody>
           ${data.rows.map((r) => `
             <tr class="${r.symbol === symbol ? "row-self" : ""}">
@@ -125,11 +128,11 @@ function dcfPanel(symbol, data, price) {
           <input id="dcfG" type="number" step="0.5" value="${(defaultG * 100).toFixed(1)}" inputmode="decimal" />
           <span class="field-hint">${analystGrowth != null ? `Analysts expect ${(analystGrowth * 100).toFixed(1)}% EPS growth next year. ` : ""}${d.revenueCagr != null ? `Revenue grew ${(d.revenueCagr * 100).toFixed(1)}%/yr historically.` : ""}</span>
         </label>
-        <label>Terminal growth (%)
+        <label for="dcfGT"><span>${term("terminalGrowth", "Terminal growth (%)")}</span>
           <input id="dcfGT" type="number" step="0.25" value="2.5" inputmode="decimal" />
           <span class="field-hint">Long-run growth after year 10; usually 2–3% (≈ GDP).</span>
         </label>
-        <label>Discount rate / WACC (%)
+        <label for="dcfR"><span>${term("wacc", "Discount rate / WACC (%)")}</span>
           <input id="dcfR" type="number" step="0.25" value="9" inputmode="decimal" />
           <span class="field-hint">Your required return. ~8–10% for large caps, higher for small or risky firms.</span>
         </label>
@@ -142,7 +145,7 @@ function dcfPanel(symbol, data, price) {
           <span id="dcfUpside" class="small"></span>
         </div>
         <div class="dcf-result">
-          <span class="muted small">Growth the market is pricing in (reverse DCF)</span>
+          <span class="muted small">Growth the market is pricing in (${term("reverseDcf", "reverse DCF")})</span>
           <strong id="dcfImplied">—</strong>
           <span class="small muted">per year for 5 years, at your discount rate</span>
         </div>
@@ -179,13 +182,14 @@ function wireDcf(symbol, data, price) {
     el("dcfImplied").textContent = ig === null ? "—" : `${(ig * 100).toFixed(1)}%`;
     const rs = [p.r - 0.02, p.r - 0.01, p.r, p.r + 0.01, p.r + 0.02];
     const gs = [p.gT - 0.01, p.gT - 0.005, p.gT, p.gT + 0.005, p.gT + 0.01];
-    el("dcfSens").innerHTML = `<caption class="cap">Sensitivity: value per share (rows = discount rate, columns = terminal growth)</caption>
+    el("dcfSens").innerHTML = `<caption class="cap">Sensitivity: value per share (rows = discount rate, columns = terminal growth). ▲ / ▼ = more than 15% above / below today's price.</caption>
       <thead><tr><th scope="col">WACC \\ g</th>${gs.map((g) => `<th scope="col" class="num">${(g * 100).toFixed(1)}%</th>`).join("")}</tr></thead>
       <tbody>${rs.map((r) => `<tr><th scope="row">${(r * 100).toFixed(1)}%</th>${gs.map((g) => {
         const val = dcfValue({ ...p, r, gT: g })?.perShare;
-        const cls = val && price ? (val > price * 1.15 ? "tone-good" : val < price * 0.85 ? "tone-bad" : "") : "";
+        // Neutral marks, not green/red: a model value above the price isn't a buy call.
+        const mark = val && price ? (val > price * 1.15 ? "above" : val < price * 0.85 ? "below" : "") : "";
         const center = r === p.r && g === p.gT ? " sens-center" : "";
-        return `<td class="num ${cls}${center}">${val ? fmtUSD(val).replace(/\.\d+$/, "") : "—"}</td>`;
+        return `<td class="num${mark ? ` sens-${mark}` : ""}${center}">${val ? fmtUSD(val).replace(/\.\d+$/, "") : "—"}${mark ? ` <span aria-hidden="true">${mark === "above" ? "▲" : "▼"}</span><span class="sr-only">(${mark} today's price)</span>` : ""}</td>`;
       }).join("")}</tr>`).join("")}</tbody>`;
   };
   el("dcfForm").addEventListener("input", update);
@@ -201,11 +205,11 @@ export async function render(c, { symbol, data, price, isFinancial }) {
   const ks = data.street?.keyStats || {};
   c.innerHTML = `
     <section class="summary" aria-label="Valuation multiples">
-      <div class="stat"><div class="label">EV / EBITDA</div><div class="value">${mult(ks.evToEbitda)}</div></div>
-      <div class="stat"><div class="label">EV / Revenue</div><div class="value">${mult(ks.evToRevenue)}</div></div>
-      <div class="stat"><div class="label">PEG ratio</div><div class="value">${Number.isFinite(ks.peg) ? ks.peg.toFixed(2) : "—"}</div><div class="sub">P/E ÷ expected growth; ~1 is “fair”</div></div>
-      <div class="stat"><div class="label">Price / Book</div><div class="value">${mult(ks.priceToBook)}</div></div>
-      <div class="stat"><div class="label">FCF yield</div><div class="value">${Number.isFinite(ks.freeCashflow) && Number.isFinite(data.stats.summaryDetail?.marketCap?.raw) ? fmtRatio(ks.freeCashflow / data.stats.summaryDetail.marketCap.raw) : "—"}</div><div class="sub">Free cash flow / market cap</div></div>
+      <div class="stat"><div class="label">${term("evEbitda", "EV / EBITDA")}</div><div class="value">${mult(ks.evToEbitda)}</div></div>
+      <div class="stat"><div class="label">${term("evRevenue", "EV / Revenue")}</div><div class="value">${mult(ks.evToRevenue)}</div></div>
+      <div class="stat"><div class="label">${term("peg")}</div><div class="value">${Number.isFinite(ks.peg) ? ks.peg.toFixed(2) : "—"}</div><div class="sub">P/E ÷ expected growth (a rough comparison, not a fair-value line)</div></div>
+      <div class="stat"><div class="label">${term("priceToBook", "Price / Book")}</div><div class="value">${mult(ks.priceToBook)}</div></div>
+      <div class="stat"><div class="label">${term("fcfYield", "FCF yield")}</div><div class="value">${Number.isFinite(ks.freeCashflow) && Number.isFinite(data.stats.summaryDetail?.marketCap?.raw) ? fmtRatio(ks.freeCashflow / data.stats.summaryDetail.marketCap.raw) : "—"}</div><div class="sub">Free cash flow / market cap</div></div>
     </section>
     <div class="tab-grid">
       <section class="panel span-full" aria-labelledby="comps-h">

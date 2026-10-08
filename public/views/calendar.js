@@ -26,6 +26,18 @@ function listView(events) {
     </section>`).join("");
 }
 
+// A short label that still fits a phone-width day cell: the ticker for company events.
+function shortLabel(e) {
+  if (e.type === "earnings") return e.title.replace(/ earnings$/, "");
+  if (e.type === "ex-dividend") return `${e.title.replace(/ ex-dividend$/, "")} ex-div`;
+  if (e.type === "macro") return /CPI/.test(e.title) ? "CPI" : /Jobs/.test(e.title) ? "Jobs" : e.title;
+  if (e.type === "opex") return /Quarterly/.test(e.title) ? "OpEx+rebal" : "OpEx";
+  if (e.type === "month-end") return "Month end";
+  return e.title;
+}
+
+const LEGEND = `<p class="cal-legend small">${Object.entries(TYPE_LABEL).map(([t, l]) => `<span class="cal-event cal-${t}">${esc(l)}</span>`).join("")}</p>`;
+
 function monthGrid(events, monthKey) {
   const [y, m] = monthKey.split("-").map(Number);
   const first = new Date(Date.UTC(y, m - 1, 1));
@@ -38,13 +50,15 @@ function monthGrid(events, monthKey) {
     byDay.get(d).push(e);
   }
   const cells = [];
-  for (let i = 0; i < startDow; i++) cells.push(`<div class="cal-cell cal-empty"></div>`);
+  for (let i = 0; i < startDow; i++) cells.push(`<div class="cal-cell cal-empty" aria-hidden="true"></div>`);
   for (let d = 1; d <= daysInMonth; d++) {
     const dayEvents = byDay.get(d) || [];
-    cells.push(`<div class="cal-cell"><div class="cal-daynum">${d}</div>${dayEvents.map((e) => `<div class="cal-event" title="${esc(e.title)}${e.detail ? ` — ${esc(e.detail)}` : ""}"><span class="badge ${TYPE_CLASS[e.type] || ""}">${esc(TYPE_LABEL[e.type] || e.type)}</span> ${esc(e.title)}</div>`).join("")}</div>`);
+    cells.push(`<div class="cal-cell"><div class="cal-daynum">${d}</div>${dayEvents.map((e) => `<div class="cal-event cal-${e.type}" title="${esc(e.title)}${e.detail ? ` — ${esc(e.detail)}` : ""}"><span class="sr-only">${esc(TYPE_LABEL[e.type] || e.type)}: </span>${esc(shortLabel(e))}</div>`).join("")}</div>`);
   }
+  const monthName = first.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
   return `
-    <div class="cal-grid-head">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => `<div>${d}</div>`).join("")}</div>
+    <h3 class="cal-month">${esc(monthName)}</h3>
+    <div class="cal-grid-head" aria-hidden="true">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => `<div>${d}</div>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>`;
 }
 
@@ -63,8 +77,8 @@ async function load(container) {
   const months = [...new Set(r.events.map((e) => e.date.slice(0, 7)))];
   box.innerHTML = `
     ${!r.finnhubConfigured || !r.fredConfigured ? `<p class="notice small">${!r.finnhubConfigured ? "Earnings dates need a Finnhub API key. " : ""}${!r.fredConfigured ? "CPI/jobs release dates need a FRED API key." : ""}</p>` : ""}
-    ${state.view === "list" ? listView(r.events) : months.map((m) => monthGrid(r.events, m)).join("")}
-    <p class="muted small page-pad">FOMC meeting dates aren't included — there's no free, reliable API for the Fed's own calendar; check <a href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener">federalreserve.gov<span class="sr-only"> (opens in new tab)</span></a>.</p>`;
+    ${state.view === "list" ? listView(r.events) : LEGEND + months.map((m) => monthGrid(r.events, m)).join("")}
+    <p class="muted small page-pad">FOMC dates come from the Federal Reserve's own calendar and show the decision day of each two-day meeting; confirm on <a href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener">federalreserve.gov<span class="sr-only"> (opens in new tab)</span></a>.</p>`;
 }
 
 export const title = "Market calendar";

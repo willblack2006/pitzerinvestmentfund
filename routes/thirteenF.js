@@ -3,12 +3,23 @@ const db = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const thirteenF = require("../lib/sources/thirteenF");
 const yahoo = require("../lib/sources/yahoo");
-const { topConviction, matchOverlaps, qoqChanges } = require("../lib/thirteenF");
+const { computeWeights, topConviction, matchOverlaps, qoqChanges } = require("../lib/thirteenF");
 
 const router = express.Router();
 
 router.get("/13f/managers", (req, res) => {
   res.json(db.prepare("SELECT * FROM thirteenf_managers ORDER BY name").all());
+});
+
+// Look up 13F filers by name, so members don't need to find a CIK by hand.
+router.get("/13f/search", async (req, res) => {
+  const q = String(req.query.q || "").trim();
+  if (q.length < 2 || q.length > 80) return res.status(400).json({ error: "Type at least 2 characters of the manager's name." });
+  try {
+    res.json({ results: (await thirteenF.searchManagers(q)).slice(0, 12) });
+  } catch (err) {
+    res.status(502).json({ error: `EDGAR search failed: ${err.message}` });
+  }
 });
 
 router.post("/13f/managers", requireAuth, (req, res) => {
@@ -43,7 +54,7 @@ router.get("/13f/:cik", async (req, res) => {
     if (!data.filings.length) return res.json({ cik, companyName: data.companyName, available: false, reason: "No 13F-HR filings found for this CIK." });
     const { universe, owned, watched } = await universeWithNames();
     const conviction = topConviction(data.current, 15);
-    const overlaps = matchOverlaps(data.current, universe).map((h) => ({ ...h, owned: owned.includes(h.matchedSymbol), watching: watched.includes(h.matchedSymbol) }));
+    const overlaps = matchOverlaps(computeWeights(data.current), universe).map((h) => ({ ...h, owned: owned.includes(h.matchedSymbol), watching: watched.includes(h.matchedSymbol) }));
     const changes = data.prior.length ? qoqChanges(data.current, data.prior) : null;
     res.json({
       cik, companyName: data.companyName, available: true,

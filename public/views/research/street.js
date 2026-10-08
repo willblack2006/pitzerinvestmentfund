@@ -1,6 +1,7 @@
 import { el, esc, fmtUSD, fmtPct, fmtMoneyCompact, signed } from "../../shared.js";
 import { barChart } from "../../charts.js";
 import { scoreMeter, signalBadge } from "../insiderSignal.js";
+import { term } from "../../glossary.js";
 
 const PERIOD = { "0q": "This quarter", "+1q": "Next quarter", "0y": "This fiscal year", "+1y": "Next fiscal year" };
 
@@ -17,7 +18,7 @@ function targetRange(t, price) {
       <div class="tr-ends small muted"><span>Low ${fmtUSD(t.low)}</span><span>High ${fmtUSD(t.high)}</span></div>
     </div>
     <div class="kv-grid kv-4">
-      <div><span class="muted small">Upside to mean</span><strong>${t.upside != null ? signed(t.upside * 100, fmtPct(t.upside * 100)) : "—"}</strong></div>
+      <div><span class="muted small">Upside to mean ${term("priceTarget", "target")}</span><strong>${t.upside != null ? signed(t.upside * 100, fmtPct(t.upside * 100)) : "—"}</strong></div>
       <div><span class="muted small">Median target</span><strong>${t.median ? fmtUSD(t.median) : "—"}</strong></div>
       <div><span class="muted small">Analysts</span><strong>${t.analysts ?? "—"}</strong></div>
       <div><span class="muted small">Avg rating</span><strong>${Number.isFinite(t.recommendationMean) ? `${t.recommendationMean.toFixed(2)} <span class="small muted">(1 = strong buy, 5 = sell)</span>` : "—"}</strong></div>
@@ -30,7 +31,7 @@ function estimatesTable(est) {
     <div class="table-scroll">
       <table class="mini-table est-table">
         <caption class="sr-only">Consensus EPS and revenue estimates with revision trend</caption>
-        <thead><tr><th scope="col">Period</th><th scope="col" class="num">EPS est.</th><th scope="col" class="num">Range</th><th scope="col" class="num">Growth</th><th scope="col" class="num">Revenue est.</th><th scope="col" class="num">EPS est. change, 90d</th><th scope="col" class="num">Revisions, 30d</th></tr></thead>
+        <thead><tr><th scope="col">Period</th><th scope="col" class="num">${term("consensus", "EPS est.")}</th><th scope="col" class="num">Range</th><th scope="col" class="num">Growth</th><th scope="col" class="num">Revenue est.</th><th scope="col" class="num">${term("epsDrift", "EPS est. change, 90d")}</th><th scope="col" class="num">${term("revisionBreadth", "Revisions, 30d")}</th></tr></thead>
         <tbody>${est.map((e) => {
           const drift = e.epsTrend?.current && e.epsTrend?.d90 ? (e.epsTrend.current / e.epsTrend.d90 - 1) * 100 : null;
           const up = e.revisions?.up30 ?? 0, down = e.revisions?.down30 ?? 0;
@@ -81,7 +82,7 @@ export async function render(c, { symbol, data, price }) {
   c.innerHTML = `
     <div class="tab-grid">
       <section class="panel span-2" aria-labelledby="tgt-h">
-        <h3 id="tgt-h">Price targets</h3>
+        <h3 id="tgt-h">${term("priceTarget", "Price targets")}</h3>
         ${targetRange(st.targets, price)}
       </section>
       <section class="panel" aria-labelledby="next-h">
@@ -89,7 +90,7 @@ export async function render(c, { symbol, data, price }) {
         ${next?.dates?.length ? `
           <p class="big-date">${esc(next.dates[0])}${next.estimated ? ` <span class="muted small">(estimated)</span>` : ""}</p>
           <dl class="facts small">
-            ${next.epsAvg != null ? `<dt>Consensus EPS</dt><dd>$${next.epsAvg.toFixed(2)}</dd>` : ""}
+            ${next.epsAvg != null ? `<dt>${term("consensus", "Consensus EPS")}</dt><dd>$${next.epsAvg.toFixed(2)}</dd>` : ""}
             ${next.revenueAvg ? `<dt>Consensus revenue</dt><dd>${fmtMoneyCompact(next.revenueAvg)}</dd>` : ""}
             ${st.history.length ? `<dt>Beat rate</dt><dd>${beats} of last ${st.history.length} quarters</dd>` : ""}
           </dl>` : `<p class="muted">No scheduled date yet.</p>`}
@@ -99,7 +100,7 @@ export async function render(c, { symbol, data, price }) {
         <div class="chart-box chart-sm"><canvas id="trendChart" role="img" aria-label="${esc(`Analyst ratings by month: ${trend.map((t) => `${monthLabel(t.period)} ${t.strongBuy + t.buy} buy, ${t.hold} hold, ${t.sell + t.strongSell} sell`).join("; ")}`)}"></canvas></div>
       </section>
       <section class="panel" aria-labelledby="surp-h">
-        <h3 id="surp-h">Earnings surprises</h3>
+        <h3 id="surp-h">${term("epsSurprise", "Earnings surprises")}</h3>
         <div class="chart-box chart-sm"><canvas id="surpChart" role="img" aria-label="${esc(`EPS surprise by quarter: ${st.history.map((h) => `${h.quarter} ${h.surprisePct != null ? (h.surprisePct * 100).toFixed(1) + "%" : "n/a"}`).join(", ")}`)}"></canvas></div>
         <p class="muted small">Actual EPS vs consensus, % above (beat) or below (miss).</p>
       </section>
@@ -113,7 +114,7 @@ export async function render(c, { symbol, data, price }) {
         </ul>
       </section>
       <section class="panel span-full" aria-labelledby="rev-h">
-        <div class="panel-head"><h3 id="rev-h">Estimate revision score</h3></div>
+        <div class="panel-head"><h3 id="rev-h">${term("revisionScore")}</h3></div>
         <div class="sig-head">
           ${signalBadge(st.revisionScore.score, st.revisionScore.label)}
           ${scoreMeter(st.revisionScore.score)}

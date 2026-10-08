@@ -3,6 +3,8 @@ import {
   loading, errorBox, fundContext, invalidateContext, pushRecent, statusBadge, tabNav,
 } from "../shared.js";
 import { lineChart, destroyAll } from "../charts.js";
+import { govContractsPanelHtml, loadGovContracts } from "./govContractsPanel.js";
+import { signalsGlanceHtml, loadSignalsGlance } from "./signalsGlance.js";
 
 const TABS = [
   ["overview", "Overview"],
@@ -123,20 +125,12 @@ function renderOverview(c, { symbol, data, fund, price }) {
           ${sub ? `<span class="snap-sub">${sub}</span>` : ""}
         </a>`).join("")}
     </section>
+    ${signalsGlanceHtml()}
 
     <div class="research-layout">
       <div class="research-main">
         ${data.position ? renderPosition(data.position, price) : ""}
-        <section class="panel" aria-labelledby="exec-h">
-          <h3 id="exec-h">Execution helper</h3>
-          <div class="form-row">
-            <label class="field-inline">Direction
-              <select id="execDir"><option value="buy">Buy</option><option value="sell">Sell</option></select>
-            </label>
-            <label class="field-inline">Order size (shares) <input id="execShares" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 100" /></label>
-          </div>
-          <div id="execBody" class="small">${loading("Loading live bid/ask…")}</div>
-        </section>
+
         <section class="panel" aria-labelledby="chart-h">
           <div class="panel-head"><h3 id="chart-h">Price, past year</h3>
             <a class="small" href="#/research/${encodeURIComponent(symbol)}/risk">Compare with the market →</a></div>
@@ -149,6 +143,16 @@ function renderOverview(c, { symbol, data, fund, price }) {
           <div class="panel-head"><h3 id="news-h">News</h3><div id="newsTriageActions"></div></div>
           <div id="newsBody">${renderNews(data.news, !!data.errors?.news)}</div>
         </section>
+        <details class="panel exec-panel">
+          <summary><strong id="exec-h">Placing a trade? Execution helper</strong> <span class="muted small">bid/ask, spread, suggested limit</span></summary>
+          <div class="form-row">
+            <label class="field-inline">Direction
+              <select id="execDir"><option value="buy">Buy</option><option value="sell">Sell</option></select>
+            </label>
+            <label class="field-inline">Order size (shares) <input id="execShares" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 100" /></label>
+          </div>
+          <div id="execBody" class="small">${loading("Loading live bid/ask…")}</div>
+        </details>
       </div>
       <aside class="research-side" aria-label="Company context">
         <section class="panel" aria-labelledby="about-h">
@@ -172,6 +176,7 @@ function renderOverview(c, { symbol, data, fund, price }) {
           <h3 id="supply-h">Supply chain</h3>
           <div id="supplyBody">${loading("Checking the latest 10-K for major customers…")}</div>
         </section>
+        ${govContractsPanelHtml()}
         <section class="panel" aria-labelledby="factor-h">
           <div class="panel-head"><h3 id="factor-h">Factor profile</h3><a class="small" href="#/factors">Fund scorecard →</a></div>
           <div id="factorBody">${loading("Scoring factors…")}</div>
@@ -187,6 +192,8 @@ function renderOverview(c, { symbol, data, fund, price }) {
     fill: true,
   });
   loadFactorProfile(symbol);
+  loadGovContracts(symbol);
+  loadSignalsGlance(symbol, data);
   loadExecution(symbol);
   loadNewsTriage(symbol, data.news, !!data.errors?.news);
   loadSupplyChain(symbol);

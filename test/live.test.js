@@ -93,6 +93,18 @@ live("market pages: macro, screener, insiders", async () => {
   assert.ok(Number.isFinite(ins.netValue) && ins.recent.length);
 }, 240000);
 
+live("gov contracts and House congressional trades", async () => {
+  const gov = (await s.api("/api/research/LMT/gov-contracts")).body;
+  assert.ok(gov.available && gov.relevant, JSON.stringify(gov).slice(0, 300));
+  assert.ok(gov.count > 0 && gov.total > 0);
+  assert.ok(gov.top.every((a) => a.amount > 0 && /^https:\/\/www\.usaspending\.gov\//.test(a.url)));
+
+  const ct = (await s.api("/api/congress-trades")).body;
+  assert.ok(!ct.error, ct.error);
+  assert.ok(ct.filingCount > 0 && ct.tradeCount > 0, "parsed some House PTRs");
+  assert.ok(ct.matched.every((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.tradeDate) && /house\.gov/.test(t.url)));
+}, 240000);
+
 live("short pressure: single-symbol detail and ranked list", async () => {
   const one = (await s.api("/api/short-pressure/AAPL")).body;
   assert.ok(!one.error, one.error);
@@ -119,6 +131,38 @@ live("live quotes: batched prices, today's change and market state", async () =>
   assert.equal((await s.api("/api/quotes")).status, 400);
   const research = (await s.api("/api/research/AAPL")).body;
   assert.equal(research.technicals.price, research.quote.price, "research uses the live quote");
+});
+
+live("13F manager search: finds a fund by name via EDGAR", async () => {
+  const r = await s.api("/api/13f/search?q=bridgewater");
+  assert.equal(r.status, 200);
+  assert.ok(r.body.results.find((m) => m.cik === "0001350694"), JSON.stringify(r.body).slice(0, 500));
+  assert.equal((await s.api("/api/13f/search?q=a")).status, 400);
+});
+
+live("today: editions list and live market side column", async () => {
+  const ed = await s.api("/api/today/editions");
+  assert.equal(ed.status, 200);
+  assert.equal(ed.body.editions.length, 4);
+  assert.deepEqual(ed.body.editions[0].slots.map((x) => x.key), ["premarket", "midday", "postmarket"]);
+  if (!ed.body.edition) assert.ok(ed.body.liveHeadlines.length > 0, "live headlines when nothing is captured yet");
+  assert.equal((await s.api("/api/today/editions?date=2020-01-01&slot=premarket")).status, 400);
+  const live = (await s.api("/api/today/live")).body;
+  assert.ok(live.snapshot.find((r) => r.symbol === "^GSPC").price > 0, "S&P 500 quote");
+  assert.equal(live.sectors.length, 11);
+  assert.ok(live.fed.nextMeeting?.date || live.fed.lastMeeting?.date, "Fed calendar parsed");
+});
+
+live("holdings time frames: base closes for every period in one call", async () => {
+  const add = await s.api("/api/positions", { method: "POST", auth: true, body: { symbol: "AAPL", shares: 10, avgCost: 100, totalCost: 1000 } });
+  assert.ok([200, 201, 409].includes(add.status), `add position: ${add.status} ${add.text}`);
+  const r = await s.api("/api/portfolio/period-bases");
+  assert.equal(r.status, 200);
+  assert.ok(r.body.bySymbol.AAPL, "AAPL included");
+  for (const [sym, b] of Object.entries(r.body.bySymbol)) {
+    for (const p of ["5d", "1m", "3m", "ytd", "1y"]) assert.ok(b[p]?.close > 0, `${sym} ${p} base`);
+    assert.ok(b.ytd.date < `${r.body.latest.slice(0, 4)}-01-01`, "YTD base is in the prior year");
+  }
 });
 
 live("server log has no crashes after live run", () => {

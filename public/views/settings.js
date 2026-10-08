@@ -79,12 +79,17 @@ export async function mount(container) {
           <ul class="link-list">${managers.map((m) => `<li>${esc(m.name || m.cik)} <span class="muted small">(CIK ${esc(m.cik)})</span>${unlocked ? ` <button class="btn-link small" data-del-manager="${esc(m.cik)}">Remove</button>` : ""}</li>`).join("")}</ul>`
           : `<p class="muted">No managers followed yet.</p>`}
         ${unlocked ? `
-          <form id="addManager" class="inline-form">
-            <label>CIK <input name="cik" required placeholder="e.g. 0001067983" maxlength="10" /></label>
-            <label>Name <input name="name" placeholder="e.g. Berkshire Hathaway" maxlength="120" /></label>
-            <button class="btn btn-primary btn-sm">Follow</button>
+          <form id="findManager" class="inline-form" role="search">
+            <label>Find a manager by name <input name="q" required minlength="2" maxlength="80" placeholder="e.g. Bridgewater" autocomplete="off" /></label>
+            <button class="btn btn-primary btn-sm">Search EDGAR</button>
           </form>
-          <p class="muted small">Find a manager's CIK on <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type=13F-HR" target="_blank" rel="noopener">SEC EDGAR's 13F filer search<span class="sr-only"> (opens in new tab)</span></a>. Up to 20 managers.</p>` : ""}
+          <div id="managerResults" aria-live="polite"></div>
+          <form id="addManager" class="inline-form">
+            <label>Or add by CIK <input name="cik" required placeholder="e.g. 0001067983" maxlength="10" /></label>
+            <label>Name <input name="name" placeholder="e.g. Berkshire Hathaway" maxlength="120" /></label>
+            <button class="btn btn-ghost btn-sm">Follow</button>
+          </form>
+          <p class="muted small">Name search covers firms that file 13F-HR reports with the SEC. If it misses one, find the CIK on <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type=13F-HR" target="_blank" rel="noopener">SEC EDGAR's 13F filer search<span class="sr-only"> (opens in new tab)</span></a>. Up to 20 managers.</p>` : ""}
       </section>
     </div>`;
 
@@ -168,6 +173,30 @@ export async function mount(container) {
     }
   });
 
+  const followed = new Set(managers.map((m) => m.cik));
+  el("findManager")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = new FormData(e.target).get("q").trim();
+    const box = el("managerResults");
+    box.innerHTML = `<p class="muted small">Searching EDGAR…</p>`;
+    try {
+      const { results } = await api(`/api/13f/search?q=${encodeURIComponent(q)}`);
+      box.innerHTML = results.length
+        ? `<ul class="link-list">${results.map((m) => `<li>${esc(m.name)} <span class="muted small">(CIK ${esc(m.cik)})</span> ${followed.has(m.cik) ? `<span class="muted small">Following</span>` : `<button type="button" class="btn-link small" data-follow-cik="${esc(m.cik)}" data-follow-name="${esc(m.name)}">Follow</button>`}</li>`).join("")}</ul>`
+        : `<p class="muted small">No 13F filer with “${esc(q)}” in its name. Try a shorter or different part of the name.</p>`;
+    } catch (err) {
+      box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`;
+    }
+  });
+  el("managerResults")?.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-follow-cik]");
+    if (!b) return;
+    try {
+      await api("/api/13f/managers", { method: "POST", body: JSON.stringify({ cik: b.dataset.followCik, name: b.dataset.followName }) });
+      toast("Manager added.", { type: "success" });
+      mount(container);
+    } catch (err) { toast(err.message, { type: "error" }); }
+  });
   el("addManager")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target).entries());

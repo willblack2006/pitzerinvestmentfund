@@ -5,7 +5,7 @@ import {
 import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
 
 export const title = "Discovery";
-export const IDEAS_TABS = [["#/screener", "Discovery"], ["#/watchlist", "Watchlist"], ["#/pitches", "Pitches"], ["#/track-record", "Track record"], ["#/forced-sellers", "Forced sellers"]];
+export const IDEAS_TABS = [["#/screener", "Discovery"], ["#/watchlist", "Watchlist"], ["#/pitches", "Pitches"], ["#/track-record", "Track record"], ["#/forced-sellers", "Forced sellers"], ["#/paper", "Paper trading"]];
 
 const state = { rows: [], sort: { key: "suggestedBy", dir: -1 } };
 

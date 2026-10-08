@@ -28,7 +28,7 @@ async function loadManager(container) {
         <div class="panel-head"><h3 id="conv-h">Highest-conviction positions</h3><span class="muted small">By weight within this manager's own 13F book</span></div>
         <div class="table-scroll"><table class="mini-table">
           <thead><tr><th scope="col">Issuer</th><th scope="col">CUSIP</th><th scope="col" class="num">Value</th><th scope="col" class="num">Weight</th></tr></thead>
-          <tbody>${r.conviction.map((h) => `<tr><td>${esc(h.nameOfIssuer)}</td><td class="muted small">${esc(h.cusip)}</td><td class="num">${fmtMoneyCompact(h.value * 1000)}</td><td class="num">${weightCell(h.weightPct)}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">No holdings parsed.</td></tr>`}</tbody>
+          <tbody>${r.conviction.map((h) => `<tr><td>${esc(h.nameOfIssuer)}</td><td class="muted small">${esc(h.cusip)}</td><td class="num">${fmtMoneyCompact(h.value)}</td><td class="num">${weightCell(h.weightPct)}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">No holdings parsed.</td></tr>`}</tbody>
         </table></div>
         <p class="muted small">A true "overweight vs the market" measure (Cohen, Polk &amp; Silli) needs each stock's market-cap weight too, which free EDGAR data doesn't provide — this instead shows where the manager is concentrated within their own reported portfolio.</p>
       </section>

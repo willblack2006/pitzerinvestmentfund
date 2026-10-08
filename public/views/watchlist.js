@@ -1,5 +1,5 @@
 import {
-  esc, api, isUnlocked, toast, confirmAction, lockedHint, pageHead, loading, errorBox, subTabs, invalidateContext,
+  esc, api, fmtUSD, fmtPct, signed, isUnlocked, toast, confirmAction, lockedHint, pageHead, loading, errorBox, subTabs, invalidateContext,
 } from "../shared.js";
 import { IDEAS_TABS } from "./screener.js";
 import { openPositionDialog } from "./holdings.js";
@@ -8,13 +8,18 @@ import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
 export const title = "Watchlist";
 
 let rows = [];
+let quotes = {};
 
 function renderRows(container) {
   const unlocked = isUnlocked();
   const tbody = container.querySelector("#wlTbody");
-  tbody.innerHTML = rows.map((r) => `
+  tbody.innerHTML = rows.map((r) => {
+    const q = quotes[r.symbol];
+    return `
     <tr data-id="${r.id}">
       <th scope="row" class="left"><a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a></th>
+      <td>${q ? fmtUSD(q.price) : `<span class="muted">—</span>`}</td>
+      <td>${q?.changePct != null ? signed(q.changePct, fmtPct(q.changePct)) : `<span class="muted">—</span>`}</td>
       <td class="left muted small">${esc(r.sourcedFrom || "—")}</td>
       <td class="left">${esc(r.addedAt?.slice(0, 10) || "—")}</td>
       <td>
@@ -25,7 +30,8 @@ function renderRows(container) {
             <button class="btn btn-danger btn-sm" data-remove="${r.id}" aria-label="Remove ${esc(r.symbol)} from watchlist">Remove</button>` : ""}
         </div>
       </td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
   container.querySelector("#wlTable").classList.toggle("hidden", !rows.length);
   container.querySelector("#wlEmpty").innerHTML = rows.length
     ? ""
@@ -87,7 +93,7 @@ export async function mount(container) {
       <table id="wlTable">
         <caption class="sr-only">Watchlist</caption>
         <thead><tr>
-          <th scope="col" class="left">Ticker</th><th scope="col" class="left">Where it came from</th>
+          <th scope="col" class="left">Ticker</th><th scope="col">Price</th><th scope="col">Day</th><th scope="col" class="left">Where it came from</th>
           <th scope="col" class="left">Added</th><th scope="col"><span class="sr-only">Actions</span></th>
         </tr></thead>
         <tbody id="wlTbody"></tbody>
@@ -98,6 +104,11 @@ export async function mount(container) {
   `;
   renderRows(container);
   loadCrowdingPanel("crowdPanel", "watchlist");
+  if (rows.length) {
+    api(`/api/quotes?symbols=${encodeURIComponent(rows.map((r) => r.symbol).join(","))}`)
+      .then((r) => { quotes = r.quotes; if (container.querySelector("#wlTbody")) renderRows(container); })
+      .catch(() => { /* prices just stay blank */ });
+  }
 
   container.querySelector("#wlTbody").addEventListener("click", (e) => {
     const removeId = e.target.closest("[data-remove]")?.dataset.remove;

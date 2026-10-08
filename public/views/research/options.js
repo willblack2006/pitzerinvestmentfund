@@ -1,5 +1,6 @@
-import { el, esc, api, fmtUSD, fmtPct, fmtNum, loading } from "../../shared.js";
+import { el, esc, api, fmtUSD, fmtRatio, fmtNum, loading } from "../../shared.js";
 import { barChart } from "../../charts.js";
+import { term } from "../../glossary.js";
 
 let state = { expiration: null };
 
@@ -26,20 +27,21 @@ async function load(c, symbol) {
       </label>
       <span class="muted small">${daysOut} days out</span>
     </div>
+    ${!r.quality?.hasOI || !r.quality?.hasIV || !r.quality?.hasQuotes ? `<p class="notice small" role="note">Yahoo is serving incomplete data for this chain right now (${[!r.quality?.hasOI && "no open interest", !r.quality?.hasIV && "placeholder implied volatilities", !r.quality?.hasQuotes && "no bid/ask quotes"].filter(Boolean).join(", ")}), which often happens outside market hours. Stats that depend on it are hidden rather than shown as zeros.</p>` : ""}
     <section class="summary" aria-label="Options positioning summary">
-      <div class="stat"><div class="label">Put/call OI ratio</div><div class="value">${r.pcRatio.oiRatio != null ? r.pcRatio.oiRatio.toFixed(2) : "—"}</div><div class="sub">${fmtNum(r.pcRatio.putOI)} put OI / ${fmtNum(r.pcRatio.callOI)} call OI</div></div>
-      <div class="stat"><div class="label">Put/call volume ratio</div><div class="value">${r.pcRatio.volumeRatio != null ? r.pcRatio.volumeRatio.toFixed(2) : "—"}</div></div>
-      <div class="stat"><div class="label">Max pain</div><div class="value">${r.maxPainStrike != null ? fmtUSD(r.maxPainStrike) : "—"}</div><div class="sub">Spot ${fmtUSD(r.spot)}</div></div>
-      <div class="stat"><div class="label">Expected move</div><div class="value">${r.expectedMovePct != null ? fmtPct(r.expectedMovePct * 100) : "—"}</div><div class="sub">From the ATM straddle (${fmtUSD(r.atmStrike)} strike)</div></div>
-      <div class="stat"><div class="label">25-delta skew (approx.)</div><div class="value">${r.skew ? fmtPct(r.skew.skew * 100) : "—"}</div><div class="sub">${r.skew ? `Put IV ${fmtPct(r.skew.putIV * 100)} vs call IV ${fmtPct(r.skew.callIV * 100)}` : "Not enough strikes"}</div></div>
+      <div class="stat"><div class="label">${term("putCallOI")}</div><div class="value">${r.pcRatio.oiRatio != null ? r.pcRatio.oiRatio.toFixed(2) : "—"}</div><div class="sub">${fmtNum(r.pcRatio.putOI)} put OI / ${fmtNum(r.pcRatio.callOI)} call OI</div></div>
+      <div class="stat"><div class="label">${term("putCallVolume")}</div><div class="value">${r.pcRatio.volumeRatio != null ? r.pcRatio.volumeRatio.toFixed(2) : "—"}</div></div>
+      <div class="stat"><div class="label">${term("maxPain")}</div><div class="value">${r.maxPainStrike != null ? fmtUSD(r.maxPainStrike) : "—"}</div><div class="sub">Spot ${fmtUSD(r.spot)}</div></div>
+      <div class="stat"><div class="label">${term("expectedMove")}</div><div class="value">${r.expectedMovePct != null ? `±${(r.expectedMovePct * 100).toFixed(1)}%` : "—"}</div><div class="sub">From the ATM straddle (${fmtUSD(r.atmStrike)} strike)</div></div>
+      <div class="stat"><div class="label">${term("ivSkew", "Skew (approx. 25-delta)")}</div><div class="value">${r.skew ? `${r.skew.skew >= 0 ? "+" : ""}${(r.skew.skew * 100).toFixed(1)} pts` : "—"}</div><div class="sub">${r.skew ? `Put IV ${fmtRatio(r.skew.putIV)} vs call IV ${fmtRatio(r.skew.callIV)}` : "Unavailable"}</div></div>
     </section>
     <div class="tab-grid">
       <section class="panel span-full" aria-labelledby="oi-h">
-        <div class="panel-head"><h3 id="oi-h">Open interest by strike</h3></div>
+        <div class="panel-head"><h3 id="oi-h">${term("openInterest", "Open interest by strike")}</h3></div>
         <div class="chart-box"><canvas id="oiChart" role="img" aria-label="Call and put open interest by strike price."></canvas></div>
       </section>
       <section class="panel span-full" aria-labelledby="gamma-h">
-        <div class="panel-head"><h3 id="gamma-h">Estimated dealer gamma by strike</h3><span class="muted small">Assumes dealers are long calls, short puts — a stated convention, not a fact about any dealer's book</span></div>
+        <div class="panel-head"><h3 id="gamma-h">${term("dealerGamma", "Estimated dealer gamma by strike")}</h3><span class="muted small">Assumes dealers are long calls, short puts — a stated convention, not a fact about any dealer's book</span></div>
         <div class="chart-box"><canvas id="gammaChart" role="img" aria-label="Estimated dealer gamma exposure by strike, in dollars per 1% move of the underlying."></canvas></div>
       </section>
     </div>

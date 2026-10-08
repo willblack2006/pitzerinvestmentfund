@@ -1,6 +1,7 @@
 import { esc, api, fmtPct, fmtUSD, signed, pageHead, loading, errorBox, subTabs } from "../shared.js";
 import { lineChart } from "../charts.js";
 import { IDEAS_TABS } from "./screener.js";
+import { term } from "../glossary.js";
 
 const fmtRound = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "—");
 
@@ -32,10 +33,11 @@ export async function mount(container) {
     ${subTabs(IDEAS_TABS, "#/track-record")}
     ${pageHead("Track record", "How often the fund's calls play out, graded against stated confidence and the base-case target. Only decided pitches (approved, rejected or executed) with a confidence %, horizon and base-case target are scored.")}
     ${!r.rows.length ? `<p class="muted page-pad">No graded calls yet — add a confidence % and time horizon when writing a pitch, and once its horizon passes it'll show up here.</p>` : `
+      ${r.rows.length < 20 ? `<p class="notice small page-pad" role="note">Only ${r.rows.length} graded call${r.rows.length === 1 ? "" : "s"} so far. With this few, the hit rate and Brier score mostly reflect luck; read them as a running log, not a verdict.</p>` : ""}
       <section class="summary page-pad" aria-label="Calibration summary">
         <div class="stat"><div class="label">Calls graded</div><div class="value">${r.rows.length}</div><div class="sub">${r.pending.length} still pending (horizon not reached)</div></div>
-        <div class="stat"><div class="label">Hit rate</div><div class="value">${r.hitRate != null ? fmtPct(r.hitRate * 100) : "—"}</div><div class="sub">Target reached by the horizon</div></div>
-        <div class="stat"><div class="label">Brier score</div><div class="value">${fmtRound(r.brier, 3)}</div><div class="sub">0 = perfect, 0.25 = coin-flip-at-50%, lower is better</div></div>
+        <div class="stat"><div class="label">${term("hitRate")}</div><div class="value">${r.hitRate != null ? fmtPct(r.hitRate * 100) : "—"}</div><div class="sub">Target reached by the horizon</div></div>
+        <div class="stat"><div class="label">${term("brier")}</div><div class="value">${fmtRound(r.brier, 3)}</div><div class="sub">0 = perfect, 0.25 = coin-flip-at-50%, lower is better</div></div>
       </section>
       <div class="tab-grid page-pad">
         <section class="panel span-full" aria-labelledby="cal-h">

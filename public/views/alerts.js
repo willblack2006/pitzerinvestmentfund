@@ -1,9 +1,45 @@
-import { esc, api, isUnlocked, toast, pageHead, loading, errorBox, subTabs, fmtMoneyCompact } from "../shared.js";
+import { esc, api, isUnlocked, toast, pageHead, loading, errorBox, subTabs, fmtMoneyCompact, fmtPct, signed } from "../shared.js";
+
+let briefSince = null;
+try { briefSince = localStorage.getItem("pif_meeting_since"); } catch { /* ignore */ }
+
+async function loadBrief() {
+  const box = document.getElementById("briefBody");
+  if (!box) return;
+  box.innerHTML = loading("Comparing each holding with its price on that date…");
+  let b;
+  try {
+    b = await api(`/api/meeting-brief${briefSince ? `?since=${briefSince}` : ""}`);
+  } catch (err) {
+    box.innerHTML = `<p class="muted">Couldn't build the brief: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!document.getElementById("briefBody")) return;
+  document.getElementById("briefSince").value = b.since;
+  const pct = (v) => (v == null ? "—" : signed(v * 100, fmtPct(v * 100)));
+  const movers = b.moves.filter((m) => m.changePct != null).slice(0, 6);
+  const pitchLink = (p) => `<a href="#/pitches/${p.id}">${esc(p.direction.toUpperCase())} ${esc(p.symbol)}</a>`;
+  box.innerHTML = `
+    <p class="small">Current holdings since ${esc(b.since)}: <strong>${pct(b.holdingsChangePct)}</strong> <span class="muted">(today's positions; ignores trades made in between)</span></p>
+    <div class="table-scroll"><table class="mini-table">
+      <caption class="cap">Biggest effects on the fund since then</caption>
+      <thead><tr><th scope="col">Ticker</th><th scope="col" class="num">Price move</th><th scope="col" class="num">Effect on fund</th></tr></thead>
+      <tbody>${movers.map((m) => `<tr><th scope="row"><a class="symbol-cell" href="#/research/${encodeURIComponent(m.symbol)}">${esc(m.symbol)}</a></th><td class="num">${pct(m.changePct)}</td><td class="num">${pct(m.contributionPct)}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <ul class="link-list small">
+      <li><strong>Open votes:</strong> ${b.voting.map(pitchLink).join(", ") || "none"}</li>
+      <li><strong>Approved, not yet executed:</strong> ${b.awaitingExecution.map(pitchLink).join(", ") || "none"}</li>
+      <li><strong>Decided since then:</strong> ${b.decidedSince.map((p) => `${pitchLink(p)} (${esc(p.status)})`).join(", ") || "none"}</li>
+      <li><strong>Earnings in the next 2 weeks:</strong> ${b.earnings.map((e) => `<a href="#/research/${encodeURIComponent(e.symbol)}/street">${esc(e.symbol)}</a> ${esc(e.date.slice(5))}`).join(", ") || "none"}</li>
+    </ul>`;
+}
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Alerts";
 
-const ICON = { price: "◎", target: "◎", policy: "⚠", earnings: "📅", insider: "👤", vote: "🗳" };
+export const ICON = { price: "◎", target: "◎", policy: "⚠", earnings: "📅", insider: "👤", vote: "🗳", short: "↓", revision: "✎", filingchange: "📄", redflag: "⚑", activist: "5%", crowding: "📣" };
+// Each alert opens the research tab whose panel explains it.
+export const TAB = { earnings: "/street", revision: "/street", insider: "/ownership", activist: "/ownership", target: "/thesis", short: "/risk", filingchange: "/filings", redflag: "/filings" };
 
 function timeAgo(iso) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -14,7 +50,7 @@ function timeAgo(iso) {
 }
 
 export function alertItem(a) {
-  const href = a.pitchId ? `#/pitches/${a.pitchId}` : a.type === "policy" ? "#/allocation" : a.symbol ? `#/research/${encodeURIComponent(a.symbol)}${a.type === "earnings" ? "/street" : a.type === "insider" ? "/ownership" : a.type === "target" ? "/thesis" : ""}` : null;
+  const href = a.pitchId ? `#/pitches/${a.pitchId}` : a.type === "policy" ? "#/allocation" : a.symbol ? `#/research/${encodeURIComponent(a.symbol)}${TAB[a.type] || ""}` : null;
   return `<li class="alert-item alert-${esc(a.level)}">
     <span class="alert-icon" aria-hidden="true">${ICON[a.type] || "•"}</span>
     <div><div class="alert-title">${href ? `<a href="${href}">${esc(a.title)}</a>` : esc(a.title)}</div>
@@ -42,6 +78,11 @@ export async function mount(container) {
       Insider, short-interest, filing, revision and attention signals: ${alerts.signalsAsOf ? `updated ${esc(timeAgo(alerts.signalsAsOf))}` : "not computed yet"}.
       ${isUnlocked() ? `<button type="button" class="btn btn-ghost btn-sm" id="refreshSignalsBtn">Refresh signals</button>` : ""}
     </p>
+    <section class="panel page-pad-panel" aria-labelledby="brief-h">
+      <div class="panel-head"><h3 id="brief-h">Meeting brief</h3>
+        <label class="field-inline small">Since last meeting <input type="date" id="briefSince" /></label></div>
+      <div id="briefBody"></div>
+    </section>
     <div class="tab-grid">
       <section class="panel" aria-labelledby="act-h">
         <h3 id="act-h">Needs action <span class="count-pill">${action.length}</span></h3>
@@ -97,6 +138,12 @@ export async function mount(container) {
     }
   });
 
+  loadBrief();
+  document.getElementById("briefSince").addEventListener("change", (e) => {
+    briefSince = e.target.value;
+    try { localStorage.setItem("pif_meeting_since", briefSince); } catch { /* ignore */ }
+    loadBrief();
+  });
   document.getElementById("runTriageBtn")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
     e.target.textContent = "Scoring headlines…";
