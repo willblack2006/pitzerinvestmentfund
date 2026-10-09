@@ -50,7 +50,8 @@ function timeAgo(iso) {
 }
 
 export function alertItem(a) {
-  const href = a.pitchId ? `#/pitches/${a.pitchId}` : a.type === "policy" ? "#/allocation" : a.symbol ? `#/research/${encodeURIComponent(a.symbol)}${TAB[a.type] || ""}` : null;
+  // Attention spikes are explained by the "Attention spikes" panel on Holdings.
+  const href = a.pitchId ? `#/pitches/${a.pitchId}` : a.type === "policy" ? "#/allocation" : a.type === "crowding" ? "#/" : a.symbol ? `#/research/${encodeURIComponent(a.symbol)}${TAB[a.type] || ""}` : null;
   return `<li class="alert-item alert-${esc(a.level)}">
     <span class="alert-icon" aria-hidden="true">${ICON[a.type] || "•"}</span>
     <div><div class="alert-title">${href ? `<a href="${href}">${esc(a.title)}</a>` : esc(a.title)}</div>

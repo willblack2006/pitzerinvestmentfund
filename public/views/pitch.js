@@ -44,7 +44,7 @@ function scenarioBar(p, current) {
 function priceInfoHtml(current, basePrice) {
   if (!current) return `<span class="muted small">Current price unknown — type a ticker or check it on the research page.</span>`;
   const upside = basePrice ? basePrice / current - 1 : null;
-  return `<span class="small">Current price: <strong>${fmtUSD(current)}</strong>${upside !== null ? ` · Upside to base case: ${signed(upside * 100, fmtPct(upside * 100))}` : ""}</span>`;
+  return `<span class="small">Current price: <strong>${fmtUSD(current)}</strong>${upside !== null ? ` · Upside to base case: ${signed(upside * 100, fmtPct(upside * 100), { neutral: true })}` : ""}</span>`;
 }
 
 function editor(p, isNew, current) {

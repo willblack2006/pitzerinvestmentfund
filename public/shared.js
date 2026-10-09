@@ -21,9 +21,11 @@ export const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? esc(u) : "#");
 // stay neutral instead of defaulting to "positive".
 // `invert`: for numbers where up is the bad direction (e.g. rising short interest), so the
 // color matches the meaning while the arrow still shows the direction.
-export function signed(value, formatted, { invert = false } = {}) {
+// `neutral`: arrow only, no green/red, for gaps to a model value or a price target (a target
+// above the price is not a gain, and showing it green reads like a buy signal).
+export function signed(value, formatted, { invert = false, neutral = false } = {}) {
   if (value === null || value === undefined || Number.isNaN(value)) return `<span class="muted">—</span>`;
-  const good = invert ? value < 0 : value > 0, bad = invert ? value > 0 : value < 0;
+  const good = !neutral && (invert ? value < 0 : value > 0), bad = !neutral && (invert ? value > 0 : value < 0);
   const cls = good ? "gain-pos" : bad ? "gain-neg" : "";
   const icon = value > 0 ? "▲" : value < 0 ? "▼" : "";
   const word = value > 0 ? "up" : value < 0 ? "down" : "";

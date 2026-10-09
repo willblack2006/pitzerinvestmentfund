@@ -45,7 +45,10 @@ function signalBadges(symbol) {
   if (!sig?.badges?.length) return "";
   const seen = new Set();
   const badges = sig.badges.filter((b) => (seen.has(b.type) ? false : (seen.add(b.type), true)));
-  return badges.map((b) => `<a class="sig-chip sig-chip-${esc(b.level)}" href="#/research/${encodeURIComponent(symbol)}${TAB[b.type] || ""}" title="${esc(b.title)}">${ICON[b.type] || "•"}</a>`).join("");
+  // Attention spikes are explained by the panel further down this page; the rest by a research tab.
+  return badges.map((b) => b.type === "crowding"
+    ? `<a class="sig-chip sig-chip-${esc(b.level)}" href="#crowdPanel-h" data-scroll-to="crowdPanel-h" title="${esc(b.title)}">${ICON[b.type] || "•"}</a>`
+    : `<a class="sig-chip sig-chip-${esc(b.level)}" href="#/research/${encodeURIComponent(symbol)}${TAB[b.type] || ""}" title="${esc(b.title)}">${ICON[b.type] || "•"}</a>`).join("");
 }
 
 // Overlay live quotes on the stored positions: price, market value and today's move. The
@@ -474,6 +477,8 @@ export async function mount(container) {
     renderTable();
   });
   el("tbody").addEventListener("click", (e) => {
+    const jump = e.target.closest("[data-scroll-to]");
+    if (jump) { e.preventDefault(); document.getElementById(jump.dataset.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const editId = e.target.closest("[data-edit]")?.dataset.edit;
     const deleteId = e.target.closest("[data-delete]")?.dataset.delete;
     const p = state.positions.find((x) => String(x.id) === (editId || deleteId));

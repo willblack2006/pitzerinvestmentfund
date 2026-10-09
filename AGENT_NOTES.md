@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-10-09 — Claude (site-wide QA pass on the live Render site)
+- Did: crawled every route (31 + 9 research tabs) at 1440px and 375px, light and dark, plus 28 click-through checks per size (`qa.mjs` / `qa-interact.mjs` style CDP scripts, not committed). Fixed: phones scrolled sideways on 9 pages (`.sr-only` text escaping scroll boxes; `.table-scroll`, `.table-wrap`, `.subtabs` are now `position: relative`); Factors default sort and stacked click handlers; attention-spike alerts/badges now point to the Holdings "Attention spikes" panel; analyst-target / DCF / pitch-target upside shown neutral (new `signed(..., { neutral: true })`); Insider/Short-interest rows very tall on phones (min-width on the explanation column); dividend frequency and next-payment estimate (ORCL showed $4.67 instead of $3.50); "these 0 stocks" wording.
+- Headless Chrome screenshots show Chart.js charts half-drawn (animation timing); they render fully in real Chrome. Don't chase that.
+- Earlier "found, not fixed" items in the 10-07 and 10-08 entries below are fixed by this pass, except: no sell transactions recorded for the 10/8 Schwab changes, and AI news scoring / filing summaries need ANTHROPIC_API_KEY (the live site only has OpenAI).
+
 ## 2026-10-08 — Claude (Dividends tab + cash on Holdings)
 - Did: Portfolio → Dividends page (`public/views/dividends.js`, `routes/dividends.js`, `lib/dividends.js`, new `dividends` table). Exact tracking from TRACKING_START = 2026-10-08 (the Schwab reconciliation): each ex-date logs shares × declared amount as "Owed"; "Mark received" records a dividend transaction (credits cash + the holding's divIncome); "Not owed" for shares sold before the ex-date. Deleting the transaction puts the dividend back to Owed. Projected 12-month income / yield / yield on cost from Yahoo's declared rate (or trailing 12 months for ETFs). Scheduler logs new ex-dates each tick. Holdings summary now shows Total portfolio (invested + cash), Invested, Cash, and projected dividends; "Top 5 = …% of invested" (was "of fund", which excluded cash).
 - Not done: past dividends before 10/8 (needs Schwab history; Will has no export access). If someone sends a Schwab History CSV, import it as received dividends WITHOUT moving cash (Schwab cash already includes them).

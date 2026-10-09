@@ -279,6 +279,7 @@ input[aria-invalid="true"] { border-color: var(--red); box-shadow: 0 0 0 1px var
 .page-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 .subtabs {
+  position: relative; /* see .table-scroll */
   display: flex;
   gap: 4px;
   padding: 16px var(--gutter) 0;
@@ -404,8 +405,10 @@ input[aria-invalid="true"] { border-color: var(--red); box-shadow: 0 0 0 1px var
 .code-S { color: var(--red); border-color: var(--red); }
 
 /* ============ Tables ============ */
-.table-wrap { padding: 0 var(--gutter) 24px; overflow-x: auto; }
-.table-scroll { overflow-x: auto; }
+/* position: relative keeps absolutely-positioned .sr-only text inside the scroll box; without
+   it that text escapes and makes the whole page scroll sideways on phones. */
+.table-wrap { padding: 0 var(--gutter) 24px; overflow-x: auto; position: relative; }
+.table-scroll { overflow-x: auto; position: relative; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 thead th {
   text-align: right;
@@ -1078,7 +1081,10 @@ select { max-width: 100%; }
 .seg-btn + .seg-btn { border-left: 1px solid var(--border-strong); }
 .seg-btn[aria-pressed="true"] { background: var(--accent-bg); color: #fff; }
 .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 24px 0 0; }
-.sig-table td { vertical-align: middle; }
+.sig-table td, .sig-table tbody th { vertical-align: middle; }
+/* Keep the explanation column readable: on phones it was squeezed to a few characters, which
+   made every row very tall. With a minimum width the table scrolls sideways in its box instead. */
+.sig-table td:last-child { min-width: 260px; }
 
 /* ============ Today (morning briefing) ============ */
 .brief-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px 24px; padding: 24px var(--gutter) 4px; }

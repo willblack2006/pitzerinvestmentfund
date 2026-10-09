@@ -23,7 +23,7 @@ function cell(v) {
   return `<td class="num">${v >= 70 || v <= 30 ? `<strong>${pct(v)}</strong>` : pct(v)}</td>`;
 }
 
-const state = { scope: "all", sort: { key: "value", dir: "desc" } };
+const state = { scope: "all", sort: { key: "value", dir: -1 } }; // sortRows/bindSort use 1 / -1
 
 async function load(container) {
   const box = document.getElementById("factorsBody");
@@ -63,6 +63,9 @@ async function load(container) {
     });
   }
   renderRows(r.rows);
+  // Bound once per freshly built table (re-binding on every re-sort stacked listeners, so a
+  // click could toggle the order twice and appear to do nothing).
+  bindSort(document.getElementById("factorsTable"), state.sort, () => renderRows(r.rows));
 }
 
 function renderRows(rows) {
@@ -79,7 +82,6 @@ function renderRows(rows) {
       <th scope="row" class="left"><a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}/valuation">${esc(r.symbol)}</a>${r.owned ? "" : ` <span class="badge badge-watch">Watch</span>`}</th>
       ${FACTORS.map(([k]) => cell(r[k])).join("")}
     </tr>`).join("") || `<tr><td colspan="${FACTORS.length + 1}" class="muted">No stocks in this scope.</td></tr>`;
-  bindSort(document.getElementById("factorsTable"), state.sort, () => renderRows(rows));
 }
 
 export const title = "Factors";

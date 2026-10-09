@@ -999,7 +999,9 @@ test("Dividends: annual rate, payments per year and new ex-dates since tracking 
   assert.equal(trailing.basis, "trailing 12 months");
   assert.ok(Math.abs(trailing.rate - (0.825 + 0.945 * 4)) < 1e-9);
   assert.deepEqual(annualRate({ declaredRate: 0, events: [], today }), { rate: 0, basis: null });
-  assert.equal(paymentsPerYear(events, today), 5);
+  assert.equal(paymentsPerYear(events, "2026-09-30"), 4); // quarterly: ~91-day gaps
+  assert.equal(paymentsPerYear(events.slice(2, 5), "2026-10-09"), 4); // only 3 dates in view, still quarterly
+  assert.equal(paymentsPerYear([{ exDate: "2026-01-02", amount: 1 }], today), 1);
   // Only ex-dates from tracking start through today, and not already logged.
   assert.deepEqual(newExDates(events, { since: "2026-10-08", today, logged: new Set() }).map((e) => e.exDate), ["2026-10-09"]);
   assert.deepEqual(newExDates(events, { since: "2026-10-08", today, logged: new Set(["2026-10-09"]) }), []);

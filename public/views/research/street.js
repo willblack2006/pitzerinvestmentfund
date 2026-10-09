@@ -18,7 +18,7 @@ function targetRange(t, price) {
       <div class="tr-ends small muted"><span>Low ${fmtUSD(t.low)}</span><span>High ${fmtUSD(t.high)}</span></div>
     </div>
     <div class="kv-grid kv-4">
-      <div><span class="muted small">Upside to mean ${term("priceTarget", "target")}</span><strong>${t.upside != null ? signed(t.upside * 100, fmtPct(t.upside * 100)) : "—"}</strong></div>
+      <div><span class="muted small">Upside to mean ${term("priceTarget", "target")}</span><strong>${t.upside != null ? signed(t.upside * 100, fmtPct(t.upside * 100), { neutral: true }) : "—"}</strong></div>
       <div><span class="muted small">Median target</span><strong>${t.median ? fmtUSD(t.median) : "—"}</strong></div>
       <div><span class="muted small">Analysts</span><strong>${t.analysts ?? "—"}</strong></div>
       <div><span class="muted small">Avg rating</span><strong>${Number.isFinite(t.recommendationMean) ? `${t.recommendationMean.toFixed(2)} <span class="small muted">(1 = strong buy, 5 = sell)</span>` : "—"}</strong></div>

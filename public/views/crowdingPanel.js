@@ -26,6 +26,7 @@ export async function loadCrowdingPanel(id, scopeOrSymbols) {
   }
   if (!document.getElementById(id)) return;
   const spikes = r.rows.filter((x) => x.score >= 30 && !x.error);
+  if (!r.rows.length) { box.innerHTML = `<p class="small muted">No stocks to check yet.</p>`; return; }
   if (!spikes.length) { box.innerHTML = `<p class="small muted">No attention spikes across these ${r.rows.length} stocks right now.</p>`; return; }
   box.innerHTML = `
     <ul class="link-list small">${spikes.map((x) => `

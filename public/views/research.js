@@ -98,7 +98,7 @@ function renderOverview(c, { symbol, data, fund, price }) {
 
   // Snapshot: the handful of numbers an analyst checks first, each linking to its tab.
   const snap = [
-    ["Upside to target", st?.targets?.upside != null ? signed(st.targets.upside * 100, fmtPct(st.targets.upside * 100)) : "—", "street", st?.targets?.mean ? `Mean target ${fmtUSD(st.targets.mean)} · ${st.targets.analysts} analysts` : ""],
+    ["Upside to target", st?.targets?.upside != null ? signed(st.targets.upside * 100, fmtPct(st.targets.upside * 100), { neutral: true }) : "—", "street", st?.targets?.mean ? `Mean target ${fmtUSD(st.targets.mean)} · ${st.targets.analysts} analysts` : ""],
     ["Piotroski F-score", an?.piotroski && !isFinancialSector(data) ? `${an.piotroski.score}/${an.piotroski.outOf}` : "—", "financials", an?.piotroski && !isFinancialSector(data) ? an.piotroski.verdict : isFinancialSector(data) ? "Not meaningful for financials" : ""],
     isFinancialSector(data)
       ? ["ROE (last FY)", fmtRatio(lastFy?.roe), "financials", "Key return metric for financials"]

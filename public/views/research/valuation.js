@@ -176,7 +176,7 @@ function wireDcf(symbol, data, price) {
     const v = dcfValue(p);
     last = v?.perShare ?? null;
     el("dcfValue").textContent = v ? fmtUSD(v.perShare) : "Check inputs (discount rate must exceed terminal growth)";
-    el("dcfUpside").innerHTML = v && price ? `${signed((v.perShare / price - 1) * 100, fmtPct((v.perShare / price - 1) * 100))} vs ${fmtUSD(price)} today` : "";
+    el("dcfUpside").innerHTML = v && price ? `${signed((v.perShare / price - 1) * 100, fmtPct((v.perShare / price - 1) * 100), { neutral: true })} vs ${fmtUSD(price)} today` : "";
     el("dcfTerminal").textContent = v ? `Terminal value is ${(v.terminalShare * 100).toFixed(0)}% of the total — ${v.terminalShare > 0.75 ? "the valuation rests heavily on the far future; be skeptical of precision." : "a reasonable share."}` : "";
     const ig = price ? impliedGrowth(p, price) : null;
     el("dcfImplied").textContent = ig === null ? "—" : `${(ig * 100).toFixed(1)}%`;
