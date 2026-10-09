@@ -1,22 +1,22 @@
 const express = require("express");
 const db = require("../db");
-const { requireMember, memberFromRequest, safeEqual, EDIT_PASSWORD } = require("../middleware/auth");
+const { requireSignedIn } = require("../middleware/auth");
 const { getSettings } = require("../lib/settings");
 const { latestPrices } = require("../lib/prices");
+const { notify } = require("../lib/notify");
 
 const router = express.Router();
 
 // Writing a pitch needs an identity: a signed-in member (preferred), or the shared editor
 // password with an explicit author name.
-function requireAuthor(req, res, next) {
-  req.member = memberFromRequest(req);
-  if (req.member) { req.authorName = req.member.name; return next(); }
-  if (safeEqual(req.get("x-edit-password") || "", EDIT_PASSWORD)) {
-    req.authorName = String(req.body?.author || "").trim() || "Fund editor";
-    return next();
-  }
-  res.status(401).json({ error: "Sign in as a member (or unlock editing) to write pitches.", code: "member_required" });
-}
+// Pitch rights: any signed-in member can write one; its author (or an admin) edits, opens,
+// withdraws or deletes it; a portfolio manager or admin closes the vote; only a portfolio
+// manager marks it executed (that's a real trade).
+const isAuthor = (req, p) => (p.authorId != null ? p.authorId === req.member.id : p.author === req.member.name);
+const isAuthorOrAdmin = (req, p) => req.member.isAdmin || isAuthor(req, p);
+// The author's member id (older pitches only stored a name).
+const authorIdOf = (p) => p.authorId ?? db.prepare("SELECT id FROM members WHERE name = ?").get(p.author)?.id ?? null;
+const pitchLabel = (p) => `${p.direction[0].toUpperCase()}${p.direction.slice(1)} ${p.symbol}${p.title ? `: ${p.title}` : ""}`;
 
 const FIELDS = ["symbol", "direction", "title", "thesis", "catalysts", "risks", "valuation", "bullCase", "baseCase", "bearCase", "bullPrice", "basePrice", "bearPrice", "sizePct", "confidencePct", "horizonMonths", "preMortem", "bearChecklist"];
 const NUM = new Set(["bullPrice", "basePrice", "bearPrice", "sizePct", "confidencePct", "horizonMonths"]);
@@ -81,22 +81,23 @@ router.get("/pitches/:id", async (req, res) => {
   res.json({ ...p, tally: tally(p.id), currentPrice: prices[p.symbol]?.price ?? null });
 });
 
-router.post("/pitches", requireAuthor, async (req, res) => {
+router.post("/pitches", requireSignedIn, async (req, res) => {
   let data;
   try { data = clean(req.body || {}); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
   if (!data.symbol) return res.status(400).json({ error: "A ticker is required." });
   const prices = await latestPrices([data.symbol]);
   const row = { direction: "buy", title: "", thesis: "", catalysts: "", risks: "", valuation: "", bullCase: "", baseCase: "", bearCase: "", bullPrice: null, basePrice: null, bearPrice: null, sizePct: null, confidencePct: null, horizonMonths: null, preMortem: "", bearChecklist: "[]", ...data };
   const info = db.prepare(`
-    INSERT INTO pitches (symbol, direction, title, author, thesis, catalysts, risks, valuation, bullCase, baseCase, bearCase, bullPrice, basePrice, bearPrice, sizePct, confidencePct, horizonMonths, preMortem, bearChecklist, priceAtPitch)
-    VALUES (@symbol, @direction, @title, @author, @thesis, @catalysts, @risks, @valuation, @bullCase, @baseCase, @bearCase, @bullPrice, @basePrice, @bearPrice, @sizePct, @confidencePct, @horizonMonths, @preMortem, @bearChecklist, @priceAtPitch)
-  `).run({ ...row, author: req.authorName, priceAtPitch: prices[data.symbol]?.price ?? null });
+    INSERT INTO pitches (symbol, direction, title, author, authorId, thesis, catalysts, risks, valuation, bullCase, baseCase, bearCase, bullPrice, basePrice, bearPrice, sizePct, confidencePct, horizonMonths, preMortem, bearChecklist, priceAtPitch)
+    VALUES (@symbol, @direction, @title, @author, @authorId, @thesis, @catalysts, @risks, @valuation, @bullCase, @baseCase, @bearCase, @bullPrice, @basePrice, @bearPrice, @sizePct, @confidencePct, @horizonMonths, @preMortem, @bearChecklist, @priceAtPitch)
+  `).run({ ...row, author: req.member.name, authorId: req.member.id, priceAtPitch: prices[data.symbol]?.price ?? null });
   res.status(201).json(db.prepare("SELECT * FROM pitches WHERE id = ?").get(info.lastInsertRowid));
 });
 
-router.put("/pitches/:id", requireAuthor, (req, res) => {
+router.put("/pitches/:id", requireSignedIn, (req, res) => {
   const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
   if (!p) return res.status(404).json({ error: "Pitch not found." });
+  if (!isAuthorOrAdmin(req, p)) return res.status(403).json({ error: "Only the pitch's author or an admin can edit it." });
   if (!["draft", "voting"].includes(p.status)) return res.status(409).json({ error: "Decided pitches can't be edited." });
   let data;
   try { data = clean(req.body || {}); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
@@ -111,10 +112,17 @@ router.put("/pitches/:id", requireAuthor, (req, res) => {
 });
 
 // Lifecycle: draft -> voting -> (approved | rejected) -> executed; draft/voting -> withdrawn.
-router.post("/pitches/:id/status", requireAuthor, (req, res) => {
+router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
   const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
   if (!p) return res.status(404).json({ error: "Pitch not found." });
   const action = req.body?.action;
+  const allowed = action === "close" ? req.member.isAdmin || req.member.canTrade
+    : action === "executed" ? req.member.canTrade
+    : isAuthorOrAdmin(req, p);
+  if (!allowed) {
+    const who = action === "close" ? "a portfolio manager or admin" : action === "executed" ? "a portfolio manager" : "the pitch's author or an admin";
+    return res.status(403).json({ error: `Only ${who} can do that.` });
+  }
   let status;
   if (action === "open" && p.status === "draft") {
     if (!p.thesis.trim() || p.basePrice === null) return res.status(400).json({ error: "Add a thesis and a base-case price target before opening the vote." });
@@ -138,10 +146,18 @@ router.post("/pitches/:id/status", requireAuthor, (req, res) => {
   } else {
     return res.status(409).json({ error: `Can't ${action} a pitch that is ${p.status}.` });
   }
+  const link = `#/pitches/${p.id}`;
+  if (status === "voting") {
+    notify("all", { type: "pitchVoting", title: `Vote open: ${pitchLabel(p)}`, body: `Pitched by ${p.author}.`, link }, { except: authorIdOf(p) });
+  } else if (["approved", "rejected", "executed"].includes(status)) {
+    const voters = db.prepare("SELECT memberId FROM votes WHERE pitchId = ?").all(p.id).map((v) => v.memberId);
+    const what = status === "executed" ? "was carried out in the real fund" : `was ${status}`;
+    notify([authorIdOf(p), ...voters].filter((id) => id != null), { type: "pitchResult", title: `${pitchLabel(p)} ${what}`, body: status === "executed" ? "" : `${tally(p.id).counts.yes} yes, ${tally(p.id).counts.no} no.`, link }, { except: req.member.id });
+  }
   res.json({ ...db.prepare("SELECT * FROM pitches WHERE id = ?").get(p.id), tally: tally(p.id) });
 });
 
-router.post("/pitches/:id/vote", requireMember, (req, res) => {
+router.post("/pitches/:id/vote", requireSignedIn, (req, res) => {
   const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
   if (!p) return res.status(404).json({ error: "Pitch not found." });
   if (p.status !== "voting") return res.status(409).json({ error: "Voting isn't open on this pitch." });
@@ -154,9 +170,10 @@ router.post("/pitches/:id/vote", requireMember, (req, res) => {
   res.json(tally(p.id));
 });
 
-router.delete("/pitches/:id", requireAuthor, (req, res) => {
+router.delete("/pitches/:id", requireSignedIn, (req, res) => {
   const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
   if (!p) return res.status(404).json({ error: "Pitch not found." });
+  if (!isAuthorOrAdmin(req, p)) return res.status(403).json({ error: "Only the pitch's author or an admin can delete it." });
   if (p.status !== "draft") return res.status(409).json({ error: "Only drafts can be deleted; withdraw it instead." });
   db.prepare("DELETE FROM pitches WHERE id = ?").run(p.id);
   res.status(204).end();

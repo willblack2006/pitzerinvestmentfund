@@ -32,24 +32,63 @@ export function signed(value, formatted, { invert = false, neutral = false } = {
   return `<span class="${cls}">${icon ? `<span aria-hidden="true">${icon} </span><span class="sr-only">${word} </span>` : ""}${formatted ?? value}</span>`;
 }
 
-export function getPassword() {
-  return sessionStorage.getItem("pif_edit_password") || "";
+// ---- Signed-in member (cookie session; loaded once by app.js from /api/auth/session) ----
+// can("member")  → signed in (notes, chat, pitches, theses, watchlist, votes, paper trading)
+// can("trade")   → portfolio manager: holdings, trades, cash, dividends
+// can("admin")   → members and fund settings
+let session = { member: null, setupNeeded: false, loaded: false };
+
+export function currentMember() { return session.member; }
+export function sessionInfo() { return session; }
+export function can(cap = "member") {
+  const m = session.member;
+  if (!m) return false;
+  return cap === "member" || (cap === "trade" && m.canTrade) || (cap === "admin" && m.isAdmin);
 }
-export function isUnlocked() {
-  return !!getPassword();
+export function setSession(next) {
+  const before = session.member?.id ?? null;
+  session = { ...session, ...next, loaded: true };
+  prefs = session.member ? { ...(next.prefs || (session.member?.id === before ? prefs : {})) } : readLocalPrefs();
+  applyTheme();
+  if ((session.member?.id ?? null) !== before) window.dispatchEvent(new CustomEvent("pif:session-changed"));
 }
 
-// ---- Individual member session (voting, authorship) ----
-export function getMember() {
-  try { return JSON.parse(localStorage.getItem("pif_member") || "null"); } catch { return null; }
+// ---- Personal preferences: saved to your account when signed in (they follow you across
+// devices), otherwise to this browser. Keys are validated server-side (lib/prefs.js). ----
+let prefs = {};
+const LOCAL_PREFS = "pif_prefs";
+function readLocalPrefs() { try { return JSON.parse(localStorage.getItem(LOCAL_PREFS) || "{}"); } catch { return {}; } }
+export function getPref(key, fallback = null) { return prefs[key] ?? fallback; }
+export async function setPref(key, value) {
+  prefs = { ...prefs, [key]: value };
+  if (value === null) delete prefs[key];
+  if (key === "theme") applyTheme();
+  window.dispatchEvent(new CustomEvent("pif:prefs-changed", { detail: { key, value } }));
+  if (session.member) {
+    try { prefs = await api("/api/prefs", { method: "PUT", body: JSON.stringify({ [key]: value }) }); }
+    catch (err) { toast(`Couldn't save that preference: ${err.message}`, { type: "error" }); }
+  } else {
+    try { localStorage.setItem(LOCAL_PREFS, JSON.stringify(prefs)); } catch { /* private mode */ }
+  }
 }
-export function setMember(session) {
-  try {
-    if (session) localStorage.setItem("pif_member", JSON.stringify(session));
-    else localStorage.removeItem("pif_member");
-  } catch { /* storage unavailable */ }
-  window.dispatchEvent(new CustomEvent("pif:member-changed"));
+// Light / dark / system. "system" leaves it to the device (prefers-color-scheme).
+export function applyTheme() {
+  const t = prefs.theme;
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
 }
+// "?benchmark=…" for the comparison pages when you've picked your own (else the fund's).
+export function benchParam(prefix = "?") {
+  const b = prefs.benchmark;
+  return b ? `${prefix}benchmark=${encodeURIComponent(b)}` : "";
+}
+export async function loadSession() {
+  try { setSession(await api("/api/auth/session")); } catch { setSession({ member: null }); }
+  return session;
+}
+// The first page waits for this, so it never flashes "Sign in" hints at a signed-in member.
+let firstLoad = null;
+export function sessionReady() { return (firstLoad ||= loadSession()); }
 
 // A page load routinely asks for the same GET twice at once — e.g. a view's own
 // "/api/positions" fetch alongside fundContext()'s, or "/api/alerts" for both the page body
@@ -62,19 +101,16 @@ export async function api(path, options = {}) {
   if (method === "GET" && inflightGets.has(path)) return inflightGets.get(path);
 
   const promise = (async () => {
-    const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
-    if (isUnlocked()) headers["x-edit-password"] = getPassword();
-    const member = getMember();
-    if (member?.token) headers["x-member-token"] = member.token;
-    const res = await fetch(path, { ...options, headers });
+    // x-pif-app: proves the request came from this app (session cookies alone don't).
+    const headers = Object.assign({ "Content-Type": "application/json", "x-pif-app": "1" }, options.headers || {});
+    const res = await fetch(path, { ...options, headers, credentials: "same-origin" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      // A stale/changed password: re-lock so the UI stops pretending editing works.
-      if (res.status === 401 && isUnlocked()) {
-        sessionStorage.removeItem("pif_edit_password");
+      // Signed out elsewhere, expired, or deactivated: drop the stale session in the UI.
+      if (body.code === "signin_required" && session.member) {
+        setSession({ member: null });
         window.dispatchEvent(new CustomEvent("pif:auth-expired"));
       }
-      if (body.code === "member_required" && member?.token) setMember(null); // session revoked
       throw Object.assign(new Error(body.error || `Request failed (${res.status})`), { code: body.code, status: res.status });
     }
     return res.status === 204 ? null : res.json();
@@ -140,18 +176,20 @@ export function confirmAction({ title, body, confirmLabel = "Confirm", danger = 
   });
 }
 
-export function requestMemberSignIn() {
-  window.dispatchEvent(new CustomEvent("pif:request-member"));
+export function requestSignIn() {
+  window.dispatchEvent(new CustomEvent("pif:request-signin"));
 }
 
-export function requestUnlock() {
-  window.dispatchEvent(new CustomEvent("pif:request-unlock"));
-}
+const CAP_REASON = { trade: "Only portfolio managers can do this.", admin: "Only admins can do this." };
 
-// Inline prompt shown in place of edit controls while locked, so members know editing exists.
-export function lockedHint(text) {
-  return `<p class="locked-hint"><span aria-hidden="true">🔒</span> ${esc(text)}
-    <button type="button" class="btn-link" data-unlock>Unlock editing</button></p>`;
+// Shown in place of controls someone can't use, so they know the feature exists and why
+// it's off: a Sign in button for visitors, a plain reason for members without the right.
+export function lockedHint(text, cap = "member") {
+  if (!session.member) {
+    return `<p class="locked-hint"><span aria-hidden="true">🔒</span> ${esc(text)}
+      <button type="button" class="btn-link" data-signin>Sign in</button></p>`;
+  }
+  return `<p class="locked-hint"><span aria-hidden="true">🔒</span> ${esc(CAP_REASON[cap] || text)}</p>`;
 }
 
 // ---- Sortable tables: real <button>s inside <th> with aria-sort ----

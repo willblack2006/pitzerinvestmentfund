@@ -1,6 +1,6 @@
 const express = require("express");
 const db = require("../db");
-const { requireAuth } = require("../middleware/auth");
+const { requireSignedIn } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -8,7 +8,7 @@ router.get("/watchlist", (req, res) => {
   res.json(db.prepare("SELECT * FROM watchlist ORDER BY addedAt DESC").all());
 });
 
-router.post("/watchlist", requireAuth, (req, res) => {
+router.post("/watchlist", requireSignedIn, (req, res) => {
   const { symbol, note, sourcedFrom } = req.body || {};
   if (!symbol) return res.status(400).json({ error: "symbol is required." });
   try {
@@ -29,7 +29,7 @@ router.post("/watchlist", requireAuth, (req, res) => {
   }
 });
 
-router.delete("/watchlist/:id", requireAuth, (req, res) => {
+router.delete("/watchlist/:id", requireSignedIn, (req, res) => {
   const info = db.prepare("DELETE FROM watchlist WHERE id = ?").run(req.params.id);
   if (info.changes === 0) return res.status(404).json({ error: "Not found." });
   res.status(204).end();

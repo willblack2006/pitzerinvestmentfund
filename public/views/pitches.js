@@ -1,4 +1,4 @@
-import { esc, api, fmtUSD, fmtPct, signed, pageHead, loading, errorBox, subTabs, getMember } from "../shared.js";
+import { esc, api, fmtUSD, fmtPct, signed, pageHead, loading, errorBox, subTabs, currentMember } from "../shared.js";
 import { IDEAS_TABS } from "./screener.js";
 
 export const title = "Pitches";
@@ -19,14 +19,14 @@ export async function mount(container) {
     container.innerHTML = subTabs(IDEAS_TABS, "#/pitches") + pageHead("Pitches") + errorBox(`Could not load pitches: ${err.message}`);
     return;
   }
-  const member = getMember();
+  const member = currentMember();
   const groups = STATUS_ORDER.map((s) => [s, rows.filter((r) => r.status === s)]).filter(([, list]) => list.length);
 
   container.innerHTML = `
     ${subTabs(IDEAS_TABS, "#/pitches")}
     ${pageHead("Pitches", "Stock pitches move from draft to an investment-committee vote to execution. Every pitch records the price when it was made, so calls can be graded later.",
       `<a class="btn btn-primary" href="#/pitches/new">+ New pitch</a>`)}
-    ${!member ? `<p class="notice page-pad-notice">Members vote on pitches. <button type="button" class="btn-link" data-member-signin>Sign in as a member</button> to vote or write pitches under your name.</p>` : ""}
+    ${!member ? `<p class="notice page-pad-notice">Members vote on pitches. <button type="button" class="btn-link" data-signin>Sign in</button> to vote or write pitches under your name.</p>` : ""}
     ${groups.length ? groups.map(([status, list]) => `
       <section class="pitch-group" aria-labelledby="g-${status}">
         <h3 id="g-${status}" class="group-title">${STATUS_LABEL[status]} <span class="count-pill">${list.length}</span></h3>

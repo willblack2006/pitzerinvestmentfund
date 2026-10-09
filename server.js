@@ -29,6 +29,9 @@ const todayRouter = require("./routes/today");
 const dividendsRouter = require("./routes/dividends");
 const pitchesRouter = require("./routes/pitches");
 const membersRouter = require("./routes/members");
+const authRouter = require("./routes/auth");
+const eventsRouter = require("./routes/events");
+const { requireAppHeader } = require("./middleware/auth");
 const scheduler = require("./lib/scheduler");
 const path = require("path");
 
@@ -45,7 +48,9 @@ app.use((req, res, next) => {
   });
   next();
 });
-app.use(compression()); // gzip JSON/JS/CSS responses — a real win on cellular connections
+// gzip JSON/JS/CSS responses — a real win on cellular connections. Never the live-update
+// stream: compression buffers output, which would hold events back.
+app.use(compression({ filter: (req, res) => req.path !== "/api/events" && compression.filter(req, res) }));
 app.use(express.json({ limit: "200kb" }));
 app.use(express.static(path.join(__dirname, "public"), {
   // These files aren't content-hashed, so keep the cache short rather than immutable —
@@ -54,6 +59,17 @@ app.use(express.static(path.join(__dirname, "public"), {
   maxAge: "10m",
 }));
 
+// Session cookies ride along on cross-site requests, so every API change must carry the app's
+// own header (see middleware/auth.js requireAppHeader).
+app.use("/api", requireAppHeader);
+app.use("/api", authRouter);
+app.use("/api", eventsRouter);
+app.use("/api", require("./routes/prefs"));
+app.use("/api", require("./routes/notes"));
+app.use("/api", require("./routes/chat"));
+app.use("/api", require("./routes/notifications"));
+app.use("/api", require("./routes/myAlerts"));
+app.use("/api", require("./routes/profiles"));
 app.use("/api", positionsRouter);
 app.use("/api", researchRouter);
 app.use("/api", macroRouter);

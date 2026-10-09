@@ -1,26 +1,16 @@
 const express = require("express");
 const db = require("../db");
-const { requireAuth, EDIT_PASSWORD, safeEqual } = require("../middleware/auth");
-const { loginLimiter } = require("../middleware/rateLimit");
+const { requireTrader } = require("../middleware/auth");
+const { fundChanged } = require("../lib/events");
 
 const router = express.Router();
-
-router.post("/login", loginLimiter("edit"), (req, res) => {
-  const { password } = req.body || {};
-  if (typeof password === "string" && safeEqual(password, EDIT_PASSWORD)) {
-    req.loginSucceeded();
-    return res.json({ ok: true });
-  }
-  req.loginFailed();
-  res.status(401).json({ error: "Incorrect password." });
-});
 
 router.get("/positions", (req, res) => {
   const rows = db.prepare("SELECT * FROM positions ORDER BY symbol ASC").all();
   res.json(rows);
 });
 
-router.post("/positions", requireAuth, (req, res) => {
+router.post("/positions", requireTrader, (req, res) => {
   const { symbol, shares, lastPrice, avgCost, totalCost, marketValue, divIncome, notes } = req.body || {};
   if (!symbol || typeof shares !== "number" || !(shares > 0)) {
     return res.status(400).json({ error: "A ticker and a positive share count are required." });
@@ -40,7 +30,9 @@ router.post("/positions", requireAuth, (req, res) => {
       divIncome: divIncome || 0,
       notes: notes || "",
     });
-    res.status(201).json(db.prepare("SELECT * FROM positions WHERE id = ?").get(info.lastInsertRowid));
+    const row = db.prepare("SELECT * FROM positions WHERE id = ?").get(info.lastInsertRowid);
+    fundChanged(req, "position.add", { symbol: row.symbol, shares: row.shares });
+    res.status(201).json(row);
   } catch (e) {
     if (String(e).includes("UNIQUE")) {
       return res.status(409).json({ error: `Position ${symbol} already exists.` });
@@ -49,7 +41,7 @@ router.post("/positions", requireAuth, (req, res) => {
   }
 });
 
-router.put("/positions/:id", requireAuth, (req, res) => {
+router.put("/positions/:id", requireTrader, (req, res) => {
   const existing = db.prepare("SELECT * FROM positions WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ error: "Position not found." });
 
@@ -65,12 +57,16 @@ router.put("/positions/:id", requireAuth, (req, res) => {
     WHERE id = @id
   `).run({ ...merged, symbol: String(merged.symbol).toUpperCase().trim(), id: req.params.id });
 
-  res.json(db.prepare("SELECT * FROM positions WHERE id = ?").get(req.params.id));
+  const row = db.prepare("SELECT * FROM positions WHERE id = ?").get(req.params.id);
+  fundChanged(req, "position.edit", { symbol: row.symbol, shares: row.shares, previousShares: existing.shares, fields: Object.keys(req.body || {}) });
+  res.json(row);
 });
 
-router.delete("/positions/:id", requireAuth, (req, res) => {
-  const info = db.prepare("DELETE FROM positions WHERE id = ?").run(req.params.id);
-  if (info.changes === 0) return res.status(404).json({ error: "Position not found." });
+router.delete("/positions/:id", requireTrader, (req, res) => {
+  const existing = db.prepare("SELECT * FROM positions WHERE id = ?").get(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Position not found." });
+  db.prepare("DELETE FROM positions WHERE id = ?").run(existing.id);
+  fundChanged(req, "position.delete", { symbol: existing.symbol, shares: existing.shares });
   res.status(204).end();
 });
 

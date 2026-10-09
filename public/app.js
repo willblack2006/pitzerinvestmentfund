@@ -1,5 +1,9 @@
-import { el, esc, api, isUnlocked, toast, fundContext, getMember, setMember } from "./shared.js";
+import { el, esc, api, toast, fundContext, currentMember, sessionInfo, setSession, sessionReady, invalidateContext } from "./shared.js";
 import { initRouter } from "./router.js";
+import { initNotes } from "./notes.js";
+import { initSelection } from "./selection.js";
+import { initChat } from "./chat.js";
+import { initInbox, setFundAlertCount } from "./inbox.js";
 
 // Each page's code only downloads when the user actually navigates there, instead of every
 // view in the app loading up front (the old eager imports were the biggest contributor to
@@ -34,139 +38,140 @@ const router = initRouter({
   "/index-radar": () => import("./views/indexRadar.js"),
   "/congress": () => import("./views/congressTrades.js"),
   "/settings": () => import("./views/settings.js"),
+  "/account": () => import("./views/account.js"),
+  "/account/:section": () => import("./views/account.js"),
+  "/notes": () => import("./views/notes.js"),
+  "/chat": () => import("./views/chat.js"),
+  "/inbox": () => import("./views/inbox.js"),
+  "/members/:id": () => import("./views/profile.js"),
+  "/welcome/:token": () => import("./views/welcome.js"),
   "/glossary": () => import("./views/glossary.js"),
 });
 
-// ---- Edit lock (shared fund password) ----
+// ---- Accounts: sign in, first-admin setup, account menu ----
+
+const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 
 function updateAuthUI() {
-  const unlocked = isUnlocked();
-  el("authStatus").textContent = unlocked ? "Editing on" : "";
-  el("authStatus").classList.toggle("auth-on", unlocked);
-  el("loginBtn").classList.toggle("hidden", unlocked);
-  el("logoutBtn").classList.toggle("hidden", !unlocked);
+  const m = currentMember();
+  el("signInBtn").classList.toggle("hidden", !!m);
+  el("accountBtn").classList.toggle("hidden", !m);
+  if (m) {
+    el("accountInitials").textContent = initials(m.name);
+    el("accountLabel").textContent = `Account menu for ${m.name}`;
+    el("accountName").textContent = m.name;
+    el("accountTitle").textContent = [m.title, m.isAdmin ? "Admin" : "", m.canTrade ? "Can trade" : ""].filter(Boolean).join(" · ");
+    el("accountAdminLink").classList.toggle("hidden", !m.isAdmin);
+  }
 }
 
-let unlockReturnFocus = null;
-function openUnlock() {
-  unlockReturnFocus = document.activeElement;
-  el("loginError").classList.add("hidden");
-  el("loginForm").reset();
-  el("loginDialog").showModal();
+let signInReturnFocus = null;
+function openDialog(id) {
+  signInReturnFocus = document.activeElement;
+  const d = el(id);
+  d.querySelector("form")?.reset();
+  d.querySelector(".error")?.classList.add("hidden");
+  d.showModal();
+}
+// A fresh install has no accounts: the first sign-in creates the admin instead.
+function openSignIn() {
+  openDialog(sessionInfo().setupNeeded ? "setupDialog" : "signInDialog");
 }
 
-el("loginBtn").addEventListener("click", openUnlock);
-el("loginCancelBtn").addEventListener("click", () => el("loginDialog").close());
+async function afterSignIn(member, message) {
+  setSession({ member, setupNeeded: false });
+  document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+  toast(message, { type: "success" });
+  (signInReturnFocus?.isConnected && !signInReturnFocus.closest(".hidden") ? signInReturnFocus : el("accountBtn")).focus();
+}
+
+function showFormError(id, err) {
+  el(id).textContent = err.message;
+  el(id).classList.remove("hidden");
+}
+
+el("signInBtn").addEventListener("click", openSignIn);
+document.querySelectorAll("[data-close-dialog]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
 el("confirmCancel").addEventListener("click", () => el("confirmDialog").close());
 
-el("logoutBtn").addEventListener("click", () => {
-  sessionStorage.removeItem("pif_edit_password");
-  updateAuthUI();
-  router.rerender();
-  el("loginBtn").focus();
-  toast("Editing locked.");
-});
-
-el("loginForm").addEventListener("submit", async (e) => {
+el("signInForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const password = e.target.password.value;
+  const f = new FormData(e.target);
   try {
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    if (!res.ok) throw new Error("bad password");
-    sessionStorage.setItem("pif_edit_password", password);
-    el("loginDialog").close();
-    updateAuthUI();
-    await router.rerender();
-    (unlockReturnFocus?.isConnected && !unlockReturnFocus.closest(".hidden") ? unlockReturnFocus : el("logoutBtn")).focus();
-    toast("Editing unlocked for this browser tab.", { type: "success" });
-  } catch {
-    el("loginError").classList.remove("hidden");
+    const r = await api("/api/auth/login", { method: "POST", body: JSON.stringify({ email: f.get("email"), password: f.get("password") }) });
+    await afterSignIn(r.member, `Welcome back, ${r.member.name.split(" ")[0]}.`);
+  } catch (err) {
+    showFormError("signInError", err);
     e.target.password.select();
   }
 });
 
-window.addEventListener("pif:request-unlock", openUnlock);
-window.addEventListener("pif:auth-expired", () => {
-  updateAuthUI();
-  toast("The edit password changed or expired — please unlock again.", {
-    type: "error",
-    action: { label: "Unlock", onClick: openUnlock },
-  });
+el("setupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target).entries());
+  try {
+    const r = await api("/api/auth/setup", { method: "POST", body: JSON.stringify(f) });
+    await afterSignIn(r.member, "Admin account created. Invite members from Settings.");
+  } catch (err) {
+    showFormError("setupError", err);
+  }
 });
 
-// ---- Member identity (individual PIN sign-in, for votes and authorship) ----
-
-function updateMemberUI() {
-  const m = getMember();
-  el("memberBtn").textContent = m ? m.member.name.split(" ")[0] : "Sign in";
-  el("memberBtn").setAttribute("aria-label", m ? `Signed in as ${m.member.name}` : "Member sign-in");
-  el("memberBtn").classList.toggle("member-on", !!m);
-}
-
-async function openMemberSignIn() {
-  if (getMember()) {
-    const m = getMember().member;
-    el("memberMenuBody").innerHTML = `<strong>${esc(m.name)}</strong> <span class="muted">(${esc(m.role)})</span>`;
-    el("memberMenu").showModal();
-    return;
-  }
-  el("memberError").classList.add("hidden");
-  el("memberForm").reset();
-  let list = [];
-  try { list = (await api("/api/members")).filter((x) => x.active); } catch { /* ignore */ }
-  el("memberSelect").innerHTML = list.length
-    ? `<option value="">Choose your name…</option>${list.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}`
-    : `<option value="">No members yet — add them in Settings</option>`;
-  el("memberDialog").showModal();
-}
-
-el("memberBtn").addEventListener("click", openMemberSignIn);
-el("memberCancel").addEventListener("click", () => el("memberDialog").close());
-el("memberMenuClose").addEventListener("click", () => el("memberMenu").close());
-el("memberSignOut").addEventListener("click", async () => {
-  try { await api("/api/members/logout", { method: "POST" }); } catch { /* ignore */ }
-  setMember(null);
-  el("memberMenu").close();
+el("signOutBtn").addEventListener("click", async () => {
+  el("accountMenu").hidePopover();
+  try { await api("/api/auth/logout", { method: "POST" }); } catch { /* signed out anyway */ }
+  setSession({ member: null });
+  el("signInBtn").focus();
   toast("Signed out.");
 });
+el("accountMenu").addEventListener("click", (e) => { if (e.target.closest("a")) el("accountMenu").hidePopover(); });
 
-el("memberForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const f = new FormData(e.target);
-  if (!f.get("memberId")) {
-    el("memberError").textContent = "Choose your name.";
-    el("memberError").classList.remove("hidden");
-    return;
-  }
-  try {
-    const res = await fetch("/api/members/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memberId: Number(f.get("memberId")), pin: f.get("pin") }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error || "Sign-in failed.");
-    setMember(body);
-    el("memberDialog").close();
-    toast(`Signed in as ${body.member.name}.`, { type: "success" });
-  } catch (err) {
-    el("memberError").textContent = err.message;
-    el("memberError").classList.remove("hidden");
-    e.target.pin.select();
-  }
+window.addEventListener("pif:request-signin", openSignIn);
+window.addEventListener("pif:session-changed", () => { updateAuthUI(); connectLive(); router.rerender(); });
+window.addEventListener("pif:auth-expired", () => {
+  toast("You've been signed out. Sign in again to continue.", { type: "error", action: { label: "Sign in", onClick: openSignIn } });
 });
-
-window.addEventListener("pif:request-member", openMemberSignIn);
-window.addEventListener("pif:member-changed", () => { updateMemberUI(); router.rerender(); });
-
 document.body.addEventListener("click", (e) => {
-  if (e.target.closest("[data-unlock]")) openUnlock();
-  if (e.target.closest("[data-member-signin]")) openMemberSignIn();
+  if (e.target.closest("[data-signin]")) openSignIn();
 });
+
+// ---- Live updates: fund changes reach every open page (and, later, chat) ----
+
+// Pages whose data comes from the real fund; they re-render when a portfolio manager changes it.
+const FUND_PAGES = new Set(["", "today", "performance", "allocation", "transactions", "dividends", "alerts", "factors"]);
+let live = null;
+function connectLive() {
+  live?.close();
+  live = new EventSource("/api/events");
+  live.addEventListener("fund.changed", (e) => {
+    const d = JSON.parse(e.data);
+    invalidateContext();
+    window.dispatchEvent(new CustomEvent("pif:fund-changed", { detail: d }));
+    if (d.by && d.by !== currentMember()?.name) toast(describeChange(d));
+    const section = location.hash.replace(/^#\/?/, "").split("/")[0];
+    // Don't yank a page out from under someone mid-edit.
+    const busy = document.querySelector("dialog[open]") || document.activeElement?.closest("#view input, #view textarea, #view select");
+    if (FUND_PAGES.has(section) && !busy) router.rerender();
+  });
+  // Chat and presence (members only) are handled in chat.js.
+  for (const type of ["hello", "notify", "presence", "chat.message", "chat.edited", "chat.deleted", "chat.reaction", "chat.mention"]) {
+    live.addEventListener(type, (e) => window.dispatchEvent(new CustomEvent("pif:live", { detail: { type, data: JSON.parse(e.data) } })));
+  }
+}
+function describeChange({ action, detail = {}, by }) {
+  const who = by || "Someone";
+  const n = (v) => Number(v).toLocaleString("en-US", { maximumFractionDigits: 4 });
+  switch (action) {
+    case "transaction.buy": return `${who} bought ${n(detail.shares)} ${detail.symbol}.`;
+    case "transaction.sell": return `${who} sold ${n(detail.shares)} ${detail.symbol}.`;
+    case "transaction.dividend": case "dividend.received": return `${who} recorded a ${detail.symbol} dividend.`;
+    case "position.add": return `${who} added ${detail.symbol} to the holdings.`;
+    case "position.edit": return `${who} updated ${detail.symbol}.`;
+    case "position.delete": return `${who} removed ${detail.symbol} from the holdings.`;
+    case "settings.update": return `${who} updated the fund's cash or settings.`;
+    default: return `${who} updated the fund.`;
+  }
+}
 
 // ---- Alerts badge (count of items needing action) ----
 
@@ -177,6 +182,7 @@ async function refreshAlertBadge() {
     el("alertCount").textContent = n > 9 ? "9+" : String(n);
     el("alertCount").classList.toggle("hidden", !n);
     el("alertsLink").setAttribute("aria-label", n ? `Alerts: ${n} need action` : "Alerts");
+    setFundAlertCount(n);
   } catch { /* badge is best-effort */ }
 }
 
@@ -213,8 +219,11 @@ document.addEventListener("keydown", (e) => {
   el("jumpInput").focus();
 });
 
-updateAuthUI();
-updateMemberUI();
+sessionReady().then(() => { updateAuthUI(); connectLive(); });
+initNotes();
+initSelection();
+initChat();
+initInbox();
 refreshTickerOptions();
 refreshAlertBadge();
 setInterval(refreshAlertBadge, 10 * 60 * 1000);

@@ -1,4 +1,4 @@
-import { el, esc, api, fmtPct, fmtRatio, fmtUSD, signed, pageHead, loading, errorBox, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker } from "../shared.js";
+import { el, esc, api, fmtPct, fmtRatio, fmtUSD, signed, pageHead, loading, errorBox, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, benchParam } from "../shared.js";
 import { lineChart, barChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { term } from "../glossary.js";
@@ -28,8 +28,6 @@ function heatmap(corr) {
     <p class="muted small">Values near 1 move together (less diversification). Pairs above 0.7 are effectively the same bet.</p>`;
 }
 
-// Viewer's "compare with" choice; null = the fund's benchmark from Settings.
-let compareWith = null;
 
 export async function mount(container) {
   destroyAll();
@@ -37,7 +35,7 @@ export async function mount(container) {
   let d, presets;
   try {
     [d, presets] = await Promise.all([
-      api(`/api/portfolio/performance${compareWith ? `?benchmark=${encodeURIComponent(compareWith)}` : ""}`),
+      api(`/api/portfolio/performance${benchParam()}`),
       benchmarkPresets(),
     ]);
   } catch (err) {
@@ -53,7 +51,7 @@ export async function mount(container) {
     ${subTabs(PORTFOLIO_TABS, "#/performance")}
     ${pageHead("Performance & risk", `How the fund's current holdings have performed against <strong>${esc(d.benchmarkLabel)}</strong>, and where the risk is concentrated.`,
       `${benchmarkPicker("perfBench", d.benchmarkValue, presets, { label: "Compare with" })}
-       ${d.benchmarkValue !== d.fundBenchmark ? `<button type="button" class="btn-link small" id="resetBench">Back to fund benchmark</button>` : ""}`)}
+       ${d.benchmarkValue !== d.fundBenchmark ? `<button type="button" class="btn-link small" id="resetBench">Use the fund's benchmark</button>` : ""}`)}
 
     ${b ? `
     <section class="summary" aria-label="One-year statistics">
@@ -101,8 +99,9 @@ export async function mount(container) {
       </section>
     </div>`;
 
-  wireBenchmarkPicker("perfBench", (v) => { compareWith = v; mount(container); });
-  el("resetBench")?.addEventListener("click", () => { compareWith = null; mount(container); });
+  // Your pick is saved as your default "Compare with" everywhere (Allocation, Risk, Backtester…).
+  wireBenchmarkPicker("perfBench", async (v) => { await setPref("benchmark", v); mount(container); });
+  el("resetBench")?.addEventListener("click", async () => { await setPref("benchmark", null); mount(container); });
 
   if (b) {
     lineChart(el("btChart"), {

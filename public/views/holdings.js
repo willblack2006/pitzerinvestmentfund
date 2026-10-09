@@ -1,10 +1,11 @@
 import {
-  el, esc, fmtUSD, fmtPct, api, isUnlocked, toast, confirmAction, lockedHint, signed,
+  el, esc, fmtUSD, fmtPct, api, can, toast, getPref, setPref, confirmAction, lockedHint, signed,
   sortHeader, sortRows, bindSort, pageHead, loading, errorBox, invalidateContext, subTabs,
 } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { alertItem, ICON, TAB } from "./alerts.js";
 import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
+import { noteCounts, noteMarker } from "../notes.js";
 
 export const title = "Portfolio";
 
@@ -15,7 +16,6 @@ const state = { positions: [], quotes: {}, market: null, sort: { key: "marketVal
 // started (bases from /api/portfolio/period-bases), at today's share counts.
 const PERIODS = [["1d", "1D", "today"], ["5d", "5D", "last 5 days"], ["1m", "1M", "last month"], ["3m", "3M", "last 3 months"], ["ytd", "YTD", "year to date"], ["1y", "1Y", "last year"], ["all", "All", "since purchase"]];
 const periodLabel = (k) => PERIODS.find(([p]) => p === k)?.[2] || "";
-try { const saved = localStorage.getItem("pif_holdings_period"); if (PERIODS.some(([p]) => p === saved)) state.period = saved; } catch { /* private mode */ }
 
 async function loadBases() {
   if (state.bases || ["all", "1d"].includes(state.period)) return;
@@ -140,7 +140,7 @@ function renderConcentration(rows) {
 }
 
 function renderTable() {
-  const unlocked = isUnlocked();
+  const unlocked = can("trade");
   const all = withDerived(state.positions);
   let rows = all;
   if (state.filter) {
@@ -171,7 +171,7 @@ function renderTable() {
   el("tbody").innerHTML = rows.map((r) => `
     <tr data-id="${r.id}">
       <th scope="row" class="left sticky-col">
-        <a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a>
+        <a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a>${noteMarker(r.symbol, state.noteCounts)}
         ${r.notes ? `<div class="muted small cell-note">${esc(r.notes)}</div>` : ""}
       </th>
       <td class="signals-cell">${signalBadges(r.symbol)}</td>
@@ -405,13 +405,14 @@ async function deletePosition(p) {
 export async function mount(container) {
   container.innerHTML = subTabs(PORTFOLIO_TABS, "#/") + loading("Loading holdings…");
   state.bases = null; // re-fetched per visit (server caches the histories for 6h)
+  state.period = getPref("holdingsPeriod", "all");
   try {
     state.positions = await api("/api/positions");
   } catch (err) {
     container.innerHTML = subTabs(PORTFOLIO_TABS, "#/") + pageHead("Portfolio") + errorBox(`Could not load holdings: ${err.message}`);
     return;
   }
-  const unlocked = isUnlocked();
+  const unlocked = can("trade");
 
   container.innerHTML = `
     ${subTabs(PORTFOLIO_TABS, "#/")}
@@ -440,7 +441,7 @@ export async function mount(container) {
         <input id="search" type="search" placeholder="Filter by ticker or note…" autocomplete="off" />
         <span id="filterCount" class="muted small" role="status"></span>
       </div>
-      ${unlocked ? "" : lockedHint("Unlock to add, edit, or delete positions.")}
+      ${unlocked ? "" : lockedHint("Sign in to add, edit, or delete positions.", "trade")}
     </section>
     <section class="table-wrap">
       <table id="table">
@@ -461,11 +462,15 @@ export async function mount(container) {
   api("/api/signals").then((r) => { state.signals = r.bySymbol; if (el("tbody")) renderTable(); }).catch(() => { /* badges just stay blank */ });
 
   loadBases();
+  // 📝 next to tickers you (or the club) have notes on.
+  const loadNoteMarkers = () => noteCounts().then((m) => { state.noteCounts = m; if (el("tbody")) renderTable(); });
+  loadNoteMarkers();
+  window.addEventListener("pif:notes-changed", loadNoteMarkers, { once: true });
   api("/api/settings").then((s) => { state.cash = Number(s.cash) || 0; if (el("tbody")) renderTable(); }).catch(() => { /* cash card shows … */ });
   api("/api/dividends").then((d) => { state.dividends = d; if (el("tbody")) renderTable(); }).catch(() => { /* card stays loading */ });
   container.querySelectorAll("[data-period]").forEach((b) => b.addEventListener("click", () => {
     state.period = b.dataset.period;
-    try { localStorage.setItem("pif_holdings_period", state.period); } catch { /* private mode */ }
+    setPref("holdingsPeriod", state.period); // remembered for your account (or this browser)
     container.querySelectorAll("[data-period]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     renderTable();
     loadBases();

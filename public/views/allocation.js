@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, pageHead, loading, errorBox, subTabs, isUnlocked } from "../shared.js";
+import { el, esc, api, fmtUSD, pageHead, loading, errorBox, subTabs, can, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam } from "../shared.js";
 import { barChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
@@ -7,9 +7,9 @@ export const title = "Allocation & policy";
 export async function mount(container) {
   destroyAll();
   container.innerHTML = subTabs(PORTFOLIO_TABS, "#/allocation") + loading("Classifying holdings by sector…");
-  let a;
+  let a, presets;
   try {
-    a = await api("/api/portfolio/allocation");
+    [a, presets] = await Promise.all([api(`/api/portfolio/allocation${benchParam()}`), benchmarkPresets()]);
   } catch (err) {
     container.innerHTML = subTabs(PORTFOLIO_TABS, "#/allocation") + pageHead("Allocation & policy") + errorBox(`Could not load allocation: ${err.message}`);
     return;
@@ -22,7 +22,8 @@ export async function mount(container) {
   container.innerHTML = `
     ${subTabs(PORTFOLIO_TABS, "#/allocation")}
     ${pageHead("Allocation & policy", `Where the fund's money sits by sector versus ${esc(a.sectorBenchmarkLabel)}, and whether it complies with the investment policy statement (IPS).`,
-      isUnlocked() ? `<a class="btn btn-ghost" href="#/settings">Edit policy limits</a>` : "")}
+      `${benchmarkPicker("allocBench", getPref("benchmark") || s.benchmark, presets, { label: "Compare with" })}
+       ${can("admin") ? `<a class="btn btn-ghost" href="#/settings">Edit policy limits</a>` : ""}`)}
 
     <section class="compliance ${breaches.length ? "has-breach" : "ok"}" aria-labelledby="ips-h">
       <h3 id="ips-h">${breaches.length ? `<span aria-hidden="true">⚠</span> ${breaches.length} policy breach${breaches.length > 1 ? "es" : ""}` : [s.maxPositionPct, s.maxSectorPct, s.minPositions, s.maxPositions, s.minCashPct].every((v) => v == null) ? "Policy limits not set" : `<span aria-hidden="true">✓</span> Within policy`}</h3>
@@ -80,4 +81,6 @@ export async function mount(container) {
     yFormat: (v) => `${Number(v).toFixed(0)}%`,
     horizontal: true,
   });
+  // Your pick becomes your default "Compare with" everywhere.
+  wireBenchmarkPicker("allocBench", async (v) => { await setPref("benchmark", v); mount(container); });
 }

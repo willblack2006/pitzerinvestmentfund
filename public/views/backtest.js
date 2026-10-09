@@ -1,4 +1,4 @@
-import { esc, api, fmtPct, signed, pageHead, loading, subTabs } from "../shared.js";
+import { esc, api, fmtPct, signed, pageHead, loading, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam } from "../shared.js";
 import { lineChart } from "../charts.js";
 import { MARKET_TABS } from "./insiders.js";
 
@@ -17,7 +17,7 @@ async function run(container) {
   box.innerHTML = loading("Running the monthly-rebalance backtest over cached price history…");
   let r;
   try {
-    r = await api(`/api/backtest?signal=${state.signal}&years=${state.years}&costBps=${state.costBps}`);
+    r = await api(`/api/backtest?signal=${state.signal}&years=${state.years}&costBps=${state.costBps}${benchParam("&")}`);
   } catch (err) {
     box.innerHTML = `<p class="muted">Couldn't run the backtest: ${esc(err.message)}</p>`;
     return;
@@ -55,6 +55,7 @@ async function run(container) {
 export const title = "Backtester";
 
 export async function mount(container) {
+  const [presets, settings] = await Promise.all([benchmarkPresets(), api("/api/settings").catch(() => ({}))]);
   container.innerHTML = subTabs(MARKET_TABS, "#/backtest") +
     pageHead("Signal backtester", "A guardrail, not a forecast: monthly-rebalance long-only backtest of a signal across the fund's holdings + watchlist, net of an assumed trading cost.");
   container.innerHTML += `
@@ -66,12 +67,14 @@ export async function mount(container) {
         </label>
         <label class="field-inline">Years <input id="btYears" type="number" min="1" max="10" value="${state.years}" inputmode="numeric" /></label>
         <label class="field-inline">Cost (bps/rebalance) <input id="btCost" type="number" min="0" max="200" value="${state.costBps}" inputmode="numeric" /></label>
+        ${benchmarkPicker("btBench", getPref("benchmark") || settings.benchmark || "SPY", presets, { label: "Compare with" })}
         <button class="btn btn-primary">Run</button>
       </form>
       <p class="muted small">Insider, estimate-revision and short-pressure scores can't be backtested yet: the app only has their current values, not what they read in past months.</p>
       <div id="btBody"></div>
     </section>`;
   run(container);
+  wireBenchmarkPicker("btBench", async (v) => { await setPref("benchmark", v); run(container); });
   document.getElementById("btForm").addEventListener("submit", (e) => {
     e.preventDefault();
     state.signal = document.getElementById("btSignal").value;

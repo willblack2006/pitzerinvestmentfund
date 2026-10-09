@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, isUnlocked, toast, confirmAction, lockedHint, pageHead, loading, errorBox, subTabs, invalidateContext, signed } from "../shared.js";
+import { el, esc, api, fmtUSD, can, toast, confirmAction, lockedHint, pageHead, loading, errorBox, subTabs, invalidateContext, signed } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Transactions";
@@ -48,7 +48,7 @@ export async function mount(container) {
     container.innerHTML = subTabs(PORTFOLIO_TABS, "#/transactions") + pageHead("Transactions") + errorBox(`Could not load transactions: ${err.message}`);
     return;
   }
-  const unlocked = isUnlocked();
+  const unlocked = can("trade");
   const realized = rows.filter((r) => r.type === "sell").reduce((s, r) => s + (r.realizedGain || 0), 0);
 
   container.innerHTML = `
@@ -73,7 +73,7 @@ export async function mount(container) {
         <div class="tx-submit"><button class="btn btn-primary">Record</button></div>
       </form>
       <p class="muted small">Sells use average cost basis. Deleting an entry reverses its effect on holdings and cash.</p>
-    </section>` : `<section class="toolbar">${lockedHint("Unlock to record trades, dividends and cash movements.")}</section>`}
+    </section>` : `<section class="toolbar">${lockedHint("Sign in to record trades, dividends and cash movements.", "trade")}</section>`}
 
     <section class="table-wrap">
       ${rows.length ? `

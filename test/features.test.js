@@ -15,6 +15,7 @@ test("paper trading: ledger replay, validation, valuation and ranking", () => {
     { type: "buy", symbol: "MSFT", shares: 2, price: 50 },
     { type: "sell", symbol: "MSFT", shares: 2, price: 40 }, // closes the position at a 20 loss
   ];
+  const WHY = "Margins are recovering faster than expected";
   const s = replayLedger(trades, 10000);
   close(s.cash, 10000 - 1000 - 2000 + 900 - 100 + 80);
   close(s.realizedGain, 150 - 20);
@@ -23,13 +24,13 @@ test("paper trading: ledger replay, validation, valuation and ranking", () => {
   assert.equal(s.positions[0].shares, 15);
   close(s.positions[0].avgCost, 150);
 
-  assert.match(validateTrade(s, { type: "buy", symbol: "NVDA", shares: 1000, price: 100 }), /Not enough cash/);
-  assert.match(validateTrade(s, { type: "sell", symbol: "AAPL", shares: 16, price: 100 }), /hold 15/);
-  assert.match(validateTrade(s, { type: "sell", symbol: "TSLA", shares: 1, price: 100 }), /hold 0/);
+  assert.match(validateTrade(s, { type: "buy", symbol: "NVDA", shares: 1000, price: 100, reason: WHY }), /Not enough cash/);
+  assert.match(validateTrade(s, { type: "sell", symbol: "AAPL", shares: 16, price: 100, reason: WHY }), /hold 15/);
+  assert.match(validateTrade(s, { type: "sell", symbol: "TSLA", shares: 1, price: 100, reason: WHY }), /hold 0/);
   assert.match(validateTrade(s, { type: "buy", symbol: "AAPL", shares: 0, price: 100 }), /positive/);
   assert.match(validateTrade(s, { type: "buy", symbol: "AAPL", shares: 1, price: null }), /No live price/);
   assert.match(validateTrade(s, { type: "short", symbol: "AAPL", shares: 1, price: 1 }), /buy or sell/);
-  assert.equal(validateTrade(s, { type: "sell", symbol: "AAPL", shares: 15, price: 100 }), null);
+  assert.equal(validateTrade(s, { type: "sell", symbol: "AAPL", shares: 15, price: 100, reason: WHY }), null);
 
   const v = valuePortfolio(s, { AAPL: 160 }, 10000);
   close(v.holdingsValue, 15 * 160);
@@ -40,9 +41,9 @@ test("paper trading: ledger replay, validation, valuation and ranking", () => {
   close(unpriced.positions[0].marketValue, 15 * 150); // falls back to cost
 
   const board = rankLeaderboard([
-    { name: "A", returnPct: 0.05, tradeCount: 3 },
-    { name: "B", returnPct: 0.1, tradeCount: 9 },
-    { name: "C", returnPct: 0.05, tradeCount: 1 },
+    { name: "A", returnPct: 0.05, tradeCount: 3, positions: 5 },
+    { name: "B", returnPct: 0.1, tradeCount: 9, positions: 6 },
+    { name: "C", returnPct: 0.05, tradeCount: 1, positions: 5 },
   ]);
   assert.deepEqual(board.map((r) => `${r.rank}${r.name}`), ["1B", "2C", "3A"]);
 });
@@ -162,4 +163,73 @@ test("meeting brief: moves since a date, ranked by impact on the fund", () => {
   close(rows[0].contributionPct, 2000 / 10100);
   close(rows.find((r) => r.symbol === "SMALL").changePct, -0.5);
   assert.equal(rows.find((r) => r.symbol === "NONE").changePct, null);
+});
+
+test("paper trading rules: fees, splits, dividends, fills at the open, risk, ranking", () => {
+  const P = require("../lib/paperTrading");
+  const WHY = "Margins are recovering faster than expected";
+  // Fee goes into cost basis on a buy and comes off the proceeds on a sell.
+  const fee = P.tradeFee(1000, 10);
+  assert.equal(fee, 1);
+  let s = P.replayLedger([
+    { type: "buy", symbol: "AAA", shares: 10, price: 100, fee: 1, day: "2026-09-01" },
+    { type: "sell", symbol: "AAA", shares: 5, price: 120, fee: 0.6, day: "2026-09-10" },
+  ], 10000);
+  close(s.cash, 10000 - 1001 + 599.4);
+  close(s.realizedGain, 599.4 - 500.5);
+  close(s.fees, 1.6);
+  // A 2-for-1 split doubles shares at the same total cost; dividends go to holders the day before the ex-date.
+  s = P.replayLedger([
+    { type: "buy", symbol: "AAA", shares: 10, price: 100, day: "2026-09-01" },
+    { type: "buy", symbol: "AAA", shares: 4, price: 50, day: "2026-09-05" }, // bought on the ex-date: no dividend for these
+  ], 10000, { AAA: { splits: [{ date: "2026-09-03", ratio: 2 }], dividends: [{ exDate: "2026-09-05", amount: 0.5 }, { exDate: "2026-12-01", amount: 9 }] } }, { until: "2026-10-01" });
+  assert.equal(s.positions[0].shares, 24);
+  close(s.positions[0].totalCost, 1200);
+  close(s.dividends, 20 * 0.5, 1e-9); // 20 post-split shares held the evening before; the December dividend is in the future
+  // Equity curve un-adjusts Yahoo's split-adjusted closes, so the split day isn't a fake 50% drop.
+  const curve = P.equityCurve([{ type: "buy", symbol: "AAA", shares: 10, price: 100, day: "2026-09-01" }], 1000 + 0, { AAA: { splits: [{ date: "2026-09-03", ratio: 2 }] } },
+    { AAA: [{ date: "2026-09-01", close: 50 }, { date: "2026-09-02", close: 51 }, { date: "2026-09-03", close: 51 }] }, ["2026-09-01", "2026-09-02", "2026-09-03"]);
+  assert.deepEqual(curve.map((p) => p.value), [1000, 1020, 1020]);
+  // Risk: drawdown always; Sharpe only after 20 daily returns.
+  const r1 = P.riskStats([{ value: 100 }, { value: 120 }, { value: 90 }, { value: 110 }]);
+  close(r1.maxDrawdown, 90 / 120 - 1);
+  assert.equal(r1.sharpe, null);
+  const many = Array.from({ length: 30 }, (_, i) => ({ value: 100 * (1 + 0.001 * i + (i % 2 ? 0.002 : 0)) }));
+  assert.ok(P.riskStats(many).sharpe > 0);
+  // Orders while the market is shut fill at the next session's open.
+  const bars = [{ date: "2026-10-08", open: 10, close: 11 }, { date: "2026-10-09", open: 12, close: 13 }];
+  assert.equal(P.pickFillBar(bars, "2026-10-08 23:00:00").date, "2026-10-09", "evening order → next day's open");
+  assert.equal(P.pickFillBar(bars, "2026-10-09 11:00:00").date, "2026-10-09", "7 AM New York → same day's open");
+  assert.equal(P.pickFillBar(bars, "2026-10-09 21:00:00"), null, "after the close → waits");
+  // Validation: reason, stop below price, price/market-cap floors, max position, reserved cash.
+  const st = { cash: 10000, positions: [{ symbol: "AAA", shares: 10, totalCost: 1000, avgCost: 100 }] };
+  const ctx = { rules: P.DEFAULT_RULES, totalValue: 11000, positionValue: 1000 };
+  assert.match(P.validateTrade(st, { type: "buy", symbol: "BBB", shares: 1, price: 50, reason: "cheap" }, ctx), /why you're buying/);
+  assert.match(P.validateTrade(st, { type: "buy", symbol: "BBB", shares: 1, price: 50, reason: WHY, stopPrice: 60 }, ctx), /below today's price/);
+  assert.match(P.validateTrade(st, { type: "buy", symbol: "PNY", shares: 10, price: 2, reason: WHY }, ctx), /priced at \$5/);
+  assert.match(P.validateTrade(st, { type: "buy", symbol: "TNY", shares: 1, price: 20, reason: WHY }, { ...ctx, marketCap: 50e6 }), /worth at least/);
+  assert.match(P.validateTrade(st, { type: "buy", symbol: "AAA", shares: 20, price: 100, reason: WHY }, ctx), /more than 25%/);
+  assert.equal(P.validateTrade(st, { type: "buy", symbol: "AAA", shares: 15, price: 100, reason: WHY }, ctx), null);
+  assert.match(P.validateTrade(st, { type: "buy", symbol: "CCC", shares: 20, price: 100, reason: WHY }, { ...ctx, reserved: { cash: 9000, shares: {} } }), /not already set aside/);
+  assert.match(P.validateTrade(st, { type: "sell", symbol: "AAA", shares: 8, price: 100, reason: WHY }, { ...ctx, reserved: { cash: 0, shares: { AAA: 5 } } }), /already in a sell order/);
+  // Ranking: under-diversified members are listed after, unranked.
+  const board = P.rankLeaderboard([{ name: "A", returnPct: 0.5, tradeCount: 1, positions: 1 }, { name: "B", returnPct: 0.1, tradeCount: 5, positions: 5 }]);
+  assert.deepEqual(board.map((r) => [r.name, r.rank]), [["B", 1], ["A", null]]);
+  assert.match(board[1].why, /Needs 5 holdings/);
+});
+
+test("personal price alerts: when they fire", () => {
+  const { shouldTrigger, cleanAlert, nyDay } = require("../lib/memberAlerts");
+  const day = "2026-10-09";
+  const t = new Date("2026-10-09T15:00:00Z").toISOString();
+  assert.equal(shouldTrigger({ active: 1, kind: "above", value: 100 }, { price: 101 }, day), true);
+  assert.equal(shouldTrigger({ active: 0, kind: "above", value: 100 }, { price: 101 }, day), false, "fired alerts stay off");
+  assert.equal(shouldTrigger({ active: 1, kind: "below", value: 100 }, { price: 101 }, day), false);
+  assert.equal(shouldTrigger({ active: 1, kind: "move", value: 5 }, { price: 1, changePct: -6, time: t }, day), true);
+  assert.equal(shouldTrigger({ active: 1, kind: "move", value: 5, lastTriggeredDay: day }, { price: 1, changePct: -6, time: t }, day), false, "once a day");
+  assert.equal(shouldTrigger({ active: 1, kind: "move", value: 5 }, { price: 1, changePct: 6, time: "2026-10-08T20:00:00Z" }, day), false, "yesterday's move doesn't count");
+  assert.throws(() => cleanAlert({ symbol: "AAPL", kind: "move", value: 80 }), /50%/);
+  assert.throws(() => cleanAlert({ symbol: "!!", kind: "above", value: 1 }), /ticker/);
+  assert.deepEqual(cleanAlert({ symbol: "$cost", kind: "below", value: "900" }), { symbol: "COST", kind: "below", value: 900 });
+  assert.match(nyDay(), /^\d{4}-\d{2}-\d{2}$/);
 });

@@ -188,6 +188,38 @@ function addColumn(table, column, ddl) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
   if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
+// Accounts (2026-10-09): each member signs in with email + password set through a one-time
+// invite link. `role` is now a free-text title ("Analyst", "Risk officer"); what someone may
+// do comes from isAdmin / canTrade. PINs are retired (pinHash kept for old rows, unused).
+addColumn("members", "email", "TEXT");
+addColumn("members", "passwordHash", "TEXT");
+addColumn("members", "isAdmin", "INTEGER NOT NULL DEFAULT 0");
+addColumn("members", "canTrade", "INTEGER NOT NULL DEFAULT 0");
+addColumn("members", "lastSeenAt", "TEXT");
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS members_email ON members (email) WHERE email IS NOT NULL`);
+// Sessions are now cookies; the table stores a SHA-256 of the token, never the token itself.
+addColumn("member_sessions", "expiresAt", "TEXT");
+addColumn("member_sessions", "lastUsedAt", "TEXT");
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invites (
+    tokenHash TEXT PRIMARY KEY,
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    createdBy INTEGER,
+    expiresAt TEXT NOT NULL,
+    usedAt TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  -- Who changed what: every real-fund change and member administration.
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memberId INTEGER,
+    memberName TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT '{}',
+    at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS activity_log_at ON activity_log (at);
+`);
 addColumn("research_notes", "targetPrice", "REAL");
 addColumn("research_notes", "priceAtThesis", "REAL");
 addColumn("positions", "sector", "TEXT NOT NULL DEFAULT ''");
@@ -224,6 +256,74 @@ db.exec(`
     transactionId INTEGER,
     createdAt TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (symbol, exDate)
+  );
+`);
+
+// Personal preferences (benchmark to compare against, theme, start page, followed tickers…),
+// one JSON value per key per member; lib/prefs.js validates them.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS member_prefs (
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (memberId, key)
+  );
+`);
+
+// Personal notes: on a company (symbol) or any page (pageRef/pageTitle), optionally quoting text
+// the member highlighted. Private by default; "club" notes are visible to every signed-in member.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    symbol TEXT,
+    pageRef TEXT NOT NULL DEFAULT '',
+    pageTitle TEXT NOT NULL DEFAULT '',
+    quote TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '[]',
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','club')),
+    pinned INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS notes_member ON notes (memberId, updatedAt);
+  CREATE INDEX IF NOT EXISTS notes_symbol ON notes (symbol);
+`);
+
+// Club chat (members only). Messages can carry an attachment (a quoted highlight, a page link
+// or a snapshot image) and @mentions; images live in chat_images (JPEG/PNG/WebP, size-capped).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memberId INTEGER NOT NULL REFERENCES members(id),
+    body TEXT NOT NULL DEFAULT '',
+    attachment TEXT,
+    imageId INTEGER,
+    replyTo INTEGER,
+    mentions TEXT NOT NULL DEFAULT '[]',
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    editedAt TEXT,
+    deletedAt TEXT
+  );
+  CREATE TABLE IF NOT EXISTS chat_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memberId INTEGER NOT NULL REFERENCES members(id),
+    mime TEXT NOT NULL,
+    data BLOB NOT NULL,
+    bytes INTEGER NOT NULL,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS chat_reads (
+    memberId INTEGER PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+    lastReadId INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS chat_reactions (
+    messageId INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    emoji TEXT NOT NULL,
+    PRIMARY KEY (messageId, memberId, emoji)
   );
 `);
 
@@ -271,6 +371,53 @@ db.exec(`
     createdAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS paper_trades_member ON paper_trades (seasonId, memberId);
+`);
+
+// Paper trading rules (2026-10-09, from docs/paper-trading-research.md): a small fee per trade,
+// diversification rules, a reason with every order, and orders placed while the market is shut
+// wait for the next open ("pending" until filled or cancelled).
+addColumn("paper_seasons", "feeBps", "REAL NOT NULL DEFAULT 10");
+addColumn("paper_seasons", "minHoldings", "INTEGER NOT NULL DEFAULT 5");
+addColumn("paper_seasons", "maxPositionPct", "REAL NOT NULL DEFAULT 25");
+addColumn("paper_seasons", "minPrice", "REAL NOT NULL DEFAULT 5");
+addColumn("paper_seasons", "minMarketCap", "REAL NOT NULL DEFAULT 300000000");
+addColumn("paper_trades", "status", "TEXT NOT NULL DEFAULT 'filled'");
+addColumn("paper_trades", "fee", "REAL NOT NULL DEFAULT 0");
+addColumn("paper_trades", "reason", "TEXT NOT NULL DEFAULT ''");
+addColumn("paper_trades", "targetPrice", "REAL");
+addColumn("paper_trades", "stopPrice", "REAL");
+addColumn("paper_trades", "horizon", "TEXT NOT NULL DEFAULT ''");
+addColumn("paper_trades", "filledAt", "TEXT");
+addColumn("paper_trades", "cancelReason", "TEXT NOT NULL DEFAULT ''");
+
+// Personal notifications (the inbox) and personal price alerts.
+addColumn("pitches", "authorId", "INTEGER");
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    link TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    readAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS notifications_member ON notifications (memberId, id);
+  -- Alerts only their owner sees: price above/below (one-shot) or a daily move of N% (once a day).
+  CREATE TABLE IF NOT EXISTS member_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('above','below','move')),
+    value REAL NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    lastTriggeredAt TEXT,
+    lastTriggeredDay TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS member_alerts_member ON member_alerts (memberId);
 `);
 
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund

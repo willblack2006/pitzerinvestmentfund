@@ -2,7 +2,7 @@ const express = require("express");
 const db = require("../db");
 const { histories } = require("../lib/prices");
 const benchmarks = require("../lib/benchmarks");
-const { getSettings } = require("../lib/settings");
+const { benchmarkFor } = require("../lib/prefs");
 const { backtestMomentum } = require("../lib/backtest");
 
 const router = express.Router();
@@ -25,6 +25,8 @@ router.get("/backtest", async (req, res) => {
   const years = Math.min(10, Math.max(1, Number(req.query.years) || 7));
   const costBps = Math.min(200, Math.max(0, Number(req.query.costBps) || 20));
 
+  let bench;
+  try { bench = benchmarkFor(req); } catch (e) { return res.status(400).json({ error: e.message }); }
   const owned = db.prepare("SELECT symbol FROM positions").all().map((r) => r.symbol);
   const watched = db.prepare("SELECT symbol FROM watchlist").all().map((r) => r.symbol);
   const symbols = [...new Set([...owned, ...watched])];
@@ -32,13 +34,13 @@ router.get("/backtest", async (req, res) => {
 
   const [universeSeries, benchSeries] = await Promise.all([
     histories(symbols, `${years}y`),
-    benchmarks.series(getSettings().benchmark, `${years}y`),
+    benchmarks.series(bench, `${years}y`),
   ]);
   const usable = Object.fromEntries(Object.entries(universeSeries).filter(([, s]) => s.length >= 300));
   const { rows, summary } = backtestMomentum(usable, benchSeries, { costBps });
 
   res.json({
-    signal, years, costBps, benchmark: benchmarks.shortName(getSettings().benchmark),
+    signal, years, costBps, benchmark: benchmarks.shortName(bench), benchmarkValue: bench,
     universeSize: Object.keys(usable).length,
     excludedForHistory: symbols.length - Object.keys(usable).length,
     rows, summary,

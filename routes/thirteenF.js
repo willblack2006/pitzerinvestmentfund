@@ -1,6 +1,6 @@
 const express = require("express");
 const db = require("../db");
-const { requireAuth } = require("../middleware/auth");
+const { requireSignedIn } = require("../middleware/auth");
 const thirteenF = require("../lib/sources/thirteenF");
 const yahoo = require("../lib/sources/yahoo");
 const { computeWeights, topConviction, matchOverlaps, qoqChanges } = require("../lib/thirteenF");
@@ -22,7 +22,7 @@ router.get("/13f/search", async (req, res) => {
   }
 });
 
-router.post("/13f/managers", requireAuth, (req, res) => {
+router.post("/13f/managers", requireSignedIn, (req, res) => {
   const cik = String(req.body?.cik || "").replace(/\D/g, "").padStart(10, "0");
   const name = String(req.body?.name || "").trim();
   if (!/^\d{10}$/.test(cik)) return res.status(400).json({ error: "CIK must be numeric (the fund's EDGAR CIK, e.g. 0001067983 for Berkshire)." });
@@ -32,7 +32,7 @@ router.post("/13f/managers", requireAuth, (req, res) => {
   res.status(201).json(db.prepare("SELECT * FROM thirteenf_managers WHERE cik = ?").get(cik));
 });
 
-router.delete("/13f/managers/:cik", requireAuth, (req, res) => {
+router.delete("/13f/managers/:cik", requireSignedIn, (req, res) => {
   db.prepare("DELETE FROM thirteenf_managers WHERE cik = ?").run(req.params.cik);
   res.status(204).end();
 });

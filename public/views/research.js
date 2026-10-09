@@ -1,8 +1,9 @@
 import {
-  el, esc, safeUrl, fmtUSD, fmtPct, fmtCompact, fmtNum, fmtRatio, api, isUnlocked, toast, lockedHint, signed,
+  el, esc, safeUrl, fmtUSD, fmtPct, fmtCompact, fmtNum, fmtRatio, api, can, toast, lockedHint, getPref, setPref, signed,
   loading, errorBox, fundContext, invalidateContext, pushRecent, statusBadge, tabNav,
 } from "../shared.js";
 import { lineChart, destroyAll } from "../charts.js";
+import { mountMyAlerts } from "../myAlerts.js";
 import { govContractsPanelHtml, loadGovContracts } from "./govContractsPanel.js";
 import { signalsGlanceHtml, loadSignalsGlance } from "./signalsGlance.js";
 
@@ -16,6 +17,7 @@ const TABS = [
   ["options", "Options"],
   ["filings", "Filings"],
   ["thesis", "Thesis"],
+  ["notes", "Notes"],
 ];
 // Loaded on demand — most visits only ever look at Overview, so the other tabs (each with
 // its own charts/tables) shouldn't cost anything until a reader actually clicks one.
@@ -27,6 +29,7 @@ const TAB_LOADERS = {
   ownership: () => import("./research/ownership.js"),
   options: () => import("./research/options.js"),
   filings: () => import("./research/filings.js"),
+  notes: () => import("./research/notes.js"),
 };
 
 export const title = (params) => {
@@ -313,8 +316,8 @@ async function loadNewsTriage(symbol, newsList, errored) {
   if (body) body.innerHTML = renderNews(newsList, errored, byUrl);
   if (r.aiEnabled === false) {
     actions.innerHTML = `<span class="muted small">AI news scoring: coming soon</span>`;
-  } else if (isUnlocked() && r.aiEnabled) {
-    actions.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="triageBtn">Score with Claude</button>`;
+  } else if (can("member") && r.aiEnabled) {
+    actions.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="triageBtn">Score with AI</button>`;
     el("triageBtn").addEventListener("click", async (e) => {
       e.target.disabled = true;
       e.target.textContent = "Scoring…";
@@ -326,7 +329,7 @@ async function loadNewsTriage(symbol, newsList, errored) {
       } catch (err) {
         toast(err.message, { type: "error" });
         e.target.disabled = false;
-        e.target.textContent = "Score with Claude";
+        e.target.textContent = "Score with AI";
       }
     });
   }
@@ -379,7 +382,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
             </div>
             <p class="muted small">Setting a target locks in today's price so the call can be graded later. Price alerts and the Portfolio alerts feed flag when it's reached.</p>` : `
             <div id="thesisRead" class="thesis-read">${t?.thesis ? "" : `<p class="muted">No thesis yet.</p>`}</div>
-            ${lockedHint("Unlock to write or edit the thesis.")}`}
+            ${lockedHint("Sign in to write or edit the thesis.")}`}
         </section>
       </div>
       <aside class="research-side">
@@ -394,6 +397,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
         </section>
         <section class="panel" aria-labelledby="alerts-h">
           <h3 id="alerts-h">Price alerts</h3>
+          ${unlocked ? `<p class="pf-sub">Just for me</p><div id="myAlertsBox"></div><p class="pf-sub">For the club <span class="muted small">(everyone sees these on the Alerts page)</span></p>` : ""}
           <ul class="link-list" id="alertList">
             ${data.priceAlerts.map((a) => `<li>${a.direction === "above" ? "Rises above" : "Falls below"} <strong>${fmtUSD(a.price)}</strong>${a.note ? ` <span class="muted small">— ${esc(a.note)}</span>` : ""}
               ${unlocked ? `<button class="btn-link small" data-del-alert="${a.id}" aria-label="Delete alert at ${fmtUSD(a.price)}">Remove</button>` : ""}</li>`).join("") || `<li class="muted">No alerts set.</li>`}
@@ -405,7 +409,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
               <label class="sr-only" for="alertPrice">Price</label>
               <input id="alertPrice" type="number" step="any" min="0" placeholder="Price" required inputmode="decimal" />
               <button class="btn btn-ghost btn-sm">Add alert</button>
-            </form>` : lockedHint("Unlock to set alerts.")}
+            </form>` : lockedHint("Sign in to set alerts.")}
         </section>
       </aside>
     </div>`;
@@ -424,6 +428,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
       try { localStorage.setItem(`pif_draft_${symbol}`, e.target.value); } catch { /* ignore */ }
     });
     el("saveThesisBtn").addEventListener("click", () => saveThesis(symbol, price));
+    mountMyAlerts(el("myAlertsBox"), { symbol });
     window.addEventListener("beforeunload", onBeforeUnload);
 
     el("alertForm").addEventListener("submit", async (e) => {
@@ -511,7 +516,7 @@ export async function mount(container, params) {
   pushRecent(symbol);
   const profile = data.profile || {};
   const price = data.technicals?.price ?? null;
-  const unlocked = isUnlocked();
+  const unlocked = can("member");
   const cs = chartSummary(data.chart);
   const owned = !!data.position, watched = !!data.watch;
   const base = `#/research/${encodeURIComponent(symbol)}`;
@@ -524,6 +529,9 @@ export async function mount(container, params) {
   if (!owned && unlocked) actions.push(`<button id="addPosBtn" class="btn btn-ghost">+ Add to holdings</button>`);
   actions.push(`<a class="btn btn-ghost" href="#/pitches/new/${encodeURIComponent(symbol)}">Pitch it</a>`);
   actions.push(`<button id="copyLinkBtn" class="btn btn-ghost" aria-label="Copy link to this page">Copy link</button>`);
+  // Personal follow list ("My tickers"): shows up in your Today "For you" section.
+  const following = getPref("myTickers", []).includes(symbol);
+  actions.push(`<button id="followBtn" class="btn btn-ghost" aria-pressed="${following}">${following ? "★ Following" : "☆ Follow"}</button>`);
 
   const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => k);
 
@@ -549,7 +557,16 @@ export async function mount(container, params) {
 
   const body = el("tabBody");
   const tctx = { symbol, data, fund, price, unlocked, isFinancial: isFinancialSector(data) };
-  if (tab === "overview") renderOverview(body, tctx);
+  if (tab === "overview") {
+    renderOverview(body, tctx);
+    // Your notes on this company, right on the Overview (signed-in members).
+    if (can("member")) {
+      const box = document.createElement("div");
+      box.className = "overview-notes";
+      body.prepend(box);
+      TAB_LOADERS.notes().then((m) => box.isConnected && m.render(box, { symbol, compact: true }));
+    }
+  }
   else if (tab === "thesis") renderThesisTab(body, tctx);
   else {
     body.innerHTML = loading(`Loading ${tab}…`);
@@ -558,6 +575,14 @@ export async function mount(container, params) {
     await mod.render(body, tctx);
   }
 
+  el("followBtn").addEventListener("click", async (e) => {
+    const list = getPref("myTickers", []);
+    const on = !list.includes(symbol);
+    await setPref("myTickers", on ? [...list, symbol] : list.filter((s) => s !== symbol));
+    e.currentTarget.setAttribute("aria-pressed", String(on));
+    e.currentTarget.textContent = on ? "★ Following" : "☆ Follow";
+    toast(on ? `Following ${symbol}. It'll show in "For you" on Today.` : `Stopped following ${symbol}.`);
+  });
   el("copyLinkBtn").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);

@@ -1,6 +1,6 @@
 const express = require("express");
 const db = require("../db");
-const { requireAuth } = require("../middleware/auth");
+const { requireSignedIn } = require("../middleware/auth");
 const yahoo = require("../lib/sources/yahoo");
 const sec = require("../lib/sources/sec");
 const { cached } = require("../lib/cache");
@@ -12,11 +12,12 @@ const { extractCustomerMentions, economicLinkGap } = require("../lib/supplyChain
 const { normalizeName } = require("../lib/thirteenF");
 const { chainQuality, putCallRatio, maxPain, expectedMove, ivSkew, dealerGammaByStrike } = require("../lib/options");
 const finnhub = require("../lib/sources/finnhub");
-const claude = require("../lib/sources/claude");
+const ai = require("../lib/sources/openai");
+const { extractSections } = require("../lib/filingText");
 const fundamentals = require("../lib/fundamentals");
 const analytics = require("../lib/analytics");
-const { getSettings } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
+const { benchmarkFor } = require("../lib/prefs");
 
 const router = express.Router();
 
@@ -145,7 +146,7 @@ router.get("/research/:symbol", async (req, res) => {
     news: settledValue(news) || [],
     peers: settledValue(peers) || [],
     thesis: note || null,
-    aiEnabled: claude.configured(),
+    aiEnabled: ai.configured(),
     redFlags: scanRedFlags(settledValue(quickFilings) || []),
     errors: {
       chart: errOf(chart), quoteSummary: errOf(quoteSummary), peers: errOf(peers), financials: errOf(facts), news: errOf(news),
@@ -192,8 +193,8 @@ async function filingDiffFor(symbol, form) {
     if (filings.length < 2) return { form, available: false, reason: `Need two ${form} filings to compare; only ${filings.length} found.` };
     const [latest, prior] = filings; // newest first
     const [latestText, priorText] = await Promise.all([sec.getFilingText(latest.url), sec.getFilingText(prior.url)]);
-    const latestSections = claude.extractSections(latestText, form, { includeLegal: true });
-    const priorSections = claude.extractSections(priorText, form, { includeLegal: true });
+    const latestSections = extractSections(latestText, form, { includeLegal: true });
+    const priorSections = extractSections(priorText, form, { includeLegal: true });
     const sections = latestSections.map((s) => {
       const match = priorSections.find((p) => p.label === s.label);
       const cmp = compareFilingSections(match?.body, s.body);
@@ -212,21 +213,21 @@ router.get("/research/:symbol/filing-diff", async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   const form = req.query.form === "10-Q" ? "10-Q" : "10-K";
   try {
-    res.json({ symbol, aiEnabled: claude.configured(), ...(await filingDiffFor(symbol, form)) });
+    res.json({ symbol, aiEnabled: ai.configured(), ...(await filingDiffFor(symbol, form)) });
   } catch (err) {
-    res.json({ symbol, form, available: false, error: err.message, aiEnabled: claude.configured() });
+    res.json({ symbol, form, available: false, error: err.message, aiEnabled: ai.configured() });
   }
 });
 
 // AI summary of what changed between the two filings (costs API credit, so edit-unlocked only).
-router.post("/research/:symbol/filing-diff/summary", require("../middleware/auth").requireAuth, async (req, res) => {
+router.post("/research/:symbol/filing-diff/summary", requireSignedIn, async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   const form = req.query.form === "10-Q" ? "10-Q" : "10-K";
-  if (!claude.configured()) return res.status(503).json({ error: "AI summaries need ANTHROPIC_API_KEY set on the server." });
+  if (!ai.configured()) return res.status(503).json({ error: "AI summaries need OPENAI_API_KEY set on the server." });
   try {
     const diff = await filingDiffFor(symbol, form);
     if (!diff.available) return res.status(404).json({ error: diff.reason || "Not enough filings to compare." });
-    res.json(await claude.summarizeFilingChange(symbol, diff));
+    res.json(await ai.summarizeFilingChange(symbol, diff));
   } catch (err) {
     res.status(502).json({ error: `Summary failed: ${err.message}` });
   }
@@ -349,7 +350,7 @@ router.get("/research/:symbol/comps", async (req, res) => {
 router.get("/research/:symbol/risk", async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   let benchmark;
-  try { benchmark = benchmarks.normalize(req.query.benchmark || getSettings().benchmark); } catch (e) { return res.status(400).json({ error: e.message }); }
+  try { benchmark = benchmarkFor(req); } catch (e) { return res.status(400).json({ error: e.message }); }
   // The asset/benchmark charts don't depend on the sector lookup, so kick them off in
   // parallel with it instead of waiting for it to finish first (that serial round trip was
   // pure added latency on every Risk tab load).
@@ -375,29 +376,29 @@ router.get("/research/:symbol/filings", async (req, res) => {
   try {
     const filings = await sec.getRecentFilings(symbol);
     res.json({
-      aiEnabled: claude.configured(),
-      filings: filings.slice(0, 12).map((f) => ({ ...f, summary: claude.cachedSummary(f.accession) })),
+      aiEnabled: ai.configured(),
+      filings: filings.slice(0, 12).map((f) => ({ ...f, summary: ai.cachedSummary(f.accession) })),
     });
   } catch (e) {
-    res.json({ aiEnabled: claude.configured(), filings: [], error: e.message });
+    res.json({ aiEnabled: ai.configured(), filings: [], error: e.message });
   }
 });
 
 // Generating a summary costs API credits, so it's limited to people who can edit.
-router.post("/research/:symbol/filings/:accession/summary", requireAuth, async (req, res) => {
+router.post("/research/:symbol/filings/:accession/summary", requireSignedIn, async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
-  if (!claude.configured()) return res.status(503).json({ error: "AI summaries need ANTHROPIC_API_KEY set on the server." });
+  if (!ai.configured()) return res.status(503).json({ error: "AI summaries need OPENAI_API_KEY set on the server." });
   const filings = await sec.getRecentFilings(symbol);
   const filing = filings.find((f) => f.accession === req.params.accession);
   if (!filing) return res.status(404).json({ error: "Filing not found." });
   try {
-    res.json(await claude.summarizeFiling(symbol, filing));
+    res.json(await ai.summarizeFiling(symbol, filing));
   } catch (e) {
     res.status(502).json({ error: `Summary failed: ${e.message}` });
   }
 });
 
-router.put("/research/:symbol/thesis", requireAuth, (req, res) => {
+router.put("/research/:symbol/thesis", requireSignedIn, (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   const { author, thesis, targetPrice, priceAtThesis } = req.body || {};
   const tp = targetPrice === "" || targetPrice === null || targetPrice === undefined ? null : Number(targetPrice);

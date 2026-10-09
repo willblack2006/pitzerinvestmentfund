@@ -1,5 +1,5 @@
 import {
-  el, esc, api, fmtUSD, fmtPct, signed, loading, errorBox, toast, confirmAction, isUnlocked, getMember, requestMemberSignIn,
+  el, esc, api, fmtUSD, fmtPct, signed, loading, errorBox, toast, confirmAction, currentMember, requestSignIn,
 } from "../shared.js";
 import { statusPill } from "./pitches.js";
 
@@ -94,7 +94,6 @@ function editor(p, isNew, current) {
         }).join("")}
         <input type="hidden" name="bearChecklist" value="${esc(p.bearChecklist || "[]")}" />
       </fieldset>
-      ${!getMember() ? `<label class="field-block">Author name <input name="author" value="${esc(p.author || "")}" placeholder="Your name" /></label>` : ""}
       <div class="dialog-actions">
         ${isNew ? `<a class="btn btn-ghost" href="#/pitches">Cancel</a>` : `<button type="button" class="btn btn-ghost" id="cancelEdit">Cancel</button>`}
         <button class="btn btn-primary">${isNew ? "Save draft" : "Save changes"}</button>
@@ -114,8 +113,8 @@ function readView(p) {
 
 function votePanel(p) {
   const t = p.tally;
-  const member = getMember();
-  const mine = member && t.votes.find((v) => v.memberId === member.member.id);
+  const member = currentMember();
+  const mine = member && t.votes.find((v) => v.memberId === member.id);
   const pct = (n) => (t.total ? (n / t.total) * 100 : 0);
   return `
     <section class="panel vote-panel" aria-labelledby="vote-h">
@@ -126,19 +125,27 @@ function votePanel(p) {
       <p class="small ${t.quorumMet ? "" : "tone-warn"}">Rules: more than ${t.thresholdPct}% yes of yes+no votes, with at least ${t.quorum} votes cast. ${t.quorumMet ? (t.passing ? `<span class="tone-good">Currently passing.</span>` : `<span class="tone-bad">Currently failing.</span>`) : `Quorum not yet met (${t.total}/${t.quorum}).`}</p>
       ${p.status === "voting" ? (member ? `
         <form id="voteForm" class="vote-form">
-          <fieldset><legend class="small">Your vote, ${esc(member.member.name)}${mine ? ` (currently <strong>${esc(mine.vote)}</strong>)` : ""}</legend>
+          <fieldset><legend class="small">Your vote, ${esc(member.name)}${mine ? ` (currently <strong>${esc(mine.vote)}</strong>)` : ""}</legend>
             <div class="seg">
               ${["yes", "no", "abstain"].map((v) => `<label class="seg-opt"><input type="radio" name="vote" value="${v}" ${mine?.vote === v ? "checked" : ""} required /> <span>${v[0].toUpperCase() + v.slice(1)}</span></label>`).join("")}
             </div>
           </fieldset>
           <label class="field-block small">Comment (optional) <input name="comment" value="${esc(mine?.comment || "")}" maxlength="1000" placeholder="Why you voted this way" /></label>
           <button class="btn btn-primary btn-sm">${mine ? "Change vote" : "Cast vote"}</button>
-        </form>` : `<p><button type="button" class="btn btn-primary btn-sm" data-member-signin>Sign in as a member to vote</button></p>`) : ""}
+        </form>` : `<p><button type="button" class="btn btn-primary btn-sm" data-signin>Sign in to vote</button></p>`) : ""}
       ${t.votes.length ? `<ul class="vote-list">${t.votes.map((v) => `<li><span class="vote-chip v-${esc(v.vote)}">${esc(v.vote)}</span> <strong>${esc(v.name)}</strong>${v.comment ? ` <span class="muted small">— ${esc(v.comment)}</span>` : ""}</li>`).join("")}</ul>` : ""}
     </section>`;
 }
 
+// Buttons follow the server's rules: the author or an admin manages the pitch, a portfolio
+// manager or admin closes the vote, a portfolio manager marks it executed.
 function actionsFor(p) {
+  const m = currentMember();
+  const owner = m && (m.isAdmin || p.author === m.name);
+  const allowed = (act) => (act === "close" ? m && (m.isAdmin || m.canTrade) : act === "executed" ? m?.canTrade : owner);
+  return actionsList(p).filter(([act]) => allowed(act));
+}
+function actionsList(p) {
   const a = [];
   if (p.status === "draft") a.push(["open", "Open the vote", "btn-primary"], ["withdraw", "Withdraw", "btn-ghost"]);
   if (p.status === "voting") a.push(["close", "Close vote & record result", "btn-primary"], ["reopen", "Back to draft", "btn-ghost"], ["withdraw", "Withdraw", "btn-ghost"]);
@@ -154,7 +161,7 @@ export async function mount(container, params) {
     let prefill = {};
     try { prefill = JSON.parse(sessionStorage.getItem("pif_pitch_prefill") || "{}"); } catch { /* ignore */ }
     if (prefill.symbol && params.symbol && prefill.symbol !== params.symbol.toUpperCase()) prefill = {};
-    p = { symbol: (params.symbol || "").toUpperCase(), direction: "buy", author: (() => { try { return localStorage.getItem("pif_author") || ""; } catch { return ""; } })(), ...prefill };
+    p = { symbol: (params.symbol || "").toUpperCase(), direction: "buy", ...prefill };
   } else {
     container.innerHTML = loading("Loading pitch…");
     try {
@@ -164,14 +171,16 @@ export async function mount(container, params) {
       return;
     }
   }
-  const canEdit = isUnlocked() || !!getMember();
+  const me = currentMember();
+  const canEdit = !!me; // writing a new pitch
+  const canManage = !!me && (isNew || me.isAdmin || p.author === me.name); // editing/deleting this one
   const editing = isNew || (container.dataset.editing === String(p.id) && ["draft", "voting"].includes(p.status));
 
   if (isNew && !canEdit) {
     container.innerHTML = `
       <div class="page-head"><h2>New pitch</h2></div>
       <div class="page-pad"><p>Pitches are written under a member's name.</p>
-        <p><button type="button" class="btn btn-primary" data-member-signin>Sign in as a member</button> or <button type="button" class="btn btn-ghost" data-unlock>unlock editing</button>.</p>
+        <p><button type="button" class="btn btn-primary" data-signin>Sign in</button></p>
         <p><a href="#/pitches">← All pitches</a></p></div>`;
     return;
   }
@@ -188,12 +197,12 @@ export async function mount(container, params) {
       <div>
         <p class="crumb small"><a href="#/pitches">← All pitches</a></p>
         <h2>${isNew ? "New pitch" : `<span class="pitch-dir dir-${esc(p.direction)}">${esc(p.direction)}</span> ${esc(p.symbol)}`}${!isNew && p.title ? ` <span class="company-name">${esc(p.title)}</span>` : ""}</h2>
-        ${!isNew ? `<p class="muted page-desc">${statusPill(p.status)} by ${esc(p.author)} · ${esc(p.createdAt.slice(0, 10))} · <a href="#/research/${encodeURIComponent(p.symbol)}">Research ${esc(p.symbol)}</a></p>` : `<p class="muted page-desc">Saved as a draft; open the vote when it's ready for the committee.</p>`}
+        ${!isNew ? `<p class="muted page-desc">${statusPill(p.status)} by ${p.authorId ? `<a href="#/members/${p.authorId}">${esc(p.author)}</a>` : esc(p.author)} · ${esc(p.createdAt.slice(0, 10))} · <a href="#/research/${encodeURIComponent(p.symbol)}">Research ${esc(p.symbol)}</a></p>` : `<p class="muted page-desc">Saved as a draft; open the vote when it's ready for the committee.</p>`}
       </div>
       ${!isNew && canEdit && !editing ? `<div class="page-actions">
-        ${["draft", "voting"].includes(p.status) ? `<button class="btn btn-ghost" id="editBtn">Edit</button>` : ""}
+        ${canManage && ["draft", "voting"].includes(p.status) ? `<button class="btn btn-ghost" id="editBtn">Edit</button>` : ""}
         ${actionsFor(p).map(([act, label, cls]) => `<button class="btn ${cls}" data-action="${act}">${label}</button>`).join("")}
-        ${p.status === "draft" ? `<button class="btn btn-danger" id="deleteBtn">Delete</button>` : ""}
+        ${canManage && p.status === "draft" ? `<button class="btn btn-danger" id="deleteBtn">Delete</button>` : ""}
       </div>` : ""}
     </div>
     ${!isNew ? `
@@ -250,7 +259,6 @@ export async function mount(container, params) {
       e.target.symbol.focus();
       return;
     }
-    try { if (body.author) localStorage.setItem("pif_author", body.author); } catch { /* ignore */ }
     try {
       const saved = isNew
         ? await api("/api/pitches", { method: "POST", body: JSON.stringify(body) })
@@ -302,7 +310,7 @@ export async function mount(container, params) {
       toast("Vote recorded.", { type: "success" });
       mount(container, params);
     } catch (err) {
-      if (err.code === "member_required") requestMemberSignIn();
+      if (err.code === "signin_required") requestSignIn();
       toast(err.message, { type: "error" });
     }
   });

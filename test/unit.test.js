@@ -1007,3 +1007,22 @@ test("Dividends: annual rate, payments per year and new ex-dates since tracking 
   assert.deepEqual(newExDates(events, { since: "2026-10-08", today, logged: new Set(["2026-10-09"]) }), []);
   assert.deepEqual(newExDates(events, { since: "2026-10-08", today: "2026-10-07" }), []);
 });
+
+test("chat: mentions, edit window, delete rights, image sniffing", () => {
+  const chat = require("../lib/chat");
+  const members = [{ id: 1, name: "Ana Lee" }, { id: 11, name: "Ben Park" }, { id: 12, name: "Ben Ortiz" }];
+  assert.deepEqual(chat.parseMentions("thanks @ana!", members), [1]);
+  assert.deepEqual(chat.parseMentions("@Ben can you look", members), [], "a shared first name needs the full name");
+  assert.deepEqual(chat.parseMentions("@ben ortiz can you look", members), [12]);
+  assert.deepEqual(chat.parseMentions("email ana@lee.com", members), [], "not an @mention");
+  const now = Date.parse("2026-10-08T12:00:00Z");
+  const msg = { memberId: 1, createdAt: "2026-10-08 11:50:00", deletedAt: null };
+  assert.equal(chat.canEdit(msg, { id: 1 }, now), true);
+  assert.equal(chat.canEdit(msg, { id: 1 }, now + 10 * 60e3), false, "15-minute window");
+  assert.equal(chat.canEdit(msg, { id: 11 }, now), false);
+  assert.equal(chat.canDelete(msg, { id: 11, isAdmin: true }), true);
+  assert.equal(chat.canDelete({ ...msg, deletedAt: "x" }, { id: 1 }), false);
+  assert.equal(chat.sniffImage(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0])), "image/jpeg");
+  assert.equal(chat.sniffImage(Buffer.from("<svg xmlns='x'></svg>")), null);
+  assert.throws(() => chat.cleanMessage({ body: "", attachment: { kind: "page", pageRef: "#/today" } }) && chat.cleanMessage({}), /Write a message/);
+});

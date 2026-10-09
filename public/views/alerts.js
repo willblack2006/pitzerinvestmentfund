@@ -1,4 +1,4 @@
-import { esc, api, isUnlocked, toast, pageHead, loading, errorBox, subTabs, fmtMoneyCompact, fmtPct, signed } from "../shared.js";
+import { esc, api, can, toast, pageHead, loading, errorBox, subTabs, fmtMoneyCompact, fmtPct, signed } from "../shared.js";
 
 let briefSince = null;
 try { briefSince = localStorage.getItem("pif_meeting_since"); } catch { /* ignore */ }
@@ -77,7 +77,7 @@ export async function mount(container) {
     ${pageHead("Alerts", "Everything that needs the fund's attention: price targets hit, policy breaches, open votes, upcoming earnings and insider buying.")}
     <p class="small muted page-pad" id="signalsStatus">
       Insider, short-interest, filing, revision and attention signals: ${alerts.signalsAsOf ? `updated ${esc(timeAgo(alerts.signalsAsOf))}` : "not computed yet"}.
-      ${isUnlocked() ? `<button type="button" class="btn btn-ghost btn-sm" id="refreshSignalsBtn">Refresh signals</button>` : ""}
+      ${can("member") ? `<button type="button" class="btn btn-ghost btn-sm" id="refreshSignalsBtn">Refresh signals</button>` : ""}
     </p>
     <section class="panel page-pad-panel" aria-labelledby="brief-h">
       <div class="panel-head"><h3 id="brief-h">Meeting brief</h3>
@@ -110,10 +110,10 @@ export async function mount(container) {
           </table></div>` : `<p class="muted">${earnings.error ? "The earnings calendar needs a Finnhub API key." : "No reports scheduled in the next 45 days."}</p>`}
       </section>
       <section class="panel span-full" aria-labelledby="news-h">
-        <div class="panel-head"><h3 id="news-h">AI news triage</h3>${isUnlocked() && alerts.aiEnabled !== false ? `<button type="button" class="btn btn-ghost btn-sm" id="runTriageBtn">Run today's triage</button>` : ""}</div>
+        <div class="panel-head"><h3 id="news-h">AI news triage</h3>${can("member") && alerts.aiEnabled !== false ? `<button type="button" class="btn btn-ghost btn-sm" id="runTriageBtn">Run today's triage</button>` : ""}</div>
         <div id="triageBody" class="small muted">${alerts.aiEnabled === false
           ? "AI news triage isn't available yet (coming soon)."
-          : `Click "Run today's triage" to score each holding's recent headlines for materiality with Claude (one batched call per stock; costs a little API credit).`}</div>
+          : `Click "Run today's triage" to score each holding's recent headlines for materiality with AI (one batched call per stock; costs a little API credit).`}</div>
       </section>
     </div>`;
 

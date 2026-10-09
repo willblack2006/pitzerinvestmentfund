@@ -1,5 +1,5 @@
 import {
-  esc, fmtCompact, fmtPct, api, isUnlocked, toast, lockedHint, signed,
+  esc, fmtCompact, fmtPct, api, can, toast, lockedHint, signed,
   sortHeader, sortRows, bindSort, pageHead, loading, errorBox, subTabs, invalidateContext,
 } from "../shared.js";
 import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
@@ -12,7 +12,7 @@ const state = { rows: [], sort: { key: "suggestedBy", dir: -1 } };
 const tickerLink = (s) => `<a href="#/research/${encodeURIComponent(s)}">${esc(s)}</a>`;
 
 function renderTable() {
-  const unlocked = isUnlocked();
+  const unlocked = can("member");
   const s = state.sort;
   document.getElementById("scrThead").innerHTML = `<tr>
     ${sortHeader("symbol", "Ticker", s, { align: "left sticky-col" })}
@@ -79,7 +79,7 @@ export async function mount(container) {
     ${pageHead("Discovery", `Companies that show up as competitors of our ${data.holdingsCount} holdings but that we don't own. The more holdings that point to a company, the higher it ranks.`)}
     <section class="toolbar">
       <span class="muted small">${state.rows.length} candidates · click any ticker for full research</span>
-      ${isUnlocked() ? "" : lockedHint("Unlock to add ideas to the watchlist.")}
+      ${can("member") ? "" : lockedHint("Sign in to add ideas to the watchlist.")}
     </section>
     <section class="table-wrap">
       <table id="scrTable">

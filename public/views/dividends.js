@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, isUnlocked, toast, pageHead, loading, errorBox, subTabs, lockedHint } from "../shared.js";
+import { el, esc, api, fmtUSD, can, toast, pageHead, loading, errorBox, subTabs, lockedHint } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Dividends";
@@ -32,7 +32,7 @@ function logTable(rows, unlocked) {
 }
 
 function render(container, d) {
-  const unlocked = isUnlocked();
+  const unlocked = can("trade");
   const t = d.totals;
   container.innerHTML = `
     ${subTabs(PORTFOLIO_TABS, "#/dividends")}
@@ -50,7 +50,7 @@ function render(container, d) {
           : `<p class="muted">No declared ex-dividend or payment dates in the next 60 days.</p>`}
       </section>
       <section class="panel span-2" aria-labelledby="log-h">
-        <div class="panel-head"><h3 id="log-h">Owed &amp; received</h3>${unlocked ? "" : lockedHint("Unlock to confirm payments.")}</div>
+        <div class="panel-head"><h3 id="log-h">Owed &amp; received</h3>${unlocked ? "" : lockedHint("Sign in to confirm payments.", "trade")}</div>
         ${logTable(d.rows, unlocked)}
         <p class="muted small">"Mark received" records a dividend transaction for the amount Schwab actually paid, which adds it to cash and to the holding's total. Foreign stocks (like CJPRY) can pay less than shown because of tax withholding.</p>
       </section>

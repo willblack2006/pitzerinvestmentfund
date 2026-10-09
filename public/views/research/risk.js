@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, fmtPct, fmtRatio, fmtX, loading, signed, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker } from "../../shared.js";
+import { el, esc, api, fmtUSD, fmtPct, fmtRatio, fmtX, loading, signed, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, benchParam } from "../../shared.js";
 import { lineChart, barChart } from "../../charts.js";
 import { shortBadge, shortMeter } from "../shortSignal.js";
 import { term } from "../../glossary.js";
@@ -8,7 +8,6 @@ const f2 = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "—");
 
 const pct = (v) => (v === null || v === undefined ? "—" : signed(v * 100, fmtPct(v * 100)));
 
-let compareWith = null;
 
 async function loadShortPressure(symbol) {
   const box = el("shortPressureBody");
@@ -63,7 +62,7 @@ export async function render(c, ctx) {
   let r, presets;
   try {
     [r, presets] = await Promise.all([
-      api(`/api/research/${encodeURIComponent(symbol)}/risk${compareWith ? `?benchmark=${encodeURIComponent(compareWith)}` : ""}`),
+      api(`/api/research/${encodeURIComponent(symbol)}/risk${benchParam()}`),
       benchmarkPresets(),
     ]);
   } catch (err) {
@@ -130,7 +129,7 @@ export async function render(c, ctx) {
       </section>
     </div>`;
 
-  wireBenchmarkPicker("riskBench", (v) => { compareWith = v; render(c, ctx); });
+  wireBenchmarkPicker("riskBench", async (v) => { await setPref("benchmark", v); render(c, ctx); });
   const ds = [
     { label: symbol, data: p.series.asset, color: "--s1" },
     { label: `${r.benchmark} (benchmark)`, data: p.series.bench, color: "--s2", dash: [5, 4] },

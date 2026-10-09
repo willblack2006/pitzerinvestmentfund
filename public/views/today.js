@@ -1,4 +1,5 @@
-import { el, esc, api, safeUrl, loading, errorBox } from "../shared.js";
+import { el, esc, api, safeUrl, loading, errorBox, getPref, can, currentMember } from "../shared.js";
+import { openChat } from "../chat.js";
 import { term } from "../glossary.js";
 
 export const title = "Today";
@@ -7,6 +8,7 @@ export const title = "Today";
 const state = { date: null, slot: null, showAll: false, movers: "gainers" };
 let live = null;     // /api/today/live (not stored; refreshed per visit)
 let current = null;  // last /api/today/editions response
+let forYou = null;   // /api/today/foryou (signed in only)
 
 const EDITION_TITLE = { premarket: "Morning briefing", midday: "Midday update", postmarket: "Evening wrap" };
 const TILE_TERMS = { "^VIX": "vix", "^TNX": "tenYearYield" };
@@ -307,7 +309,47 @@ function moversSection() {
     </section>`;
 }
 
+// Signed-in members: what's theirs today. Every part is skipped when empty; a brand-new
+// account sees a short "how to make this yours" line instead.
+function forYouSection() {
+  if (!can("member")) return "";
+  if (!forYou) return `<section class="panel foryou" aria-labelledby="fy-h"><h3 id="fy-h" class="sec-title">For you</h3><p class="muted small">Loading…</p></section>`;
+  const f = forYou;
+  const first = currentMember()?.name.split(/\s+/)[0] || "";
+  const parts = [];
+  if (f.chat.mentions.length || f.chat.unread) {
+    parts.push(`<div class="fy-block"><p class="pf-sub">Club chat</p>
+      ${f.chat.mentions.map((m) => `<p class="small"><strong>${esc(m.by)}</strong> mentioned you: ${esc(m.body)}</p>`).join("")}
+      <button type="button" class="btn btn-ghost btn-sm" data-open-chat>${f.chat.unread ? `${f.chat.unread} unread message${f.chat.unread === 1 ? "" : "s"}` : "Open chat"} →</button></div>`);
+  }
+  if (f.toVote.length) {
+    parts.push(`<div class="fy-block"><p class="pf-sub">Waiting for your vote</p><ul class="link-list small">${f.toVote.map((p) => `<li><a href="#/pitches/${p.id}">${esc(p.direction[0].toUpperCase() + p.direction.slice(1))} ${esc(p.symbol)}</a>${p.title ? ` <span class="muted">· ${esc(p.title)}</span>` : ""}</li>`).join("")}</ul></div>`);
+  }
+  if (f.tickers.length) {
+    parts.push(`<div class="fy-block fy-tickers"><p class="pf-sub">Tickers you follow</p><ul class="fy-list">${f.tickers.map((t) => `<li>
+      <div class="fy-row">${logo(t.symbol, 22)}<a class="symbol-cell" href="#/research/${encodeURIComponent(t.symbol)}">${esc(t.symbol)}</a><span class="num">${change(t.changePct, "market")}</span></div>
+      ${t.news ? `<p class="small fy-news">${ext(t.news.url, esc(t.news.headline), "muted-link")} <span class="muted">${esc(t.news.source || "")}${t.news.datetime ? ` · ${esc(ago(t.news.datetime))}` : ""}</span></p>` : ""}
+    </li>`).join("")}</ul></div>`);
+  }
+  if (f.paper) {
+    parts.push(`<div class="fy-block"><p class="pf-sub">Your paper portfolio · ${esc(f.paper.season)}</p>
+      <p><strong>$${Math.round(f.paper.totalValue).toLocaleString("en-US")}</strong> <span class="small">${change((f.paper.returnPct ?? 0) * 100, "market")} this season</span></p>
+      <p class="small muted">${money(f.paper.dayChange)} today · ${f.paper.positions} position${f.paper.positions === 1 ? "" : "s"} · <a href="#/paper">Paper trading →</a></p></div>`);
+  }
+  if (f.notes.length) {
+    parts.push(`<div class="fy-block"><p class="pf-sub">Your latest notes</p><ul class="link-list small">${f.notes.map((n) => `<li>${n.symbol ? `<a class="symbol-cell" href="#/research/${encodeURIComponent(n.symbol)}">${esc(n.symbol)}</a> ` : ""}${esc(n.body || n.quote)}</li>`).join("")}</ul><a class="small" href="#/notes">All notes →</a></div>`);
+  }
+  const empty = !parts.length;
+  return `<section class="panel foryou" aria-labelledby="fy-h">
+    <div class="panel-head"><h3 id="fy-h" class="sec-title">For you${first ? `, ${esc(first)}` : ""}</h3><a class="small" href="#/account">Personalize →</a></div>
+    ${empty ? `<p class="muted small">Follow tickers from any Research page (the Follow button) and they'll show up here with their moves and news. Your notes, chat mentions and pitches waiting for your vote appear here too.</p>` : `<div class="fy-grid">${parts.join("")}</div>`}
+  </section>`;
+}
+
 // ---- Render ----
+
+// Sections someone turned off in Account & preferences.
+const show = (key) => !getPref("todayHidden", []).includes(key);
 
 function render(container) {
   const r = current;
@@ -333,25 +375,27 @@ function render(container) {
       ${picker(r, cur)}
     </header>
     ${missing ? `<p class="muted page-pad">${slotInfo?.status === "upcoming" ? "This edition isn't out yet. Editions are saved at about 8:00 AM, 12:30 PM and 4:30 PM ET." : `No edition was captured for ${esc(dayLabel(cur.date, r.editions[0].date))}${slotInfo ? ` (${esc(slotInfo.label.toLowerCase())})` : ""}.`}</p>` : `
-    ${readSection(useEdBriefing ? ed.briefing : live?.briefing, useEdBriefing ? ed : null)}
-    ${tilesSection()}
+    ${show("read") ? readSection(useEdBriefing ? ed.briefing : live?.briefing, useEdBriefing ? ed : null) : ""}
+    ${show("markets") ? tilesSection() : ""}
+    ${show("foryou") ? forYouSection() : ""}
     <div class="brief-grid">
       <div class="brief-main">
         ${!ed ? `<p class="notice small">No edition saved yet today. Editions are saved each weekday at about 8:00 AM, 12:30 PM and 4:30 PM ET; these are live headlines.</p>` : ""}
-        <div class="ord-recap">${recapSection(ed, r.aiEnabled)}</div>
-        <div class="ord-stories">${storiesSection(list, ed)}</div>
-        <div class="ord-hn">${holdingsNewsSection(ed)}</div>
+        <div class="ord-recap">${show("recap") ? recapSection(ed, r.aiEnabled) : ""}</div>
+        <div class="ord-stories">${show("stories") ? storiesSection(list, ed) : ""}</div>
+        <div class="ord-hn">${show("holdingsNews") ? holdingsNewsSection(ed) : ""}</div>
       </div>
       <aside class="brief-side" aria-label="Portfolio and calendar">
-        <div class="ord-pf">${portfolioSection()}</div>
-        <div class="ord-deck">${onDeckSection()}</div>
-        <div class="ord-sec">${sectorsSection()}</div>
-        <div class="ord-mv">${moversSection()}</div>
+        <div class="ord-pf">${show("portfolio") ? portfolioSection() : ""}</div>
+        <div class="ord-deck">${show("deck") ? onDeckSection() : ""}</div>
+        <div class="ord-sec">${show("sectors") ? sectorsSection() : ""}</div>
+        <div class="ord-mv">${show("movers") ? moversSection() : ""}</div>
       </aside>
     </div>`}`;
 
   wireSparks(container);
   wireImageFallbacks(container);
+  container.querySelectorAll("[data-open-chat]").forEach((b) => b.addEventListener("click", openChat));
   el("toggleAll")?.addEventListener("click", () => { state.showAll = !state.showAll; render(container); });
   container.querySelectorAll("[data-movers]").forEach((b) => b.addEventListener("click", () => { state.movers = b.dataset.movers; render(container); }));
   container.querySelectorAll("[data-slot]").forEach((b) => b.addEventListener("click", () => {
@@ -379,9 +423,20 @@ async function loadEdition(container) {
 }
 
 export async function mount(container) {
-  live = null; current = null;
+  live = null; current = null; forYou = null;
   container.innerHTML = loading("Loading your briefing…");
   const livePromise = api("/api/today/live").then((d) => { live = d; }).catch(() => { live = null; });
+  const forYouPromise = can("member") && !getPref("todayHidden", []).includes("foryou")
+    ? api("/api/today/foryou").then((d) => { forYou = d; }).catch(() => { forYou = { tickers: [], notes: [], chat: { unread: 0, mentions: [] }, toVote: [], paper: null }; })
+    : Promise.resolve();
+  // "For you" can be slow on a cold start (prices + news); draw it in place when it lands.
+  forYouPromise.then(() => {
+    const node = container.querySelector(".foryou");
+    if (!node || !forYou) return;
+    node.outerHTML = forYouSection();
+    container.querySelectorAll(".foryou [data-open-chat]").forEach((b) => b.addEventListener("click", openChat));
+    wireImageFallbacks(container.querySelector(".foryou"));
+  });
   await loadEdition(container);
   await livePromise;
   if (container.isConnected && current) render(container);

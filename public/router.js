@@ -1,3 +1,5 @@
+import { sessionReady, getPref } from "./shared.js";
+
 function parseHash() {
   const hash = location.hash.replace(/^#/, "") || "/";
   return hash.split("/").filter(Boolean);
@@ -48,6 +50,11 @@ const SECTION_OF = {
   "index-radar": "market",
   congress: "market",
   settings: "settings",
+  account: "settings",
+  notes: "settings",
+  chat: "settings",
+  inbox: "settings",
+  members: "settings",
 };
 
 const SITE = "Pitzer Investment Fund";
@@ -61,6 +68,12 @@ export function initRouter(routeMap) {
 
   async function render() {
     const token = ++renderToken;
+    await sessionReady(); // know who's signed in before the first page draws
+    // Your start page: opening the app's bare address goes to Today if you chose that.
+    if (firstRender && !location.hash.replace(/^#\/?/, "") && getPref("startPage") === "today") {
+      location.replace("#/today");
+      return;
+    }
     const segments = parseHash();
     const match = matchRoute(routes, segments);
     const section = SECTION_OF[segments[0] || ""];
@@ -87,6 +100,9 @@ export function initRouter(routeMap) {
     try {
       const handler = await loadHandler(match.handler);
       if (token !== renderToken) return; // user navigated away while the view's code was loading
+      // Title up front too, so anything reading it mid-load (notes, chat snapshots) sees this page.
+      const early = typeof handler.title === "function" ? handler.title(match.params) : handler.title;
+      if (early) document.title = `${early} · ${SITE}`;
       await handler.mount(view, match.params);
     } catch (err) {
       if (token !== renderToken) return;

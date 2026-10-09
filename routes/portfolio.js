@@ -1,15 +1,17 @@
 const express = require("express");
 const db = require("../db");
-const { requireAuth, memberFromRequest } = require("../middleware/auth");
+const { requireSignedIn, requireTrader } = require("../middleware/auth");
+const { fundChanged } = require("../lib/events");
 const portfolio = require("../lib/portfolio");
 const analytics = require("../lib/analytics");
 const finnhub = require("../lib/sources/finnhub");
 const { storedSignals, refreshSignals } = require("../lib/signals");
-const claude = require("../lib/sources/claude");
+const ai = require("../lib/sources/openai");
 const { latestPrices, histories } = require("../lib/prices");
 const { basesFor, PERIODS } = require("../lib/periods");
 const { getSettings } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
+const { benchmarkFor } = require("../lib/prefs");
 
 const router = express.Router();
 
@@ -36,7 +38,7 @@ router.get("/transactions", (req, res) => {
   res.json(db.prepare("SELECT * FROM transactions ORDER BY date DESC, id DESC").all());
 });
 
-router.post("/transactions", requireAuth, async (req, res) => {
+router.post("/transactions", requireTrader, async (req, res) => {
   const b = req.body || {};
   const type = b.type;
   const t = {
@@ -48,7 +50,7 @@ router.post("/transactions", requireAuth, async (req, res) => {
     amount: Number(b.amount) || 0,
     note: String(b.note || "").slice(0, 500),
     pitchId: b.pitchId ? Number(b.pitchId) : null,
-    createdBy: memberFromRequest(req)?.name || String(b.createdBy || "").slice(0, 80),
+    createdBy: req.member.name,
   };
   if (!["buy", "sell", "dividend", "deposit", "withdrawal", "fee"].includes(type)) return res.status(400).json({ error: "Unknown transaction type." });
   if ((type === "buy" || type === "sell") && (!t.symbol || !(t.shares > 0) || !(t.price > 0))) {
@@ -58,6 +60,7 @@ router.post("/transactions", requireAuth, async (req, res) => {
   if (["deposit", "withdrawal", "fee"].includes(type) && !(t.amount > 0)) return res.status(400).json({ error: "Enter a positive amount." });
   try {
     const saved = portfolio.recordTransaction(t);
+    fundChanged(req, `transaction.${saved.type}`, { id: saved.id, symbol: saved.symbol, shares: saved.shares, price: saved.price, amount: saved.amount });
     portfolio.snapshot().catch(() => {}); // keep today's valuation current
     res.status(201).json(saved);
   } catch (e) {
@@ -65,10 +68,11 @@ router.post("/transactions", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/transactions/:id", requireAuth, (req, res) => {
+router.delete("/transactions/:id", requireTrader, (req, res) => {
   try {
     const t = portfolio.deleteTransaction(Number(req.params.id));
     if (!t) return res.status(404).json({ error: "Transaction not found." });
+    fundChanged(req, "transaction.delete", { id: t.id, type: t.type, symbol: t.symbol, shares: t.shares, amount: t.amount });
     res.status(204).end();
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
@@ -78,7 +82,9 @@ router.delete("/transactions/:id", requireAuth, (req, res) => {
 // ---- Allocation & investment policy ----
 
 router.get("/portfolio/allocation", async (req, res) => {
-  res.json(await portfolio.allocation());
+  let benchmark;
+  try { benchmark = benchmarkFor(req); } catch (e) { return res.status(400).json({ error: e.message }); }
+  res.json(await portfolio.allocation(benchmark));
 });
 
 // ---- Performance & risk ----
@@ -87,7 +93,7 @@ router.get("/portfolio/performance", async (req, res) => {
   const s = getSettings();
   // ?benchmark= lets a viewer compare against something else without changing the fund setting.
   let benchmark;
-  try { benchmark = benchmarks.normalize(req.query.benchmark || s.benchmark); } catch (e) { return res.status(400).json({ error: e.message }); }
+  try { benchmark = benchmarkFor(req); } catch (e) { return res.status(400).json({ error: e.message }); }
   const positions = db.prepare("SELECT symbol, shares, totalCost, marketValue FROM positions").all();
   const [hist, bench2y] = await Promise.all([
     histories(positions.map((p) => p.symbol)),
@@ -193,7 +199,7 @@ router.get("/portfolio/earnings", async (req, res) => {
 
 router.get("/price-alerts", (req, res) => res.json(db.prepare("SELECT * FROM price_alerts ORDER BY symbol").all()));
 
-router.post("/price-alerts", requireAuth, (req, res) => {
+router.post("/price-alerts", requireSignedIn, (req, res) => {
   const { symbol, direction, price, note = "" } = req.body || {};
   const sym = String(symbol || "").toUpperCase().trim();
   if (!sym || !["above", "below"].includes(direction) || !(Number(price) > 0)) {
@@ -203,7 +209,7 @@ router.post("/price-alerts", requireAuth, (req, res) => {
   res.status(201).json(db.prepare("SELECT * FROM price_alerts WHERE id = ?").get(info.lastInsertRowid));
 });
 
-router.delete("/price-alerts/:id", requireAuth, (req, res) => {
+router.delete("/price-alerts/:id", requireSignedIn, (req, res) => {
   const info = db.prepare("DELETE FROM price_alerts WHERE id = ?").run(req.params.id);
   if (!info.changes) return res.status(404).json({ error: "Alert not found." });
   res.status(204).end();
@@ -308,12 +314,12 @@ router.get("/alerts", async (req, res) => {
   alerts.sort((a, b) => order[a.level] - order[b.level]
     || (ownedSet.has(b.symbol) ? 1 : 0) - (ownedSet.has(a.symbol) ? 1 : 0)
     || (a.symbol || "").localeCompare(b.symbol || ""));
-  res.json({ alerts, generatedAt: new Date().toISOString(), signalsAsOf, aiEnabled: claude.configured() });
+  res.json({ alerts, generatedAt: new Date().toISOString(), signalsAsOf, aiEnabled: ai.configured() });
 });
 
 // Manual "Refresh signals" (Alerts page). Short budget per call; the page calls it in a loop
 // with the same `since` (when the click happened) until nothing remains.
-router.post("/signals/refresh", requireAuth, async (req, res) => {
+router.post("/signals/refresh", requireSignedIn, async (req, res) => {
   const since = Number(req.body?.since);
   res.json(await refreshSignals({ budgetMs: 20000, since: Number.isFinite(since) && since > 0 ? Math.min(since, Date.now()) : null }));
 });

@@ -85,8 +85,10 @@ Works for any ticker. Every tab has its own link.
 
 ### Settings (`#/settings`)
 - Investment policy limits, vote threshold and quorum, the benchmark, and the cash balance.
-- **Members:** each member has a 4–8 digit PIN, hashed with scrypt. Marking a member as alumni at
-  the end of a semester revokes their access and keeps their votes on record.
+- **Members (admins):** add a member (name, email, title), tick "Can trade" for portfolio managers
+  and "Admin" for admins, and copy the one-time invite link (valid 7 days) to send them. The same
+  button makes a password-reset link. Marking a member as alumni signs them out everywhere and keeps
+  their votes on record. Admins also see an activity log of every change to the real fund.
 
 ## Benchmarks
 The fund benchmark is set in **Settings** and drives performance, beta/relative charts and the
@@ -114,20 +116,26 @@ The preset catalogue lives in `lib/benchmarks.js`; adding one is a single line.
 
 ## Access model
 - **Viewing:** open to everyone.
-- **Editing:** holdings, theses, watchlist, transactions, settings and members need the shared
-  `EDIT_PASSWORD` ("Unlock editing").
-- **Voting:** needs an individual member sign-in ("Sign in"), so votes and pitch authorship are
-  attributable.
+- **Members** (signed in with email + password): personal notes, the club chat, preferences
+  (benchmark to compare with, theme, start page, followed tickers), pitches and votes, theses,
+  watchlist, price alerts, paper trading and AI briefs.
+- **Portfolio managers** ("Can trade", set by an admin): positions, transactions, cash and
+  dividends. Their changes show up live on everyone's open pages.
+- **Admins:** members and invites, fund settings (policy limits, voting rules, official benchmark),
+  paper seasons and the activity log.
+- First run: Sign in → "Create the first admin", gated by `EDIT_PASSWORD`. Once an admin exists,
+  `EDIT_PASSWORD` grants nothing.
 
-## AI filing briefs (optional)
-Set `ANTHROPIC_API_KEY` to enable "Summarize with Claude" on the Filings tab.
-- It extracts Risk Factors and MD&A (or the whole text of an 8-K) and asks Claude (Opus 5.5) for
-  a structured brief: bottom line, what changed, key risks, outlook, red flags, and questions to
+## AI features (optional)
+Set `OPENAI_API_KEY` to turn on every AI feature: filing briefs and 10-K change briefs (Research →
+Filings), news scoring (Research news and the Alerts page), and the Today page recap. All use
+`gpt-6-luna` by default; set `OPENAI_MODEL` to change it (or `OPENAI_RECAP_MODEL` for the recap only).
+- Filing briefs extract Risk Factors and MD&A (or the whole text of an 8-K) and ask for a
+  structured brief: bottom line, what changed, key risks, outlook, red flags, and questions to
   ask.
 - Each brief is generated once per filing and cached for 30 days.
-- Generating one requires unlocked editing, so the API credit spend stays with the fund's
-  editors.
-- A typical 10-K brief costs roughly $0.10–0.30.
+- Generating one requires a member sign-in, so the API credit spend stays with the club.
+- Each brief shows its estimated cost (from the API's token counts) next to the model name.
 
 Accessibility: the app targets WCAG 2.2 AA:
 - keyboard-sortable tables and focus management on navigation;
@@ -152,7 +160,7 @@ Accessibility: the app targets WCAG 2.2 AA:
 | SEC EDGAR `submissions` + filing documents | No | Filing list and text for AI briefs |
 | Yahoo `quoteSummary` (earningsTrend, calendarEvents, upgradeDowngradeHistory, institutionOwnership, SPY topHoldings) | No | Street view, ownership, S&P sector weights |
 | Finnhub `stock/metric`, `calendar/earnings` | Free key | Peer comps, earnings calendar |
-| [Anthropic API](https://console.anthropic.com/) | Optional, paid | AI filing briefs |
+| [OpenAI API](https://platform.openai.com/) | Optional, paid | AI filing briefs, news scoring, Today recap |
 
 Any page/feature that needs a missing key degrades gracefully with a clear "needs an API key"
 message rather than erroring — the app is fully usable with just the keyless sources.
@@ -165,10 +173,10 @@ npm start
 ```
 Visit http://localhost:3000.
 
-## Changing the edit password
-Set `EDIT_PASSWORD` in `.env` (local) or as an env var (deployed). Anyone who knows it can click
-"Unlock editing" to add/edit/delete positions, save a thesis, or manage the watchlist. Viewing
-never requires a password.
+## The setup password
+Set `EDIT_PASSWORD` in `.env` (local) or as an env var (deployed). It is used once, to create the
+first admin account; after that, people sign in with their own email and password. Viewing never
+requires a password.
 
 ## Testing
 ```bash
@@ -183,10 +191,14 @@ The tests cover:
 - validation and security: rate limits, headers and HTML escaping.
 
 ## Security notes
-- Set a strong `EDIT_PASSWORD`. The server logs a warning if it's still the default.
-- Edit-password and member-PIN logins are rate limited: 10 failures per 15 minutes per IP, and
-  per member for PINs.
-- PINs are stored as salted scrypt hashes and are never returned by the API.
+- Set a strong `EDIT_PASSWORD` before the first admin is created. The server logs a warning if it's
+  still the default.
+- Sign-in, setup, invite and password changes are rate limited: 10 failures per 15 minutes per IP,
+  and per account for sign-in.
+- Passwords are stored as salted scrypt hashes and are never returned by the API. Sessions are
+  HttpOnly cookies (only a SHA-256 of the token is stored), and every write needs the
+  `x-pif-app: 1` header, so other sites can't submit forms to the API.
+- Chat images are checked by their bytes (JPEG/PNG/WebP only, ≤600 KB) and served only to members.
 - All third-party and user text is HTML-escaped before rendering. AI briefs go through a
   restricted Markdown renderer.
 
