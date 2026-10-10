@@ -35,10 +35,33 @@ router.post("/auth/setup", loginLimiter("setup"), (req, res) => {
   const problem = passwordProblem(password);
   if (problem) return res.status(400).json({ error: problem });
   req.loginSucceeded();
-  const info = db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash, isAdmin, canTrade) VALUES (?, ?, '', ?, ?, 1, 1)")
-    .run(String(name).trim().slice(0, 80), "Admin", e, hashSecret(password));
-  setSessionCookie(res, createSession(info.lastInsertRowid));
-  res.status(201).json({ member: publicMember(db.prepare("SELECT * FROM members WHERE id = ?").get(info.lastInsertRowid)) });
+  const cleanName = String(name).trim().slice(0, 80);
+  // Members from the old PIN system have no password; if the name or email matches one, that
+  // row becomes the admin (keeping their votes and pitches) instead of clashing with it.
+  const existing = db.prepare("SELECT * FROM members WHERE lower(name) = lower(?) OR lower(email) = ?").all(cleanName, e);
+  if (existing.some((m) => m.passwordHash)) return res.status(409).json({ error: "An account with that name or email already exists. Sign in instead." });
+  if (existing.length > 1) return res.status(409).json({ error: "That name and that email belong to two different old members. Use a different name or email." });
+  let id;
+  try {
+    if (existing.length === 1) {
+      id = existing[0].id;
+      db.prepare("UPDATE members SET name = ?, role = 'Admin', email = ?, passwordHash = ?, isAdmin = 1, canTrade = 1, active = 1 WHERE id = ?").run(cleanName, e, hashSecret(password), id);
+    } else {
+      id = db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash, isAdmin, canTrade) VALUES (?, ?, '', ?, ?, 1, 1)")
+        .run(cleanName, "Admin", e, hashSecret(password)).lastInsertRowid;
+    }
+  } catch (err) {
+    console.error("[auth] first-admin setup failed:", err.message);
+    if (String(err).includes("UNIQUE")) return res.status(409).json({ error: "A member with that name or email already exists." });
+    return res.status(500).json({ error: `Couldn't create the account: ${err.message}` });
+  }
+  try {
+    setSessionCookie(res, createSession(Number(id)));
+  } catch (err) {
+    console.error("[auth] first-admin session failed:", err.message);
+    return res.status(500).json({ error: `Your admin account was created, but signing you in failed (${err.message}). Try Sign in.` });
+  }
+  res.status(201).json({ member: publicMember(db.prepare("SELECT * FROM members WHERE id = ?").get(id)) });
 });
 
 // Limited per IP and per email, so one account can't be guessed from many IPs either.

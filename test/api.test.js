@@ -582,3 +582,22 @@ test("paper trading: a reason is required; seasons carry their own rules", async
 test("server log has no unexpected errors (after the newest features)", () => {
   assert.ok(!/TypeError|ReferenceError|SqliteError/.test(s.log()), s.log());
 });
+
+test("first-admin setup takes over an old PIN-era member with the same name", async () => {
+  // Boot once so the schema exists, then add the kind of row the old PIN system left behind.
+  const first = await startServer();
+  await first.stop({ keep: true });
+  const Database = require("libsql");
+  const raw = new Database(first.dbPath);
+  raw.prepare("INSERT INTO members (name, role, pinHash) VALUES ('Old Member', 'analyst', 'salt:hash')").run();
+  raw.close();
+  const t = await startServer({ dir: first.dir });
+  try {
+    const r = await t.api("/api/auth/setup", { method: "POST", body: { setupPassword: PASSWORD, name: "Old Member", email: "old@test.edu", password: ADMIN_PASSWORD } });
+    assert.equal(r.status, 201, r.text);
+    assert.equal(r.body.member.isAdmin, true);
+    assert.ok(r.cookie, "signed in");
+    const again = await t.api("/api/auth/setup", { method: "POST", body: { setupPassword: PASSWORD, name: "Someone", email: "x@test.edu", password: ADMIN_PASSWORD } });
+    assert.equal(again.status, 409);
+  } finally { await t.stop(); }
+});

@@ -8,8 +8,8 @@ const path = require("node:path");
 const PASSWORD = "test-edit-password";       // the server's EDIT_PASSWORD (first-admin setup only)
 const ADMIN_PASSWORD = "test-admin-password";
 
-async function startServer() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pif-test-"));
+// `dir` reuses an existing database folder (to restart against the same data).
+async function startServer({ dir = fs.mkdtempSync(path.join(os.tmpdir(), "pif-test-")) } = {}) {
   const port = 20000 + Math.floor(Math.random() * 20000);
   const child = spawn(process.execPath, ["server.js"], {
     cwd: path.join(__dirname, ".."),
@@ -71,10 +71,12 @@ async function startServer() {
     createMember,
     ensureAdmin,
     log: () => log,
-    async stop() {
+    dir,
+    dbPath: path.join(dir, "test.db"),
+    async stop({ keep = false } = {}) {
       child.kill();
       await new Promise((r) => child.once("exit", r));
-      fs.rmSync(dir, { recursive: true, force: true });
+      if (!keep) fs.rmSync(dir, { recursive: true, force: true });
     },
   };
 }

@@ -453,7 +453,9 @@ export function initChat() {
   btn.addEventListener("click", () => (state.open && panel?.open ? closePanel() : openChat()));
   const sync = () => {
     const on = can("member");
-    btn.classList.toggle("hidden", !on);
+    // Always shown so people know the chat exists; visitors get the sign-in box.
+    btn.classList.remove("hidden");
+    btn.title = on ? "Club chat" : "Club chat (sign in to join)";
     if (!on) { state.loaded = false; state.messages = []; state.members = []; state.open = false; panel?.close(); }
     else refreshUnread();
   };
