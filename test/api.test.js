@@ -681,3 +681,31 @@ test("first-admin setup takes over an old PIN-era member with the same name", as
     assert.equal(again.status, 409);
   } finally { await t.stop(); }
 });
+
+test("admins can delete a test or duplicate account so the person can sign up again", async () => {
+  const t = await startServer();
+  try {
+    const admin = await t.ensureAdmin();
+    const dup = await t.createMember("Dupe", { isAdmin: true, email: "dupe@test.edu" });
+    const tester = await t.createMember("Tess", { email: "tess@test.edu" });
+    // Give the tester some history that doesn't clean itself up on its own.
+    await t.api("/api/chat/messages", { method: "POST", member: tester.cookie, body: { body: "hello @Dupe" } });
+    await t.api("/api/notes", { method: "POST", member: tester.cookie, body: { body: "test note" } });
+    const list = (await t.api("/api/watchlists", { method: "POST", member: tester.cookie, body: { name: "Tess list", visibility: "club" } })).body;
+    await t.api(`/api/watchlists/${list.id}/items`, { method: "POST", member: tester.cookie, body: { symbol: "AAPL" } });
+    assert.equal((await t.api(`/api/members/${tester.id}`, { method: "DELETE", member: tester.cookie })).status, 403, "admins only");
+    assert.equal((await t.api(`/api/members/${tester.id}`, { method: "DELETE", member: admin })).status, 204);
+    assert.equal((await t.api("/api/auth/session", { member: tester.cookie })).body.member, null, "signed out");
+    assert.equal((await t.api("/api/chat/messages", { member: admin })).body.messages.length, 0, "their messages are gone");
+    assert.ok(!(await t.api("/api/watchlists", { member: admin })).body.some((l) => l.name === "Tess list"));
+    // Same name and email can join again.
+    const link = (await t.api("/api/auth/join-link", { method: "POST", member: admin, body: {} })).body.link.token;
+    assert.equal((await t.api(`/api/auth/join/${link}`, { method: "POST", body: { name: "Tess", email: "tess@test.edu", password: "new-password-1" } })).status, 201);
+    // The duplicate admin account can go; you can't delete yourself.
+    const me = (await t.api("/api/auth/session", { member: admin })).body.member;
+    assert.equal((await t.api(`/api/members/${me.id}`, { method: "DELETE", member: admin })).status, 400);
+    assert.equal((await t.api(`/api/members/${dup.id}`, { method: "DELETE", member: admin })).status, 204);
+    assert.equal((await t.api(`/api/members/${dup.id}`, { method: "DELETE", member: admin })).status, 404);
+    assert.ok(!/TypeError|ReferenceError|SqliteError/.test(t.log()), t.log());
+  } finally { await t.stop(); }
+});

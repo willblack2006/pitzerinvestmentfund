@@ -1,4 +1,4 @@
-import { el, esc, api, can, toast, lockedHint, pageHead, loading, errorBox, confirmAction, benchmarkPresets, benchmarkPicker, readBenchmark } from "../shared.js";
+import { el, esc, api, can, currentMember, toast, lockedHint, pageHead, loading, errorBox, confirmAction, benchmarkPresets, benchmarkPicker, readBenchmark } from "../shared.js";
 
 export const title = "Settings";
 
@@ -11,7 +11,7 @@ const POLICY = [
 ];
 
 const ACTION_LABEL = {
-  "member.join": "Joined with the sign-up link", "joinLink.create": "Made a new sign-up link", "joinLink.revoke": "Turned off the sign-up link",
+  "member.join": "Joined with the sign-up link", "joinLink.create": "Made a new sign-up link", "joinLink.revoke": "Turned off the sign-up link", "member.delete": "Deleted an account",
   "position.add": "Added a holding", "position.edit": "Edited a holding", "position.delete": "Removed a holding",
   "transaction.buy": "Bought", "transaction.sell": "Sold", "transaction.dividend": "Recorded a dividend", "transaction.deposit": "Recorded a deposit",
   "transaction.withdrawal": "Recorded a withdrawal", "transaction.fee": "Recorded a fee", "transaction.delete": "Deleted a transaction",
@@ -113,6 +113,7 @@ export async function mount(container) {
               <td><div class="row-actions">
                 ${m.active ? `<button class="btn btn-ghost btn-sm" data-invite="${m.id}" data-name="${esc(m.name)}">${m.hasPassword ? "Password reset link" : "New sign-in link"}</button>` : ""}
                 <button class="btn btn-ghost btn-sm" data-active="${m.id}" data-to="${m.active ? 0 : 1}">${m.active ? "Mark alumni" : "Reactivate"}</button>
+                ${m.id === currentMember()?.id ? "" : `<button class="btn btn-danger btn-sm" data-delete="${m.id}" data-name="${esc(m.name)}" data-email="${esc(m.email || "")}">Delete</button>`}
               </div></td>
             </tr>`).join("")}</tbody>
           </table></div>
@@ -278,6 +279,17 @@ function wireMembers(container) {
         el("inviteOut").innerHTML = inviteBox(inv.dataset.name, r.inviteToken);
         el("inviteOut").scrollIntoView({ block: "nearest" });
         el("inviteOut").querySelector("input").select();
+      } catch (err) { toast(err.message, { type: "error" }); }
+    }
+    const delBtn = e.target.closest("[data-delete]");
+    if (delBtn) {
+      const who = `${delBtn.dataset.name}${delBtn.dataset.email ? ` (${delBtn.dataset.email})` : ""}`;
+      const ok = await confirmAction({ title: `Delete ${who}?`, body: "This permanently removes the account and its notes, chat messages, votes, paper trades, lists and alerts. Pitches they wrote stay. They (or anyone) can then sign up again with that name and email. For someone leaving the club, use Mark alumni instead. This can't be undone.", confirmLabel: "Delete account", danger: true });
+      if (!ok) return;
+      try {
+        await api(`/api/members/${delBtn.dataset.delete}`, { method: "DELETE" });
+        toast(`${delBtn.dataset.name}'s account was deleted.`);
+        mount(container);
       } catch (err) { toast(err.message, { type: "error" }); }
     }
     if (activeBtn) {

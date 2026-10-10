@@ -52,6 +52,30 @@ router.get("/members", requireSignedIn, (req, res) => {
   res.json(rows.map((m) => (req.member.isAdmin ? adminView(m) : { id: m.id, name: m.name, title: m.role || "", active: !!m.active })));
 });
 
+// Permanently delete an account (e.g. a test account, or a duplicate) so the person can sign up
+// fresh. Their notes, chat messages, votes, paper trades, lists and alerts go with it; pitches
+// they wrote stay (under their name) since the club voted on them. For someone leaving the
+// club, "Mark alumni" is the right choice instead: it keeps their record.
+router.delete("/members/:id", requireAdmin, (req, res) => {
+  const m = memberRow(req.params.id);
+  if (!m) return res.status(404).json({ error: "Member not found." });
+  if (m.id === req.member.id) return res.status(400).json({ error: "You can't delete your own account." });
+  const otherAdmins = db.prepare("SELECT COUNT(*) AS c FROM members WHERE isAdmin = 1 AND active = 1 AND id != ?").get(m.id).c;
+  if (m.isAdmin && m.active && otherAdmins === 0) return res.status(400).json({ error: "The club needs at least one active admin." });
+  db.transaction(() => {
+    const msgIds = db.prepare("SELECT id FROM chat_messages WHERE memberId = ?").all(m.id).map((r) => r.id);
+    for (const id of msgIds) db.prepare("DELETE FROM chat_reactions WHERE messageId = ?").run(id);
+    db.prepare("DELETE FROM chat_messages WHERE memberId = ?").run(m.id);
+    db.prepare("DELETE FROM chat_images WHERE memberId = ?").run(m.id);
+    db.prepare("DELETE FROM paper_trades WHERE memberId = ?").run(m.id);
+    db.prepare("UPDATE watchlist_items SET addedBy = NULL WHERE addedBy = ?").run(m.id);
+    db.prepare("UPDATE pitches SET authorId = NULL WHERE authorId = ?").run(m.id);
+    db.prepare("DELETE FROM members WHERE id = ?").run(m.id); // sessions, notes, votes, prefs, lists, alerts cascade
+  })();
+  logActivity(req, "member.delete", { id: m.id, name: m.name, email: m.email });
+  res.status(204).end();
+});
+
 // Add a member and get their one-time invite link (the admin sends it to them).
 router.post("/members", requireAdmin, (req, res) => {
   const { name, email, title = "Analyst", isAdmin = false, canTrade = false } = req.body || {};
