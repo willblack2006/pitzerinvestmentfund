@@ -532,6 +532,7 @@ export async function mount(container, params) {
   // Personal follow list ("My tickers"): shows up in your Today "For you" section.
   const following = getPref("myTickers", []).includes(symbol);
   actions.push(`<button id="followBtn" class="btn btn-ghost" aria-pressed="${following}">${following ? "★ Following" : "☆ Follow"}</button>`);
+  if (unlocked) actions.push(`<button id="listsBtn" type="button" class="btn btn-ghost" aria-haspopup="dialog">☰ Lists</button>`);
 
   const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => k);
 
@@ -596,6 +597,11 @@ export async function mount(container, params) {
   el("addPosBtn")?.addEventListener("click", async () => {
     const { openPositionDialog } = await import("./holdings.js");
     openPositionDialog(null, { symbol, lastPrice: price ?? "" });
+  });
+  el("listsBtn")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget; // currentTarget is cleared once the import below yields
+    const { openListMenu } = await import("../listMenu.js");
+    openListMenu(btn, symbol);
   });
   el("watchBtn")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget;

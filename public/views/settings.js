@@ -11,6 +11,7 @@ const POLICY = [
 ];
 
 const ACTION_LABEL = {
+  "member.join": "Joined with the sign-up link", "joinLink.create": "Made a new sign-up link", "joinLink.revoke": "Turned off the sign-up link",
   "position.add": "Added a holding", "position.edit": "Edited a holding", "position.delete": "Removed a holding",
   "transaction.buy": "Bought", "transaction.sell": "Sold", "transaction.dividend": "Recorded a dividend", "transaction.deposit": "Recorded a deposit",
   "transaction.withdrawal": "Recorded a withdrawal", "transaction.fee": "Recorded a fee", "transaction.delete": "Deleted a transaction",
@@ -21,6 +22,23 @@ export function activityText(a) {
   const d = a.detail || {};
   const what = [d.symbol, d.shares != null ? `${Number(d.shares).toLocaleString("en-US", { maximumFractionDigits: 4 })} sh` : "", d.name].filter(Boolean).join(" · ");
   return `${ACTION_LABEL[a.action] || a.action}${what ? `: ${what}` : ""}`;
+}
+
+const joinUrl = (token) => `${location.origin}${location.pathname}#/join/${token}`;
+const day = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+// The club's shared sign-up link: post it in the group chat; anyone with it joins as an Analyst.
+function joinLinkHtml(link) {
+  const days = `<label class="field-inline">Works for <select id="joinDays"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>`;
+  return `<div class="join-link">
+    <p class="pf-sub">Sign-up link for the club</p>
+    ${link ? `<p class="small">Post this in the group chat. Anyone who opens it can make an account and starts as an <strong>Analyst</strong>; give out other roles below. Works until ${esc(day(link.expiresAt))} · ${link.uses} joined so far.</p>
+      <div class="invite-row"><input type="text" readonly value="${esc(joinUrl(link.token))}" aria-label="Club sign-up link" /><button type="button" class="btn btn-primary btn-sm" data-copy="${esc(joinUrl(link.token))}">Copy link</button></div>
+      <div class="inline-form join-actions">${days}<button type="button" class="btn btn-ghost btn-sm" id="joinNew">Make a new link</button><button type="button" class="btn btn-danger btn-sm" id="joinOff">Turn off</button></div>
+      <p class="muted small">Anyone who gets the link can join, so turn it off (or make a new one) once everyone's in. A new link stops the old one working.</p>`
+    : `<p class="small">Make one link to post in the group chat. Anyone who opens it can create their own account as an Analyst, so you don't have to add people one by one.</p>
+      <div class="inline-form join-actions">${days}<button type="button" class="btn btn-primary btn-sm" id="joinNew">Make a sign-up link</button></div>`}
+  </div>`;
 }
 
 const inviteUrl = (token) => `${location.origin}${location.pathname}#/welcome/${token}`;
@@ -76,8 +94,10 @@ export async function mount(container) {
         </form>
       </section>
       <section class="panel span-full" aria-labelledby="mem-h">
-        <div class="panel-head"><h3 id="mem-h">Members</h3><span class="muted small">${admin ? "Admins add members and send them a one-time sign-in link" : "Club members"}</span></div>
+        <div class="panel-head"><h3 id="mem-h">Members</h3><span class="muted small">${admin ? "Share the sign-up link, or add people one at a time" : "Club members"}</span></div>
         ${!member ? `<p class="muted">Sign in to see the club's members.</p>` : admin ? `
+          <div id="joinLinkBox"></div>
+          <p class="pf-sub">Members</p>
           <div id="inviteOut"></div>
           <div class="table-scroll"><table class="mini-table members-table">
             <caption class="sr-only">Fund members and what they can do</caption>
@@ -208,7 +228,25 @@ export async function mount(container) {
 }
 
 // Admin members table: add, toggle access, titles, sign-in links, alumni.
+async function wireJoinLink() {
+  const box = el("joinLinkBox");
+  if (!box) return;
+  const draw = (link) => {
+    box.innerHTML = joinLinkHtml(link);
+    el("joinNew").addEventListener("click", async () => {
+      if (link && !(await confirmAction({ title: "Make a new sign-up link?", body: "The current link stops working. Anyone who already joined keeps their account.", confirmLabel: "Make new link" }))) return;
+      try { draw((await api("/api/auth/join-link", { method: "POST", body: JSON.stringify({ days: Number(el("joinDays").value) }) })).link); toast("New sign-up link ready. Copy it into the group chat.", { type: "success" }); } catch (err) { toast(err.message, { type: "error" }); }
+    });
+    el("joinOff")?.addEventListener("click", async () => {
+      if (!(await confirmAction({ title: "Turn off the sign-up link?", body: "Nobody new can join with it. Existing accounts aren't affected.", confirmLabel: "Turn off", danger: true }))) return;
+      try { await api("/api/auth/join-link", { method: "DELETE" }); draw(null); toast("Sign-up link turned off."); } catch (err) { toast(err.message, { type: "error" }); }
+    });
+  };
+  try { draw((await api("/api/auth/join-link")).link); } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; }
+}
+
 function wireMembers(container) {
+  wireJoinLink();
   el("addMember").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);

@@ -70,6 +70,7 @@ app.use("/api", require("./routes/chat"));
 app.use("/api", require("./routes/notifications"));
 app.use("/api", require("./routes/myAlerts"));
 app.use("/api", require("./routes/profiles"));
+app.use("/api", require("./routes/watchlists"));
 app.use("/api", positionsRouter);
 app.use("/api", researchRouter);
 app.use("/api", macroRouter);

@@ -22,6 +22,7 @@ const router = initRouter({
   "/research/:symbol/:tab": () => import("./views/research.js"),
   "/screener": () => import("./views/screener.js"),
   "/watchlist": () => import("./views/watchlist.js"),
+  "/watchlist/:key": () => import("./views/watchlist.js"),
   "/pitches": () => import("./views/pitches.js"),
   "/pitches/new": () => import("./views/pitch.js"),
   "/pitches/new/:symbol": () => import("./views/pitch.js"),
@@ -45,6 +46,7 @@ const router = initRouter({
   "/inbox": () => import("./views/inbox.js"),
   "/members/:id": () => import("./views/profile.js"),
   "/welcome/:token": () => import("./views/welcome.js"),
+  "/join/:token": () => import("./views/join.js"),
   "/glossary": () => import("./views/glossary.js"),
 });
 

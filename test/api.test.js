@@ -579,6 +579,86 @@ test("paper trading: a reason is required; seasons carry their own rules", async
   assert.deepEqual(r.mine.pending, []);
 });
 
+test("watchlists: holdings default, fund list, Following, private and shared lists", async () => {
+  // Visitors see the two fund lists only.
+  const pub = (await s.api("/api/watchlists")).body;
+  assert.deepEqual(pub.map((l) => l.key), ["holdings", "fund"]);
+  assert.ok(pub[0].count > 0, "holdings fill themselves");
+  assert.equal((await s.api("/api/watchlists/holdings")).body.items.length, pub[0].count);
+  assert.equal((await s.api("/api/watchlists/following")).status, 401);
+  assert.equal((await s.api("/api/watchlists/holdings/items", { method: "POST", member: tokens.Ana, body: { symbol: "AAPL" } })).status, 403);
+
+  // Ana makes a private list and a shared one.
+  assert.equal((await s.api("/api/watchlists", { method: "POST", member: tokens.Ana, body: { name: "  " } })).status, 400);
+  const priv = (await s.api("/api/watchlists", { method: "POST", member: tokens.Ana, body: { name: "Ana's ideas" } })).body;
+  const club = (await s.api("/api/watchlists", { method: "POST", member: tokens.Ana, body: { name: "Consumer names", visibility: "club" } })).body;
+  assert.deepEqual([priv.visibility, club.visibility, club.canManage], ["private", "club", true]);
+  assert.equal((await s.api(`/api/watchlists/${priv.id}/items`, { method: "POST", member: tokens.Ana, body: { symbol: "$cost", note: "membership" } })).status, 201);
+  assert.equal((await s.api(`/api/watchlists/${priv.id}/items`, { method: "POST", member: tokens.Ana, body: { symbol: "COST" } })).status, 409);
+  assert.equal((await s.api(`/api/watchlists/${priv.id}/items`, { method: "POST", member: tokens.Ana, body: { symbol: "not a ticker" } })).status, 400);
+
+  // Ben sees the shared list (not the private one), can add to it, but can't rename or delete it.
+  const benLists = (await s.api("/api/watchlists?symbol=WMT", { member: tokens.Ben })).body;
+  assert.ok(benLists.some((l) => l.id === club.id) && !benLists.some((l) => l.id === priv.id));
+  assert.equal((await s.api(`/api/watchlists/${priv.id}`, { member: tokens.Ben })).status, 404);
+  assert.equal((await s.api(`/api/watchlists/${priv.id}/items`, { method: "POST", member: tokens.Ben, body: { symbol: "WMT" } })).status, 404);
+  assert.equal((await s.api(`/api/watchlists/${club.id}/items`, { method: "POST", member: tokens.Ben, body: { symbol: "WMT" } })).status, 201);
+  const shared = (await s.api(`/api/watchlists/${club.id}`, { member: tokens.Ana })).body;
+  assert.deepEqual(shared.items.map((i) => [i.symbol, i.addedBy]), [["WMT", "Ben"]]);
+  assert.equal((await s.api("/api/watchlists?symbol=WMT", { member: tokens.Ana })).body.find((l) => l.id === club.id).has, true);
+  assert.equal((await s.api(`/api/watchlists/${club.id}`, { method: "PUT", member: tokens.Ben, body: { name: "Mine now" } })).status, 403);
+  assert.equal((await s.api(`/api/watchlists/${club.id}`, { method: "DELETE", member: tokens.Ben })).status, 403);
+  assert.equal((await s.api(`/api/watchlists/${club.id}/items/WMT`, { method: "DELETE", member: tokens.Ana })).status, 204, "anyone can tidy a shared list");
+  // An admin can rename a shared list but not make it private.
+  assert.equal((await s.api(`/api/watchlists/${club.id}`, { method: "PUT", auth: true, body: { visibility: "private" } })).status, 403);
+  assert.equal((await s.api(`/api/watchlists/${club.id}`, { method: "PUT", auth: true, body: { name: "Consumer staples" } })).body.name, "Consumer staples");
+  // Ana turns her private list into a shared one; now Ben sees it.
+  await s.api(`/api/watchlists/${priv.id}`, { method: "PUT", member: tokens.Ana, body: { visibility: "club" } });
+  assert.equal((await s.api(`/api/watchlists/${priv.id}`, { member: tokens.Ben })).body.items[0].symbol, "COST");
+  assert.equal((await s.api(`/api/watchlists/${priv.id}`, { method: "DELETE", member: tokens.Ana })).status, 204);
+
+  // Following is the same list as the Follow button (the myTickers preference).
+  assert.equal((await s.api("/api/watchlists/following/items", { method: "POST", member: tokens.Cy, body: { symbol: "nvda" } })).status, 201);
+  assert.deepEqual((await s.api("/api/prefs", { member: tokens.Cy })).body.myTickers, ["NVDA"]);
+  assert.equal((await s.api("/api/watchlists/following/items/NVDA", { method: "DELETE", member: tokens.Cy })).status, 204);
+  // The fund watchlist through the new routes.
+  assert.equal((await s.api("/api/watchlists/fund/items", { method: "POST", member: tokens.Cy, body: { symbol: "ZZLW" } })).status, 201);
+  assert.ok((await s.api("/api/watchlist")).body.some((w) => w.symbol === "ZZLW"));
+  assert.equal((await s.api("/api/watchlists/fund/items/ZZLW", { method: "DELETE", member: tokens.Cy })).status, 204);
+});
+
+test("club sign-up link: admin makes it, anyone with it joins as an Analyst, turning it off stops it", async () => {
+  assert.equal((await s.api("/api/auth/join-link", { method: "POST", member: tokens.Ana, body: {} })).status, 403, "admins only");
+  assert.equal((await s.api("/api/auth/join/nope")).status, 404);
+  const made = await s.api("/api/auth/join-link", { method: "POST", auth: true, body: { days: 7 } });
+  assert.equal(made.status, 201);
+  const token = made.body.link.token;
+  assert.equal((await s.api(`/api/auth/join/${token}`)).status, 200);
+  const bad = (body) => s.api(`/api/auth/join/${token}`, { method: "POST", body });
+  assert.equal((await bad({ name: "Dee Dee", email: "nope", password: "long-enough-pw" })).status, 400);
+  assert.equal((await bad({ name: "Dee Dee", email: "dee@test.edu", password: "short" })).status, 400);
+  assert.equal((await bad({ name: "Dee Dee", email: "ana@test.edu", password: "long-enough-pw" })).status, 409, "email already has an account");
+  assert.equal((await bad({ name: "ana", email: "other@test.edu", password: "long-enough-pw" })).status, 409, "name taken (any case)");
+  const joined = await bad({ name: "  Quinn   Quill ", email: "Quinn@Test.edu", password: "long-enough-pw" });
+  assert.equal(joined.status, 201, joined.text);
+  assert.deepEqual([joined.body.member.name, joined.body.member.title, joined.body.member.isAdmin, joined.body.member.canTrade], ["Quinn Quill", "Analyst", false, false]);
+  assert.ok(joined.cookie, "signed in right away");
+  assert.equal((await s.api("/api/paper/seasons", { method: "POST", member: joined.cookie, body: {} })).status, 403, "no admin rights");
+  assert.equal((await s.api("/api/positions", { method: "POST", member: joined.cookie, body: { symbol: "X", shares: 1 } })).status, 403, "no trading");
+  assert.equal((await s.api("/api/chat/messages", { member: joined.cookie })).status, 200, "member features work");
+  assert.equal((await s.api("/api/auth/session", { member: joined.cookie })).body.member.email, "quinn@test.edu");
+  assert.equal((await s.api("/api/auth/join-link", { auth: true })).body.link.uses, 1);
+  // Admins hear about it.
+  assert.ok((await s.api("/api/notifications", { auth: true })).body.items.some((n) => n.type === "memberJoined" && /Quinn Quill/.test(n.title)));
+  // A new link kills the old one; turning off kills everything.
+  const next = (await s.api("/api/auth/join-link", { method: "POST", auth: true, body: {} })).body.link.token;
+  assert.equal((await s.api(`/api/auth/join/${token}`)).status, 404);
+  assert.equal((await s.api(`/api/auth/join/${next}`)).status, 200);
+  assert.equal((await s.api("/api/auth/join-link", { method: "DELETE", auth: true })).status, 204);
+  assert.equal((await s.api(`/api/auth/join/${next}`, { method: "POST", body: { name: "Late Larry", email: "l@test.edu", password: "long-enough-pw" } })).status, 404);
+  assert.equal((await s.api("/api/auth/join-link", { auth: true })).body.link, null);
+});
+
 test("server log has no unexpected errors (after the newest features)", () => {
   assert.ok(!/TypeError|ReferenceError|SqliteError/.test(s.log()), s.log());
 });

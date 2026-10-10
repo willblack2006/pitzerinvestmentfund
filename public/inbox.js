@@ -3,9 +3,9 @@
 import { el, esc, api, toast, can } from "./shared.js";
 
 const state = { items: [], unread: 0, hasMore: false, loaded: false, fundAlerts: 0 };
-const ICON = { mention: "@", pitchVoting: "🗳", pitchResult: "✅", fundTrade: "💼", priceAlert: "📈", paperOrder: "🧪" };
+const ICON = { mention: "@", pitchVoting: "🗳", pitchResult: "✅", fundTrade: "💼", priceAlert: "📈", paperOrder: "🧪", memberJoined: "👋" };
 // Types that have no other live toast of their own (chat mentions and fund trades already do).
-const TOAST = new Set(["pitchVoting", "pitchResult", "priceAlert", "paperOrder"]);
+const TOAST = new Set(["pitchVoting", "pitchResult", "priceAlert", "paperOrder", "memberJoined"]);
 
 const ago = (utc) => {
   const mins = Math.round((Date.now() - Date.parse(`${utc.replace(" ", "T")}Z`)) / 60000);

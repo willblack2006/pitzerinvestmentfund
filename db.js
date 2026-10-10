@@ -390,6 +390,45 @@ addColumn("paper_trades", "horizon", "TEXT NOT NULL DEFAULT ''");
 addColumn("paper_trades", "filledAt", "TEXT");
 addColumn("paper_trades", "cancelReason", "TEXT NOT NULL DEFAULT ''");
 
+// Watchlists beyond the fund's own (2026-10-09): any member can make a list, private to them or
+// shared with the club (any member can add to a shared list; only its creator or an admin can
+// rename or delete it). The fund's watchlist stays in the "watchlist" table, which the analysis
+// pages use as their universe.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS watchlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','club')),
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS watchlist_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listId INTEGER NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    addedBy INTEGER,
+    addedAt TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (listId, symbol)
+  );
+`);
+
+// Club sign-up link (2026-10-10): an admin shares one link (e.g. in the group chat) and anyone
+// with it creates their own account as an Analyst. One link is live at a time; making a new
+// one or turning it off kills the old one. Stored as-is so the admin can copy it again.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS join_links (
+    token TEXT PRIMARY KEY,
+    createdBy INTEGER,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    expiresAt TEXT NOT NULL,
+    revokedAt TEXT,
+    uses INTEGER NOT NULL DEFAULT 0
+  );
+`);
+
 // Personal notifications (the inbox) and personal price alerts.
 addColumn("pitches", "authorId", "INTEGER");
 db.exec(`
