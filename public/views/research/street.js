@@ -38,7 +38,7 @@ function estimatesTable(est) {
           return `<tr>
             <th scope="row">${PERIOD[e.period] || esc(e.period)}<div class="muted small">ends ${esc(e.endDate || "")}</div></th>
             <td class="num">${e.epsAvg != null ? `$${e.epsAvg.toFixed(2)}` : "—"}</td>
-            <td class="num small muted">${e.epsLow != null ? `$${e.epsLow.toFixed(2)}–$${e.epsHigh.toFixed(2)}` : "—"}</td>
+            <td class="num small muted">${e.epsLow != null ? `$${e.epsLow.toFixed(2)} to $${e.epsHigh.toFixed(2)}` : "—"}</td>
             <td class="num">${e.growth != null ? signed(e.growth * 100, fmtPct(e.growth * 100)) : "—"}</td>
             <td class="num">${fmtMoneyCompact(e.revenueAvg)}</td>
             <td class="num">${drift === null ? "—" : signed(drift, fmtPct(drift))}</td>

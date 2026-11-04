@@ -1,4 +1,4 @@
-import { esc, fundContext, recentTickers, pageHead, loading } from "../shared.js";
+import { esc, fundContext, recentTickers, pageHead, skeleton } from "../shared.js";
 
 export const title = "Research";
 
@@ -6,7 +6,7 @@ const chip = (s, extra = "") =>
   `<a class="chip" href="#/research/${encodeURIComponent(s)}">${esc(s)}${extra}</a>`;
 
 export async function mount(container) {
-  container.innerHTML = loading("Loading…");
+  container.innerHTML = skeleton("cards", { rows: 4, label: "Loading" });
   const ctx = await fundContext(true);
   const recent = recentTickers();
 
@@ -15,7 +15,7 @@ export async function mount(container) {
     <form class="hero-search" id="heroSearch" role="search">
       <label for="heroInput" class="hero-label">Which company are you researching?</label>
       <div class="hero-row">
-        <input id="heroInput" type="search" list="tickerOptions" placeholder="e.g. AAPL, MSFT, BRK.B" autocomplete="off" spellcheck="false" maxlength="10" />
+        <input id="heroInput" type="search" data-ticker data-ticker-go placeholder="e.g. AAPL, Hershey, Berkshire" autocomplete="off" spellcheck="false" maxlength="10" />
         <button class="btn btn-primary" type="submit">Research</button>
       </div>
     </form>
@@ -33,7 +33,7 @@ export async function mount(container) {
 
     <section class="panel page-pad-panel" aria-labelledby="watch-h">
       <h3 id="watch-h">On the watchlist <span class="muted small">(${ctx.watchlist.length})</span></h3>
-      <div class="chip-list">${ctx.watchlist.map((w) => chip(w.symbol)).join("") || `<p class="muted">Nothing yet — <a href="#/screener">find ideas</a>.</p>`}</div>
+      <div class="chip-list">${ctx.watchlist.map((w) => chip(w.symbol)).join("") || `<p class="muted">Nothing yet: <a href="#/screener">find ideas</a>.</p>`}</div>
     </section>
   `;
 

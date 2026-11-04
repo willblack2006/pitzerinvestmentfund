@@ -1,0 +1,89 @@
+/* App shell: header, search, account menu, scrolling tab bars. Loads after style.css and overrides its header rules. */
+
+:root { --topbar-h: 57px; }
+
+/* ---- Header, wide: one row (mark, nav, search, actions) ---- */
+.topbar { flex-wrap: nowrap; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--gutter); min-width: 0; }
+.brand-name { display: none; }
+@media (min-width: 1320px) { .brand-name { display: inline; } }
+.brand { flex: none; }
+.nav { flex: none; order: 0; width: auto; margin: 0; padding: 0; overflow: visible; }
+.nav-link { flex: none; min-height: 40px; padding: 8px 12px; border-radius: var(--r-md); }
+.nav-link.active { background: var(--surface-1); }
+@media (max-width: 1100px) { .nav-link { padding: 8px 10px; } }
+
+.search-toggle, .jump-back { display: none; }
+.jump-form { order: 0; flex: 1 1 160px; min-width: 120px; max-width: 320px; margin-left: auto; gap: 0; }
+.jump-field { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.jump-field input { width: 100%; padding-left: 34px; padding-right: 34px; }
+.jump-icon { position: absolute; left: 11px; color: var(--text-2); pointer-events: none; }
+.jump-kbd {
+  position: absolute; right: 9px; min-width: 20px; padding: 1px 6px; text-align: center;
+  font: inherit; font-size: var(--fs-xs); line-height: 18px; color: var(--text-2);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); pointer-events: none;
+}
+.jump-field input:focus ~ .jump-kbd, .jump-field input:not(:placeholder-shown) ~ .jump-kbd { display: none; }
+@media (hover: none) { .jump-kbd { display: none; } }
+.jump-field input[type="search"]::-webkit-search-cancel-button { display: none; }
+
+.auth-area { order: 0; flex: none; gap: var(--sp-1); }
+.icon-btn { width: 40px; height: 40px; color: var(--text); }
+.icon-btn .icon, .account-btn .icon { display: block; }
+.account-btn.is-guest { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.account-btn:hover { filter: brightness(1.08); }
+.auth-area .btn { white-space: nowrap; }
+
+/* ---- Header, compact (900px and under): row 1 is mark + search icon + bell + menu; nav sits under it ---- */
+@media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; gap: 0 var(--sp-1); padding: 0 var(--gutter); }
+  .brand { order: 1; min-height: 52px; }
+  .search-toggle { display: inline-grid; order: 2; margin-left: auto; }
+  .auth-area { order: 3; min-height: 52px; }
+  .chat-btn, #signInBtn { display: none !important; }   /* both are in the menu */
+  .nav { order: 4; flex: 1 0 100%; width: auto; margin: 0 calc(var(--gutter) * -1); padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; border-top: 1px solid var(--border); }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-link { flex: 1 0 auto; justify-content: center; min-height: 40px; border-radius: 0; }
+  .nav-link.active { background: transparent; }
+
+  /* Search opens over the whole first row */
+  .jump-form {
+    display: none; position: absolute; top: 0; left: 0; right: 0; height: 52px; z-index: 2;
+    max-width: none; min-width: 0; margin: 0; padding: 0 var(--gutter) 0 var(--sp-1); align-items: center; gap: var(--sp-1);
+    background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .topbar.searching .jump-form { display: flex; }
+  .jump-back { display: inline-grid; flex: none; }
+  .jump-field input { min-height: 40px; }
+}
+
+/* ---- Account and inbox menus (inside the shared popover) ---- */
+.account-menu-body { padding: var(--sp-2); }
+.account-menu-body .account-who { margin: var(--sp-1) var(--sp-2) var(--sp-2); }
+.account-item { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.account-item .icon { flex: none; color: var(--text-2); }
+.account-sep { border: 0; border-top: 1px solid var(--border); margin: var(--sp-1) 0; }
+.inbox-fund .icon { vertical-align: -2px; }
+.inbox-icon .icon { display: block; }
+.ui-pop .inbox-head { padding-top: var(--sp-1); }
+
+/* ---- Ticker picker: Recent / Holdings headings ---- */
+.tp-list li.tp-group {
+  display: block; padding: 8px 10px 4px; cursor: default; font-size: var(--fs-xs); font-weight: 600;
+  color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.tp-list li.tp-group:hover { background: none; outline: 0; }
+
+/* ---- Sticky bars under the header follow its real height (set in app.js) ---- */
+.tabnav, .jump-nav { top: var(--topbar-h); }
+.research-side { top: calc(var(--topbar-h) + var(--sp-4)); }
+.list-picker { top: calc(var(--topbar-h) + var(--sp-4)); }
+
+/* ---- Scrolling tab bars: fade an edge when more is hidden past it ---- */
+.scroll-fade { --fade-start: 0px; --fade-end: 0px; }
+.scroll-fade.fade-start { --fade-start: 28px; }
+.scroll-fade.fade-end { --fade-end: 28px; }
+.scroll-fade.fade-start, .scroll-fade.fade-end {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
+}
+.subtabs, .tabnav { overscroll-behavior-x: contain; }

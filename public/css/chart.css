@@ -1,0 +1,114 @@
+/* chart page styles (product experience pass). Uses the tokens from style.css. */
+
+/* ---- Research price chart toolbar (public/priceTerminal.js) ---- */
+/* One row. On narrow screens it scrolls sideways inside itself, never the page. */
+.ct-toolbar {
+  position: relative; display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-2);
+  margin-bottom: var(--sp-2); padding: 2px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin;
+}
+.ct-toolbar > * { flex: none; }
+.ct-toolbar-end { margin-left: auto; display: inline-flex; gap: 2px; }
+
+.ct-seg {
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.ct-seg-btn {
+  appearance: none; border: 0; background: transparent; color: var(--text-2); font: inherit;
+  font-size: var(--fs-sm); font-weight: 600; height: 28px; padding: 0 10px; border-radius: 6px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 2px; white-space: nowrap;
+}
+.ct-seg-btn:hover { color: var(--text); }
+.ct-seg-btn[aria-pressed="true"] { background: var(--surface-1); color: var(--text); box-shadow: var(--shadow); }
+.ct-seg-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ct-more .icon { opacity: 0.7; }
+
+.ct-icon-btn {
+  appearance: none; height: 34px; min-width: 34px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  border: 1px solid transparent; border-radius: var(--r-md); background: transparent; color: var(--text-2); cursor: pointer;
+}
+.ct-icon-btn:hover { background: var(--surface-3); color: var(--text); }
+.ct-icon-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ct-icon-btn[aria-pressed="true"] { color: var(--accent); }
+.ct-type-btn { border-color: var(--border); }
+.ct-menu-btn { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ct-menu-btn[aria-expanded="true"], .ct-icon-btn[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }
+
+/* Small menus (More, chart type, Display) inside the shared popover */
+.ct-menu { display: flex; flex-direction: column; padding: var(--sp-1); }
+.ct-menu-item {
+  appearance: none; display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 36px;
+  padding: 6px var(--sp-2); border: 0; border-radius: var(--r-md); background: transparent; color: var(--text);
+  font: inherit; font-size: var(--fs-md); text-align: left; cursor: pointer;
+}
+.ct-menu-item:hover { background: var(--surface-3); }
+.ct-menu-item:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ct-menu-pic { color: var(--text-2); display: inline-flex; }
+.ct-menu-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ct-menu-sub { font-size: var(--fs-xs); color: var(--text-2); }
+.ct-menu-check { width: 16px; color: var(--accent); display: inline-flex; }
+
+/* Indicators and Compare popovers */
+.ct-ind-pop, .ct-cmp-pop { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.ct-ind-pop .ui-pick, .ct-cmp-pop .ui-pick { flex: 1 1 auto; min-height: 0; }
+.ct-ind-pop .ui-pick-list, .ct-cmp-pop .ui-pick-list { max-height: 360px; }
+.ct-ind-pop .ui-pick-desc { white-space: normal; }
+.ct-ind-pop .ui-pick-right .term-btn { min-width: 22px; width: 22px; height: 22px; margin-left: 0; padding: 0; border-radius: 50%; }
+.ct-pick-count {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-full); display: inline-grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 700;
+}
+.ct-pop-note { margin: 0; padding: 0 var(--sp-3); min-height: 0; font-size: var(--fs-sm); color: var(--positive, var(--green)); font-weight: 600; }
+.ct-pop-note:empty { display: none; }
+.ct-pop-note:not(:empty) { padding-block: var(--sp-2); border-top: 1px solid var(--border); }
+.ct-pop-foot { margin: 0; padding: var(--sp-2) var(--sp-3) var(--sp-3); font-size: var(--fs-xs); color: var(--text-2); border-top: 1px solid var(--border); }
+
+/* Indicator settings popover */
+.ct-set { display: grid; gap: var(--sp-3); padding: var(--sp-3); }
+.ct-set-title { margin: 0; font-weight: 650; }
+.ct-set-field { display: grid; gap: 4px; font-size: var(--fs-sm); }
+.ct-set-field > span { display: flex; justify-content: space-between; gap: var(--sp-2); }
+.ct-set-range { color: var(--text-2); font-size: var(--fs-xs); }
+.ct-set-field input { width: 100%; min-height: 34px; }
+.ct-set-none { margin: 0; color: var(--text-2); font-size: var(--fs-sm); }
+.ct-set-err { margin: 0; color: var(--negative, var(--red)); font-size: var(--fs-sm); }
+.ct-set-err:empty { display: none; }
+.ct-set-actions { display: flex; gap: var(--sp-2); }
+.ct-set-actions .btn { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Chips above the chart: the name opens settings, the x removes */
+.ct-chip { padding: 0 2px 0 0; gap: 0; background: var(--surface-1); }
+.ct-chip-main {
+  appearance: none; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-xs); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: var(--r-full); min-height: 26px;
+}
+button.ct-chip-main { cursor: pointer; }
+button.ct-chip-main:hover, button.ct-chip-main[aria-expanded="true"] { background: var(--surface-3); }
+.ct-chip-main:focus-visible, .ct-chip-x:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ct-chip-x { display: inline-grid; place-items: center; padding: 4px; min-width: 24px; min-height: 24px; }
+
+/* Indicator names in the legend open settings too (mouse only; the chips are the keyboard path) */
+.ct-lg-ind[data-ind] { pointer-events: auto; cursor: pointer; border-radius: var(--r-sm); padding: 0 2px; }
+.ct-lg-ind[data-ind]:hover { background: var(--surface-3); color: var(--text); }
+
+/* Drawing tools, hint line and the selected-drawing toolbar */
+.ct-tool { color: var(--text-2); }
+.ct-tool .icon { display: block; }
+.ct-hint { margin: 6px 0 0 42px; min-height: 1.4em; color: var(--text-2); }
+.ct-hint.is-empty { visibility: hidden; }
+.ct-float {
+  position: absolute; z-index: 4; display: flex; gap: 2px; padding: 2px;
+  background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--r-md); box-shadow: var(--shadow);
+}
+.ct-float .btn { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
+
+/* Full screen: popovers must sit above the full-screen panel (z-index 900) */
+body.ct-max-open .ui-pop { z-index: 1000; }
+
+@media (max-width: 700px) {
+  .ct-hint { margin-left: 0; }
+}
+@media (max-width: 600px) {
+  .ct-ind-pop .ui-pick-list, .ct-cmp-pop .ui-pick-list { max-height: none; }
+  .ct-seg-btn { height: 34px; }
+}

@@ -1,9 +1,8 @@
-import { el, esc, api, pageHead, loading, errorBox, subTabs } from "../shared.js";
+import { el, esc, api, pageHead, subTabs, errorState, bindRetry, skeleton } from "../shared.js";
 import { MARKET_TABS } from "./insiders.js";
+import { sparkline, destroyAllTv } from "../tvchart.js";
 
 export const title = "Macro backdrop";
-
-const chartInstances = [];
 
 // Fallback labels for series the server couldn't load (it only sends labels with data).
 const LABELS = {
@@ -13,34 +12,6 @@ const LABELS = {
   treasury10y: "10-year Treasury yield",
 };
 const labelFor = (key) => LABELS[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
-
-function sparkline(canvas, observations) {
-  if (typeof Chart === "undefined") return;
-  const css = getComputedStyle(document.documentElement);
-  chartInstances.push(new Chart(canvas, {
-    type: "line",
-    data: {
-      labels: observations.map((o) => o.date),
-      datasets: [{
-        data: observations.map((o) => o.value),
-        borderColor: css.getPropertyValue("--chart-line").trim(),
-        backgroundColor: css.getPropertyValue("--chart-fill").trim(),
-        fill: true,
-        pointRadius: 0,
-        borderWidth: 2,
-        tension: 0.2,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: matchMedia("(prefers-reduced-motion: reduce)").matches ? false : undefined,
-      interaction: { mode: "index", intersect: false },
-      plugins: { legend: { display: false }, tooltip: { enabled: true } },
-      scales: { x: { display: false }, y: { display: false } },
-    },
-  }));
-}
 
 // CPI arrives as an index level (e.g. 334.1), which means nothing on its own. Convert it to
 // year-over-year inflation, which is the number analysts actually quote.
@@ -58,7 +29,7 @@ function card(key, series) {
     return `
       <section class="panel macro-card">
         <h3>${esc(labelFor(key))}</h3>
-        <p class="muted small">Not available — the server needs a FRED API key.</p>
+        <p class="muted small">Not available: the server needs a FRED API key.</p>
       </section>`;
   }
   const obs = series.observations;
@@ -83,15 +54,16 @@ function card(key, series) {
 }
 
 export async function mount(container) {
-  container.innerHTML = subTabs(MARKET_TABS, "#/macro") + loading("Loading macro data…");
-  chartInstances.splice(0).forEach((c) => c.destroy());
+  container.innerHTML = subTabs(MARKET_TABS, "#/macro") + skeleton("cards", { label: "Loading macro data" });
+  destroyAllTv();
 
   let series;
   try {
     series = await api("/api/macro");
     if (series.cpi) series.cpi = toYoY(series.cpi);
   } catch (err) {
-    container.innerHTML = subTabs(MARKET_TABS, "#/macro") + pageHead("Macro backdrop") + errorBox(`Could not load macro data: ${err.message}`);
+    container.innerHTML = subTabs(MARKET_TABS, "#/macro") + pageHead("Macro backdrop") + errorState({ title: "Couldn't load macro data.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
 
@@ -101,10 +73,10 @@ export async function mount(container) {
     <div class="macro-grid">
       ${Object.entries(series).map(([key, s]) => card(key, s)).join("")}
     </div>
-    ${typeof Chart === "undefined" ? `<p class="muted small page-pad">Charts couldn't load (offline or blocked CDN); the latest values above are still current.</p>` : ""}
+    <p class="muted small page-pad">Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts<span class="sr-only"> (opens in a new tab)</span></a>.</p>
   `;
 
   Object.entries(series).forEach(([key, s]) => {
-    if (s) sparkline(el(`spark-${key}`), s.observations);
+    if (s) sparkline(el(`spark-${key}`), { times: s.observations.map((o) => o.date), values: s.observations.map((o) => o.value) });
   });
 }

@@ -1,5 +1,6 @@
-import { el, esc, api, fmtUSD, fmtPct, fmtRatio, fmtX, loading, signed, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, benchParam } from "../../shared.js";
+import { el, esc, api, fmtUSD, fmtPct, fmtRatio, fmtX, signed, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, benchParam, skeleton, errorState, bindRetry } from "../../shared.js";
 import { lineChart, barChart } from "../../charts.js";
+import { timeChart } from "../../tvchart.js";
 import { shortBadge, shortMeter } from "../shortSignal.js";
 import { term } from "../../glossary.js";
 
@@ -16,7 +17,10 @@ async function loadShortPressure(symbol) {
   try {
     sp = await api(`/api/short-pressure/${encodeURIComponent(symbol)}`);
   } catch (err) {
-    if (el("shortPressureBody")) box.innerHTML = `<p class="muted">Couldn't score short pressure: ${esc(err.message)}</p>`;
+    if (el("shortPressureBody")) {
+      box.innerHTML = errorState({ title: "Couldn't score short pressure.", detail: err.message, retryId: "load" });
+      bindRetry(box, "load", () => { box.innerHTML = skeleton("text", { rows: 3, label: "Trying again" }); loadShortPressure(symbol); });
+    }
     return;
   }
   if (!el("shortPressureBody")) return;
@@ -43,8 +47,8 @@ async function loadShortPressure(symbol) {
     ` : `<p class="muted small">Not enough recent FINRA short-volume data for a trend chart.</p>`}
     <details class="explainer small">
       <summary>How this score works</summary>
-      <p>Combines days-to-cover (short interest ÷ average daily volume) and short interest as a share of the float, both from Yahoo, plus whether short interest is rising or falling vs the prior month. A crowded short — high days-to-cover and rising short interest — has historically predicted underperformance (Hong, Li, Ni, Scheinkman &amp; Wang, NBER w21166); a long-only fund that simply avoids or trims these names can capture that without paying a short-seller's borrow fees (Muravyev, Pearson &amp; Pollet, <em>Journal of Financial Economics</em>, 2025).
-      The FINRA daily short-volume line is <strong>not</strong> the same thing as short interest — it's mostly market-maker and arbitrage order flow required to be marked "short," not a bet against the stock — so it's shown only as a secondary trend, not scored heavily. A statistical tendency across many stocks, not a prediction for this one.</p>
+      <p>Combines days-to-cover (short interest ÷ average daily volume) and short interest as a share of the float, both from Yahoo, plus whether short interest is rising or falling vs the prior month. A crowded short (high days-to-cover and rising short interest) has historically predicted underperformance (Hong, Li, Ni, Scheinkman &amp; Wang, NBER w21166); a long-only fund that simply avoids or trims these names can capture that without paying a short-seller's borrow fees (Muravyev, Pearson &amp; Pollet, <em>Journal of Financial Economics</em>, 2025).
+      The FINRA daily short-volume line is <strong>not</strong> the same thing as short interest: it's mostly market-maker and arbitrage order flow required to be marked "short," not a bet against the stock, so it's shown only as a secondary trend, not scored heavily. A statistical tendency across many stocks, not a prediction for this one.</p>
     </details>`;
   if (sp.finra.length >= 5) {
     lineChart(el("finraChart"), {
@@ -58,7 +62,7 @@ async function loadShortPressure(symbol) {
 export async function render(c, ctx) {
   const { symbol, data, price } = ctx;
   const t = data.technicals;
-  c.innerHTML = loading("Comparing with the market…");
+  c.innerHTML = skeleton("chart", { label: "Comparing with the market" });
   let r, presets;
   try {
     [r, presets] = await Promise.all([
@@ -66,7 +70,8 @@ export async function render(c, ctx) {
       benchmarkPresets(),
     ]);
   } catch (err) {
-    c.innerHTML = `<p class="muted page-pad">Couldn't load risk data: ${esc(err.message)}</p>`;
+    c.innerHTML = errorState({ title: "Couldn't load risk data.", detail: err.message, retryId: "load" });
+    bindRetry(c, "load", () => render(c, ctx));
     return;
   }
   const p = r.profile;
@@ -101,6 +106,16 @@ export async function render(c, ctx) {
           <div><span class="muted small">${term("informationRatio")}</span><strong>${f2(p.informationRatio, 2)}</strong></div>
         </div>
       </section>
+      <section class="panel span-full" aria-labelledby="roll-h">
+        <div class="panel-head">
+          <h3 id="roll-h">Beta and correlation over time</h3>
+          <div class="seg" role="group" aria-label="Rolling window">
+            <button type="button" class="seg-btn" data-win="63" aria-pressed="false">3 months</button>
+            <button type="button" class="seg-btn" data-win="126" aria-pressed="true">6 months</button>
+          </div>
+        </div>
+        <div id="rollBody"></div>
+      </section>
       <section class="panel" aria-labelledby="tech-h">
         <h3 id="tech-h">Trend</h3>
         ${t?.sma50 ? `
@@ -113,11 +128,11 @@ export async function render(c, ctx) {
       </section>
       <section class="panel span-full" aria-labelledby="sp-h">
         <div class="panel-head"><h3 id="sp-h">Short interest &amp; crowding score</h3><span class="muted small"><a href="#/short-interest">compare across holdings →</a></span></div>
-        <div id="shortPressureBody">${loading("Scoring short pressure…")}</div>
+        <div id="shortPressureBody">${skeleton("cards", { rows: 3, label: "Scoring short pressure" })}</div>
       </section>
       <section class="panel span-full" aria-labelledby="br-h">
         <div class="panel-head"><h3 id="br-h">Base rate: stocks like this one</h3><span class="muted small">1-year forward returns for similar sector/size/valuation names</span></div>
-        <div id="baseRateBody">${loading("Finding comparable stocks and pooling their history…")}</div>
+        <div id="baseRateBody">${skeleton("cards", { rows: 3, label: "Finding comparable stocks and pooling their history" })}</div>
       </section>
       <section class="panel" aria-labelledby="te-h">
         <h3 id="te-h">Vs the benchmark</h3>
@@ -136,8 +151,53 @@ export async function render(c, ctx) {
   ];
   if (p.series.sector) ds.push({ label: `${r.sectorEtf} (sector)`, data: p.series.sector, color: "--s3", dash: [2, 3] });
   lineChart(el("relChart"), { labels: p.series.dates, datasets: ds, yFormat: (v) => Number(v).toFixed(0) });
+  const showRolling = (win) => {
+    c.querySelectorAll("[data-win]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.win === String(win))));
+    renderRolling(symbol, r, p, win);
+  };
+  c.querySelectorAll("[data-win]").forEach((b) => b.addEventListener("click", () => showRolling(b.dataset.win)));
+  showRolling(126);
   loadShortPressure(symbol);
   loadBaseRate(symbol);
+}
+
+// Rolling beta (top pane) and correlation (bottom pane) against the benchmark, with the
+// full two-year values as dashed reference lines and a one-line verdict on the trend.
+function renderRolling(symbol, r, p, win) {
+  const box = el("rollBody");
+  if (!box) return;
+  const roll = r.rolling?.[win];
+  if (!roll?.dates?.length) {
+    box.innerHTML = `<p class="muted small">Not enough overlapping history with ${esc(r.benchmark)} for a ${win === "63" || win === 63 ? "3" : "6"}-month window.</p>`;
+    return;
+  }
+  const t = roll.trend;
+  const months = Number(win) === 63 ? 3 : 6;
+  const label = `${symbol}'s ${months}-month rolling beta and correlation with ${r.benchmark} from ${roll.dates[0]} to ${roll.dates.at(-1)}. Beta now ${f2(roll.beta.at(-1))} (two-year ${f2(p.beta)}); correlation now ${f2(roll.correlation.at(-1))} (two-year ${f2(p.correlation)}).${t ? ` ${t.text}` : ""}`;
+  box.innerHTML = `
+    ${t ? `<p class="roll-verdict tone-${t.direction === "up" ? "warn" : t.direction === "down" ? "good" : "neutral"}"><span aria-hidden="true">${t.direction === "up" ? "▲" : t.direction === "down" ? "▼" : "■"}</span> ${esc(t.text)}</p>` : ""}
+    <div class="kv-grid kv-4">
+      <div><span class="muted small">${term("rollingBeta", "Beta")} now</span><strong>${f2(roll.beta.at(-1))}</strong></div>
+      <div><span class="muted small">Beta a year ago</span><strong>${t ? f2(t.betaThen) : "—"}</strong></div>
+      <div><span class="muted small">${term("rollingCorrelation", "Correlation")} now</span><strong>${f2(roll.correlation.at(-1))}</strong></div>
+      <div><span class="muted small">Correlation a year ago</span><strong>${t ? f2(t.corrThen) : "—"}</strong></div>
+    </div>
+    <div class="chart-box chart-box-tall"><div id="rollChart" role="img" aria-label="${esc(label)}"></div></div>
+    <p class="muted small">Each point uses the ${months} months of daily returns before it. Beta above 1 means it has amplified ${esc(r.benchmark)}'s moves over that window; correlation near 1 means it moves in step with it (less diversification for the fund). Dashed lines are the full two-year values.</p>`;
+  timeChart(el("rollChart"), {
+    series: [
+      { label: `Beta vs ${r.benchmark}`, times: roll.dates, values: roll.beta, color: "--s1" },
+      { label: "Correlation", times: roll.dates, values: roll.correlation, color: "--s3", pane: 1 },
+    ],
+    refLines: [
+      { series: 0, price: p.beta, label: "2y beta" },
+      { series: 1, price: p.correlation, label: "2y corr" },
+    ],
+    yFormat: (v) => v.toFixed(2),
+    legend: true,
+    panes: [{ stretch: 1 }, { stretch: 1 }],
+    caption: label,
+  });
 }
 
 async function loadBaseRate(symbol) {
@@ -147,7 +207,10 @@ async function loadBaseRate(symbol) {
   try {
     r = await api(`/api/research/${encodeURIComponent(symbol)}/base-rate`);
   } catch (err) {
-    if (el("baseRateBody")) box.innerHTML = `<p class="muted">Couldn't build a base rate: ${esc(err.message)}</p>`;
+    if (el("baseRateBody")) {
+      box.innerHTML = errorState({ title: "Couldn't build a base rate.", detail: err.message, retryId: "load" });
+      bindRetry(box, "load", () => { box.innerHTML = skeleton("text", { rows: 3, label: "Trying again" }); loadBaseRate(symbol); });
+    }
     return;
   }
   if (!el("baseRateBody")) return;
@@ -159,7 +222,7 @@ async function loadBaseRate(symbol) {
     <div class="kv-grid kv-4">
       <div><span class="muted small">Median 1-year return</span><strong>${fmtPct(s.median * 100)}</strong></div>
       <div><span class="muted small">Share of years positive</span><strong>${fmtRatio(s.pctPositive, 0)}</strong></div>
-      <div><span class="muted small">Typical range (10th–90th pct)</span><strong>${fmtPct(s.p10 * 100)} to ${fmtPct(s.p90 * 100)}</strong></div>
+      <div><span class="muted small">Typical range (10th to 90th pct)</span><strong>${fmtPct(s.p10 * 100)} to ${fmtPct(s.p90 * 100)}</strong></div>
       <div><span class="muted small">Sample</span><strong>${r.companies} companies × up to 5 years</strong></div>
     </div>
     <div class="chart-box"><canvas id="baseRateChart" role="img" aria-label="${esc(`Distribution of 1-year returns for ${r.companies} comparable companies: median ${fmtPct(s.median * 100)}, 10th percentile ${fmtPct(s.p10 * 100)}, 90th percentile ${fmtPct(s.p90 * 100)}.`)}"></canvas></div>

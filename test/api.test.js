@@ -709,3 +709,26 @@ test("admins can delete a test or duplicate account so the person can sign up ag
     assert.ok(!/TypeError|ReferenceError|SqliteError/.test(t.log()), t.log());
   } finally { await t.stop(); }
 });
+
+test("symbol search, chart bars and red-flag endpoints degrade cleanly", async () => {
+  const empty = await s.api("/api/symbols/search?q=");
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.body.results, []);
+  const q = await s.api("/api/symbols/search?q=hershey");
+  assert.equal(q.status, 200);
+  assert.ok(Array.isArray(q.body.results), "offline still answers with a list");
+  assert.equal((await s.api("/api/research/HSY/bars?frame=7Y")).status, 400, "unknown timeframe");
+  const bars = await s.api("/api/research/HSY/bars?frame=1Y");
+  assert.equal(bars.status, 200);
+  assert.ok(Array.isArray(bars.body.bars));
+  assert.ok(bars.body.visibleFrom, "daily frames say where the window starts");
+  const rf = await s.api("/api/research/HSY/red-flags");
+  assert.equal(rf.status, 200);
+  assert.ok(Array.isArray(rf.body.flags) && rf.body.status && Array.isArray(rf.body.checks));
+  // Chart preferences are validated like every other pref.
+  const cookie = await s.ensureAdmin();
+  const saved = await s.api("/api/prefs", { method: "PUT", member: cookie, body: { chartSettings: { frame: "nope", type: "candles", indicators: [{ id: "rsi", params: { n: 9999 } }, { id: "evil" }] }, chartDrawings: { hsy: [{ t: "trend", p: [{ time: 1, price: 2 }, { time: 3, price: 4 }] }, { t: "script", p: [] }] } } });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.chartSettings, { frame: "1Y", type: "candles", log: false, marks: true, indicators: [{ id: "rsi", params: { n: 400 } }] });
+  assert.deepEqual(saved.body.chartDrawings, { HSY: [{ t: "trend", p: [{ time: 1, price: 2 }, { time: 3, price: 4 }] }] });
+});

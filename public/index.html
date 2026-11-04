@@ -5,7 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark light" />
   <title>Pitzer Investment Fund</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="ui/ui.css" />
+  <link rel="stylesheet" href="ui/states.css" />
+  <link rel="stylesheet" href="css/chart.css" />
+  <link rel="stylesheet" href="css/research.css" />
+  <link rel="stylesheet" href="css/portfolio.css" />
+  <link rel="stylesheet" href="css/ideas.css" />
+  <link rel="stylesheet" href="css/widgets.css" />
+  <link rel="stylesheet" href="css/shell.css" />
   <link rel="icon" href="data:," />
   <!-- The default route's module is a dynamic import() (see app.js), which the browser can't
        discover until app.js actually runs. Preloading it lets the two fetches happen in
@@ -30,39 +41,32 @@
       <a class="nav-link" href="#/macro" data-section="market">Market</a>
     </nav>
 
+    <button id="searchToggle" type="button" class="icon-btn search-toggle" aria-label="Search" aria-controls="jumpForm" aria-expanded="false"><svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-search"/></svg></button>
+
     <form id="jumpForm" class="jump-form" role="search">
-      <label for="jumpInput" class="sr-only">Research a ticker</label>
-      <input id="jumpInput" type="search" list="tickerOptions" autocomplete="off" spellcheck="false"
-             placeholder="Search ticker…  ( / )" maxlength="10" aria-describedby="jumpHint" />
-      <datalist id="tickerOptions"></datalist>
-      <span id="jumpHint" class="sr-only">Type a ticker symbol and press Enter. Press slash from anywhere to focus this box.</span>
-      <button type="submit" class="btn btn-primary btn-sm">Go</button>
+      <button id="searchBack" type="button" class="icon-btn jump-back" aria-label="Close search"><svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-x"/></svg></button>
+      <div class="jump-field">
+        <svg class="icon jump-icon" width="16" height="16" aria-hidden="true" focusable="false"><use href="/icons.svg#i-search"/></svg>
+        <label for="jumpInput" class="sr-only">Research a ticker</label>
+        <input id="jumpInput" type="search" data-ticker data-ticker-go autocomplete="off" spellcheck="false"
+               placeholder="Search ticker or company" maxlength="60" aria-describedby="jumpHint" />
+        <kbd class="jump-kbd" aria-hidden="true">/</kbd>
+      </div>
+      <span id="jumpHint" class="sr-only">Type a ticker or a company name, then pick a match or press Enter. Press slash from anywhere to focus this box.</span>
     </form>
 
     <div class="auth-area">
       <a id="alertsLink" class="icon-btn" href="#/alerts" aria-label="Alerts">
-        <span aria-hidden="true">🔔</span><span id="alertCount" class="icon-badge hidden"></span>
+        <svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-bell"/></svg><span id="alertCount" class="icon-badge hidden"></span>
       </a>
-      <button id="inboxBtn" type="button" class="icon-btn hidden" popovertarget="inboxMenu" aria-haspopup="dialog" aria-label="Notifications">
-        <span aria-hidden="true">🔔</span><span id="inboxCount" class="icon-badge hidden"></span>
+      <button id="inboxBtn" type="button" class="icon-btn hidden" aria-haspopup="dialog" aria-expanded="false" aria-label="Notifications">
+        <svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-bell"/></svg><span id="inboxCount" class="icon-badge hidden"></span>
       </button>
-      <div id="inboxMenu" class="account-menu inbox-menu" popover role="dialog" aria-label="Notifications"></div>
-      <button id="chatBtn" type="button" class="icon-btn hidden" aria-label="Club chat" title="Club chat">
-        <span aria-hidden="true">💬</span><span id="chatCount" class="icon-badge hidden"></span>
+      <button id="chatBtn" type="button" class="icon-btn chat-btn hidden" aria-label="Club chat" title="Club chat">
+        <svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-chat"/></svg><span id="chatCount" class="icon-badge hidden"></span>
       </button>
-      <a class="icon-btn" href="#/glossary" aria-label="Glossary of terms" title="Glossary"><span aria-hidden="true">?</span></a>
-      <a class="icon-btn" href="#/settings" aria-label="Settings" data-section="settings"><span aria-hidden="true">⚙</span></a>
       <button id="signInBtn" class="btn btn-ghost btn-sm" aria-haspopup="dialog">Sign in</button>
-      <button id="accountBtn" class="account-btn hidden" popovertarget="accountMenu" aria-haspopup="menu"><span id="accountInitials" aria-hidden="true"></span><span class="sr-only" id="accountLabel">Account menu</span></button>
-      <div id="accountMenu" class="account-menu" popover>
-        <p class="account-who"><strong id="accountName"></strong><span id="accountTitle" class="muted small"></span></p>
-        <a href="#/members/me" class="account-item">My profile</a>
-        <a href="#/notes" class="account-item">My notes</a>
-        <a href="#/inbox" class="account-item">Notifications</a>
-        <a href="#/account" class="account-item">Account &amp; preferences</a>
-        <a href="#/settings" class="account-item" id="accountAdminLink">Members &amp; fund settings</a>
-        <button type="button" class="account-item" id="signOutBtn">Sign out</button>
-      </div>
+      <button id="accountBtn" type="button" class="account-btn is-guest" aria-haspopup="dialog" aria-expanded="false"><span id="accountInitials" aria-hidden="true"><svg class="icon" width="20" height="20" focusable="false"><use href="/icons.svg#i-user"/></svg></span><span class="sr-only" id="accountLabel">Menu</span></button>
     </div>
   </header>
 
@@ -77,7 +81,7 @@
       <input type="hidden" name="id" />
       <div class="form-grid">
         <label>Ticker <span class="req" aria-hidden="true">*</span>
-          <input name="symbol" required maxlength="10" autocapitalize="characters" aria-describedby="err-symbol" />
+          <input name="symbol" data-ticker required maxlength="10" autocapitalize="characters" aria-describedby="err-symbol" />
           <span class="field-error" id="err-symbol"></span>
         </label>
         <label>Shares <span class="req" aria-hidden="true">*</span>

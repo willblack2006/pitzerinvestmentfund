@@ -10,7 +10,7 @@ export const fmtCompact = (n) =>
   n === null || n === undefined ? "—" : new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(n);
 
 // Every value that comes from the database or a third-party API goes through esc() before
-// being interpolated into innerHTML — theses, news headlines and insider names are untrusted.
+// being interpolated into innerHTML: theses, news headlines and insider names are untrusted.
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 
@@ -90,7 +90,7 @@ export async function loadSession() {
 let firstLoad = null;
 export function sessionReady() { return (firstLoad ||= loadSession()); }
 
-// A page load routinely asks for the same GET twice at once — e.g. a view's own
+// A page load routinely asks for the same GET twice at once, e.g. a view's own
 // "/api/positions" fetch alongside fundContext()'s, or "/api/alerts" for both the page body
 // and the header badge. Sharing one in-flight request for duplicate concurrent GETs halves
 // that round-trip cost without caching anything beyond the moment both callers are waiting.
@@ -265,7 +265,7 @@ export function pushRecent(symbol) {
   try {
     const list = [symbol, ...recentTickers().filter((s) => s !== symbol)].slice(0, 8);
     localStorage.setItem("pif_recent", JSON.stringify(list));
-  } catch { /* storage unavailable — fine */ }
+  } catch { /* storage unavailable, fine */ }
 }
 
 // Consistent page header: h2 (router focuses it on navigation), one-line description, actions.
@@ -287,6 +287,49 @@ export function loading(text) {
 export function errorBox(text, retry = true) {
   return `<div class="error-box" role="alert"><p>${esc(text)}</p>
     ${retry ? `<button type="button" class="btn btn-ghost btn-sm" onclick="window.dispatchEvent(new HashChangeEvent('hashchange'))">Try again</button>` : ""}</div>`;
+}
+
+// ---- State helpers: skeleton, empty, error, icon. Styles are in ui/states.css. ----
+// Content-shaped placeholder. The visible shapes fade in after ~300ms (pure CSS), so a fast
+// load never flashes a placeholder. kind: "rows" | "chart" | "cards" | "text".
+export function skeleton(kind = "rows", { rows = 4, label = "Loading" } = {}) {
+  const n = Math.max(1, Math.min(20, Number(rows) || 4));
+  const bar = (cls = "") => `<span class="skeleton-bar ${cls}"></span>`;
+  let body;
+  if (kind === "chart") body = `<span class="skeleton-block skeleton-chart"></span>`;
+  else if (kind === "cards") body = `<div class="skeleton-cards">${Array.from({ length: Math.min(n, 6) }, () => `<span class="skeleton-block skeleton-card"></span>`).join("")}</div>`;
+  else if (kind === "text") body = Array.from({ length: n }, (_, i) => bar(i === n - 1 ? "skeleton-short" : "")).join("");
+  else body = Array.from({ length: n }, () => `<span class="skeleton-row">${bar("skeleton-w1")}${bar("skeleton-w2")}${bar("skeleton-w3")}</span>`).join("");
+  return `<div class="skeleton skeleton-${esc(kind)}" role="status"><span class="sr-only">${esc(label)}</span><div class="skeleton-shapes" aria-hidden="true">${body}</div></div>`;
+}
+
+// Nothing here yet. action is { label, href } (link) or { label, id } (button).
+export function emptyState({ icon: name, title, body, action } = {}) {
+  const act = !action ? "" : action.href
+    ? `<a class="btn btn-ghost btn-sm" href="${esc(action.href)}">${esc(action.label)}</a>`
+    : `<button type="button" class="btn btn-ghost btn-sm"${action.id ? ` id="${esc(action.id)}"` : ""}>${esc(action.label)}</button>`;
+  return `<div class="empty-state">${name ? `<span class="empty-state-icon">${icon(name, { size: 32 })}</span>` : ""}
+    <p class="empty-state-title">${esc(title)}</p>${body ? `<p class="empty-state-body">${esc(body)}</p>` : ""}${act}</div>`;
+}
+
+// Failed to load. retryId ties the button to one panel's loader (see bindRetry).
+export function errorState({ title = "Couldn't load this", detail, retryId } = {}) {
+  return `<div class="error-state" role="alert"><p class="error-state-title">${esc(title)}</p>${detail ? `<p class="error-state-detail">${esc(detail)}</p>` : ""}
+    ${retryId ? `<button type="button" class="btn btn-ghost btn-sm" data-retry="${esc(retryId)}">Try again</button>` : ""}</div>`;
+}
+
+// Re-runs only this panel's loader (errorBox, by contrast, re-renders the whole page).
+export function bindRetry(container, retryId, fn) {
+  if (!container) return;
+  container.querySelectorAll("[data-retry]").forEach((b) => {
+    if (b.dataset.retry === String(retryId)) b.addEventListener("click", () => fn(), { once: true });
+  });
+}
+
+// Inline SVG from the sprite. Root-relative so it works from any hash route.
+export function icon(name, { size = 18, label } = {}) {
+  const a11y = label ? `role="img" aria-label="${esc(label)}"` : `aria-hidden="true"`;
+  return `<svg class="icon" width="${Number(size) || 18}" height="${Number(size) || 18}" ${a11y} focusable="false"><use href="/icons.svg#i-${esc(name)}"/></svg>`;
 }
 
 // Shown at the top of grouped sections (Ideas, Market) so related pages read as one area.

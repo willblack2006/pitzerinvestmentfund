@@ -1,6 +1,6 @@
 // Highlight anything on a page → a small toolbar offers "Add to note" and "Share to chat",
 // carrying the quoted text and a link back to where it came from. Signed-in members only.
-import { can } from "./shared.js";
+import { can, icon } from "./shared.js";
 import { openNoteDrawer, pageContext } from "./notes.js";
 
 let bar = null;
@@ -12,8 +12,8 @@ function ensureBar() {
   bar.setAttribute("role", "toolbar");
   bar.setAttribute("aria-label", "Selected text");
   bar.innerHTML = `
-    <button type="button" data-sel="note"><span aria-hidden="true">📝</span> Add to note</button>
-    <button type="button" data-sel="chat"><span aria-hidden="true">💬</span> Share to chat</button>`;
+    <button type="button" data-sel="note">${icon("doc", { size: 16 })} Add to note</button>
+    <button type="button" data-sel="chat">${icon("chat", { size: 16 })} Share to chat</button>`;
   // mousedown would clear the selection before click fires; keep it.
   bar.addEventListener("mousedown", (e) => e.preventDefault());
   bar.addEventListener("click", (e) => {

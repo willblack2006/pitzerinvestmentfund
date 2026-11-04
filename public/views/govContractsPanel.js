@@ -1,12 +1,12 @@
 // Research Overview panel: recent federal contract actions (USAspending.gov). Low-evidence
 // context, shown only for defense, health and IT names or when there are awards to show.
-import { esc, api, safeUrl, fmtMoneyCompact, fmtRatio, loading } from "../shared.js";
+import { esc, api, safeUrl, fmtMoneyCompact, fmtRatio, skeleton } from "../shared.js";
 
 export function govContractsPanelHtml() {
   return `
     <section class="panel" aria-labelledby="gov-h" id="govPanel" hidden>
       <h3 id="gov-h">Government contracts</h3>
-      <div id="govBody">${loading("Checking USAspending.gov…")}</div>
+      <div id="govBody">${skeleton("text", { rows: 3, label: "Checking USAspending.gov" })}</div>
     </section>`;
 }
 

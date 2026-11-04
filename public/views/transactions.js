@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, can, toast, confirmAction, lockedHint, pageHead, loading, errorBox, subTabs, invalidateContext, signed } from "../shared.js";
+import { el, esc, api, fmtUSD, can, toast, confirmAction, lockedHint, pageHead, subTabs, invalidateContext, signed, errorState, bindRetry, skeleton, emptyState } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Transactions";
@@ -10,7 +10,7 @@ const TYPES = {
 function formFields(type) {
   const trade = type === "buy" || type === "sell";
   return `
-    ${trade || type === "dividend" ? `<label>Ticker <input name="symbol" required maxlength="10" autocapitalize="characters" /></label>` : ""}
+    ${trade || type === "dividend" ? `<label>Ticker <input name="symbol" data-ticker required maxlength="10" autocapitalize="characters" /></label>` : ""}
     ${trade ? `<label>Shares <input name="shares" type="number" step="any" min="0" required inputmode="decimal" /></label>
       <label>Price per share ($) <input name="price" type="number" step="any" min="0" required inputmode="decimal" /></label>
       <label>Commission / fees ($) <input name="amount" type="number" step="any" min="0" value="0" inputmode="decimal" /></label>
@@ -40,12 +40,13 @@ function refreshExecHint(form) {
 }
 
 export async function mount(container) {
-  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/transactions") + loading("Loading the ledger…");
+  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/transactions") + skeleton("rows", { label: "Loading the ledger" });
   let rows, settings;
   try {
     [rows, settings] = await Promise.all([api("/api/transactions"), api("/api/settings")]);
   } catch (err) {
-    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/transactions") + pageHead("Transactions") + errorBox(`Could not load transactions: ${err.message}`);
+    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/transactions") + pageHead("Transactions") + errorState({ title: "Couldn't load transactions.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const unlocked = can("trade");
@@ -92,15 +93,15 @@ export async function mount(container) {
             <td>${r.price ? fmtUSD(r.price) : ""}</td>
             <td>${signed(cash, fmtUSD(cash))}</td>
             <td>${r.realizedGain != null ? signed(r.realizedGain, fmtUSD(r.realizedGain)) : ""}</td>
-            <td class="left small muted">${esc(r.note)}${r.createdBy ? ` <span>— ${esc(r.createdBy)}</span>` : ""}</td>
+            <td class="left small muted">${esc(r.note)}${r.createdBy ? ` <span>(${esc(r.createdBy)})</span>` : ""}</td>
             ${unlocked ? `<td><button class="btn btn-danger btn-sm" data-del="${r.id}" aria-label="Delete ${TYPES[r.type]} ${esc(r.symbol)} on ${esc(r.date)}">Delete</button></td>` : ""}
           </tr>`;
         }).join("")}</tbody>
-      </table>` : `<div class="empty-state"><p class="empty-title">No transactions yet</p>
-        <p class="muted">Start with a <strong>deposit</strong> for the fund's current cash, then record trades as they happen. Existing holdings stay as they are.</p></div>`}
+      </table>` : emptyState({ icon: "briefcase", title: "No transactions yet", body: "Start with a deposit for the fund's current cash, then record trades as they happen. Existing holdings stay as they are.", action: unlocked ? { label: "Record a deposit", id: "txEmptyStart" } : null })}
     </section>`;
 
   if (!unlocked) return;
+  el("txEmptyStart")?.addEventListener("click", () => { const t = el("txType"); t.value = "deposit"; t.dispatchEvent(new Event("change")); t.focus(); });
 
   el("txType").addEventListener("change", (e) => { el("txFields").innerHTML = formFields(e.target.value); });
   el("txFields").addEventListener("input", (e) => {

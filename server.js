@@ -53,10 +53,10 @@ app.use((req, res, next) => {
 app.use(compression({ filter: (req, res) => req.path !== "/api/events" && compression.filter(req, res) }));
 app.use(express.json({ limit: "200kb" }));
 app.use(express.static(path.join(__dirname, "public"), {
-  // These files aren't content-hashed, so keep the cache short rather than immutable —
-  // long enough to skip a re-fetch on back/forward and quick repeat visits, short enough
-  // that a deploy is visible within a few minutes instead of needing a hard refresh.
-  maxAge: "10m",
+  // These files aren't content-hashed and the app is many ES modules, so a cached copy of one
+  // file next to a fresh copy of another breaks pages right after a deploy. maxAge 0 makes the
+  // browser revalidate each file (a cheap 304 via ETag when nothing changed).
+  maxAge: 0,
 }));
 
 // Session cookies ride along on cross-site requests, so every API change must carry the app's

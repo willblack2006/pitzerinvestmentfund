@@ -120,6 +120,7 @@ export function initRouter(routeMap) {
       const bar = a.parentElement, b = bar.getBoundingClientRect(), t = a.getBoundingClientRect();
       bar.scrollLeft += t.left - b.left - (b.width - t.width) / 2;
     }
+    window.dispatchEvent(new Event("pif:route-rendered")); // app.js refreshes tab-bar fades
     focusHeading();
   }
 

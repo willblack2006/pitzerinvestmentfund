@@ -3,9 +3,9 @@ import { esc } from "../shared.js";
 
 export const KIND_LABEL = { opportunistic: "Opportunistic", routine: "Routine", new: "New insider" };
 export const KIND_HINT = {
-  opportunistic: "Trades at irregular times — the kind research finds informative",
-  routine: "Trades in the same month every year — ignored, carries no information",
-  new: "Less than 3 years of trading history — counted at reduced weight",
+  opportunistic: "Trades at irregular times: the kind research finds informative",
+  routine: "Trades in the same month every year: ignored, carries no information",
+  new: "Less than 3 years of trading history: counted at reduced weight",
 };
 
 export function signalTone(score) {

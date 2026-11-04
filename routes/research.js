@@ -4,7 +4,9 @@ const { requireSignedIn } = require("../middleware/auth");
 const yahoo = require("../lib/sources/yahoo");
 const sec = require("../lib/sources/sec");
 const { cached } = require("../lib/cache");
-const { scanRedFlags } = require("../lib/redFlags");
+const { scanRedFlags, summarize: summarizeFlags, relevantText, CHECKS: FLAG_CHECKS } = require("../lib/redFlags");
+const { getCached } = require("../lib/cache");
+const { rankSymbols, directoryMatches } = require("../lib/symbolSearch");
 const { scoreEstimateRevisions } = require("../lib/estimateRevision");
 const { compareFilingSections } = require("../lib/filingDiff");
 const { parseCoverPage, buildActivistAlerts, FORMS: ACTIVIST_FORMS } = require("../lib/activistFilings");
@@ -92,6 +94,53 @@ function streetView(qs, price) {
   };
 }
 
+// Ticker lookup by symbol or company name, for every ticker box in the app. Each source is
+// best-effort: offline, the fund's own tickers still match.
+router.get("/symbols/search", async (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 60);
+  if (!q) return res.json({ q, results: [] });
+  const owned = db.prepare("SELECT symbol FROM positions").all().map((r) => r.symbol);
+  const watched = db.prepare("SELECT symbol FROM watchlist").all().map((r) => r.symbol);
+  const [dir, yh] = await Promise.allSettled([sec.getCompanyDirectory(), yahoo.search(q)]);
+  const directory = settledValue(dir) || [];
+  const names = new Map(directory.map((r) => [r.ticker, r.name]));
+  const candidates = [
+    ...owned.map((symbol) => ({ symbol, name: names.get(symbol) || null, source: "fund", owned: true })),
+    ...watched.map((symbol) => ({ symbol, name: names.get(symbol) || null, source: "fund", watching: true })),
+    ...directoryMatches(q, directory),
+    ...(settledValue(yh) || []).map((x) => ({ ...x, source: "yahoo", yahooRank: x.rank })),
+  ];
+  res.json({ q, results: rankSymbols(q, candidates) });
+});
+
+// OHLCV bars for the Research chart. Each timeframe maps to a Yahoo range + bar size. Daily
+// frames load extra history before the window and say where the window starts, so a 200-day
+// average can start on the window's first day.
+const BAR_FRAMES = {
+  "1D": ["1d", "5m"], "5D": ["5d", "15m"], "1M": ["2y", "1d", 1], "3M": ["2y", "1d", 3], "6M": ["2y", "1d", 6],
+  YTD: ["2y", "1d", "ytd"], "1Y": ["2y", "1d", 12], "2Y": ["5y", "1d", 24], "5Y": ["max", "1wk", 60], MAX: ["max", "1mo"],
+};
+function frameStart(back) {
+  if (!back) return null;
+  const d = new Date();
+  if (back === "ytd") return `${d.getUTCFullYear()}-01-01`;
+  d.setUTCMonth(d.getUTCMonth() - back);
+  return d.toISOString().slice(0, 10);
+}
+router.get("/research/:symbol/bars", async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase().trim();
+  const frame = String(req.query.frame || "1Y").toUpperCase();
+  const spec = BAR_FRAMES[frame];
+  if (!spec) return res.status(400).json({ error: `Unknown timeframe. Use one of ${Object.keys(BAR_FRAMES).join(", ")}.` });
+  const [range, interval, back] = spec;
+  try {
+    const bars = await yahoo.getChart(symbol, range, interval);
+    res.json({ symbol, frame, range, interval, visibleFrom: frameStart(back), intraday: !interval.endsWith("d") && !interval.endsWith("wk") && !interval.endsWith("mo"), bars });
+  } catch (e) {
+    res.json({ symbol, frame, range, interval, bars: [], error: e.message });
+  }
+});
+
 router.get("/research/:symbol", async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
 
@@ -114,6 +163,8 @@ router.get("/research/:symbol", async (req, res) => {
   const watch = db.prepare("SELECT * FROM watchlist WHERE symbol = ?").get(symbol) || null;
   const pitches = db.prepare("SELECT id, direction, status, author, basePrice, createdAt FROM pitches WHERE symbol = ? ORDER BY createdAt DESC").all(symbol);
   const alerts = db.prepare("SELECT * FROM price_alerts WHERE symbol = ?").all(symbol);
+  // The fund's own buys and sells, for markers on the price chart.
+  const trades = db.prepare("SELECT date, type, shares, price FROM transactions WHERE symbol = ? AND type IN ('buy','sell') ORDER BY date").all(symbol);
   const chartPoints = settledValue(chart) || [];
   const factsValue = settledValue(facts);
   // Live quote first; the quoteSummary price can be hours old (that module is cached 6h).
@@ -131,6 +182,7 @@ router.get("/research/:symbol", async (req, res) => {
     watch,
     pitches,
     priceAlerts: alerts,
+    trades,
     profile: qs?.assetProfile || null,
     stats: {
       summaryDetail: qs?.summaryDetail || null,
@@ -147,37 +199,73 @@ router.get("/research/:symbol", async (req, res) => {
     peers: settledValue(peers) || [],
     thesis: note || null,
     aiEnabled: ai.configured(),
-    redFlags: scanRedFlags(settledValue(quickFilings) || []),
+    redFlags: overviewFlags(symbol, settledValue(quickFilings) || []),
     errors: {
       chart: errOf(chart), quoteSummary: errOf(quoteSummary), peers: errOf(peers), financials: errOf(facts), news: errOf(news),
     },
   });
 });
 
-// Red-flag scanner: 8-K items (auditor change, restatement, exec departure), late-filing
-// notices, and EDGAR full-text search for going-concern / material-weakness language.
+// Red-flag scanner: 8-K items (auditor change, restatement, officer changes), late-filing
+// notices, and EDGAR full-text search for going-concern / material-weakness language. Each hit
+// is read (only the relevant sentences are cached) and sorted into critical / high / watch /
+// info, so boilerplate and routine board changes don't show up as red flags.
+const FLAG_YEARS = 2;
+const flagsSince = () => new Date(Date.now() - FLAG_YEARS * 365 * 864e5).toISOString().slice(0, 10);
+
+function filingExcerpt(url, form) {
+  return cached(`sec_excerpt_${url}`, 30 * 24 * 60 * 60, "sec_excerpt", async () => relevantText(await sec.getFilingText(url), form));
+}
+
 async function redFlagsFor(symbol) {
-  return cached(`red_flags_${symbol}`, 24 * 60 * 60, "red_flags", async () => {
+  return cached(`red_flags_v2_${symbol}`, 24 * 60 * 60, "red_flags", async () => {
     const cik = await sec.cikFor(symbol);
-    const filings = await sec.getRecentFilings(symbol, ["8-K", "10-K", "10-Q", "NT 10-K", "NT 10-Q"]);
+    const since = flagsSince();
+    const filings = (await sec.getRecentFilings(symbol, ["8-K", "NT 10-K", "NT 10-Q"])).filter((f) => f.filingDate >= since);
     let goingConcern = [], materialWeakness = [];
     if (cik) {
-      const since = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       [goingConcern, materialWeakness] = await Promise.all([
         sec.fullTextSearch({ q: "going concern", forms: "10-K,10-Q", cik, startdt: since }).catch(() => []),
         sec.fullTextSearch({ q: "material weakness", forms: "10-K,10-Q", cik, startdt: since }).catch(() => []),
       ]);
     }
-    return scanRedFlags(filings, { goingConcern, materialWeakness });
+    // Belt and braces: drop anything older than the window even if EDGAR returns it.
+    goingConcern = goingConcern.filter((h) => (h.filedAt || "") >= since);
+    materialWeakness = materialWeakness.filter((h) => (h.filedAt || "") >= since);
+    // Read only what needs a closer look: 8-Ks with Item 4.01 or 5.02, and full-text hits.
+    const toRead = new Map();
+    for (const f of filings) if (f.form === "8-K" && /\b(4\.01|5\.02)\b/.test(f.items || "")) toRead.set(f.url, "8-K");
+    for (const h of [...goingConcern, ...materialWeakness]) if (h.url) toRead.set(h.url, h.form);
+    const texts = {};
+    const queue = [...toRead.entries()].slice(0, 30); // SEC asks for <=10 req/s; this stays well under
+    await Promise.all(Array.from({ length: 3 }, async () => {
+      while (queue.length) {
+        const [url, form] = queue.shift();
+        try { texts[url] = await filingExcerpt(url, form); } catch { /* unread: stays "info" */ }
+      }
+    }));
+    const flags = scanRedFlags(filings, { goingConcern, materialWeakness }, texts);
+    return { flags, status: summarizeFlags(flags), since, read: Object.keys(texts).length };
   });
+}
+
+// The Overview badge: the full scan if one is cached, else the cheap item-code scan (which
+// can only see restatements, auditor changes and late filings without reading anything).
+function overviewFlags(symbol, quickFilings) {
+  const full = getCached(`red_flags_v2_${symbol}`);
+  if (full) return { ...full.status, full: true };
+  const since = flagsSince();
+  const flags = scanRedFlags(quickFilings.filter((f) => f.filingDate >= since));
+  return { ...summarizeFlags(flags), full: false };
 }
 
 router.get("/research/:symbol/red-flags", async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   try {
-    res.json({ symbol, flags: await redFlagsFor(symbol) });
+    const r = await redFlagsFor(symbol);
+    res.json({ symbol, ...r, checks: FLAG_CHECKS });
   } catch (err) {
-    res.json({ symbol, flags: [], error: err.message });
+    res.json({ symbol, flags: [], status: summarizeFlags([]), checks: FLAG_CHECKS, error: err.message });
   }
 });
 
@@ -367,7 +455,14 @@ router.get("/research/:symbol/risk", async (req, res) => {
   const asset = settledValue(a), bench = settledValue(b);
   if (!asset?.length || !bench?.length) return res.json({ symbol, error: "Not enough price history." });
   const profile = analytics.riskProfile(asset, bench, settledValue(s));
-  res.json({ symbol, benchmark: benchmarks.shortName(benchmark), benchmarkValue: benchmark, benchmarkLabel: benchmarks.label(benchmark), sector, sectorEtf, profile });
+  const shortName = benchmarks.shortName(benchmark);
+  // Rolling 3- and 6-month windows from the same 2y series (no extra fetches).
+  const rolling = {};
+  for (const w of [63, 126]) {
+    const r = analytics.rollingStats(asset, bench, w);
+    if (r) rolling[w] = { ...r, trend: analytics.correlationTrend(r, shortName) };
+  }
+  res.json({ symbol, benchmark: shortName, benchmarkValue: benchmark, benchmarkLabel: benchmarks.label(benchmark), sector, sectorEtf, profile, rolling });
 });
 
 // Recent filings with any cached AI summaries attached.

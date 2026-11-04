@@ -1,21 +1,30 @@
-import { esc, api, can, toast, pageHead, loading, errorBox, subTabs, fmtMoneyCompact, fmtPct, signed } from "../shared.js";
+import { esc, api, can, toast, pageHead, loading, subTabs, fmtMoneyCompact, fmtPct, signed, icon, errorState, bindRetry, skeleton } from "../shared.js";
 
-let briefSince = null;
-try { briefSince = localStorage.getItem("pif_meeting_since"); } catch { /* ignore */ }
+// lastMeeting is the date typed into the box last time; briefSince is what the brief shows now.
+let lastMeeting = null;
+try { lastMeeting = localStorage.getItem("pif_meeting_since"); } catch { /* ignore */ }
+let briefSince = lastMeeting;
+const isoDaysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+const STALE_HOURS = 36;
 
 async function loadBrief() {
   const box = document.getElementById("briefBody");
   if (!box) return;
-  box.innerHTML = loading("Comparing each holding with its price on that date…");
+  box.innerHTML = skeleton("rows", { rows: 4, label: "Comparing each holding with its price on that date" });
   let b;
   try {
     b = await api(`/api/meeting-brief${briefSince ? `?since=${briefSince}` : ""}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't build the brief: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't build the brief.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => { box.innerHTML = skeleton("text", { rows: 3, label: "Trying again" }); loadBrief(); });
     return;
   }
   if (!document.getElementById("briefBody")) return;
   document.getElementById("briefSince").value = b.since;
+  document.querySelectorAll("[data-brief]").forEach((btn) => {
+    const k = btn.dataset.brief;
+    btn.setAttribute("aria-pressed", String(b.since === (k === "meeting" ? lastMeeting : isoDaysAgo(Number(k)))));
+  });
   const pct = (v) => (v == null ? "—" : signed(v * 100, fmtPct(v * 100)));
   const movers = b.moves.filter((m) => m.changePct != null).slice(0, 6);
   const pitchLink = (p) => `<a href="#/pitches/${p.id}">${esc(p.direction.toUpperCase())} ${esc(p.symbol)}</a>`;
@@ -37,7 +46,9 @@ import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Alerts";
 
-export const ICON = { price: "◎", target: "◎", policy: "⚠", earnings: "📅", insider: "👤", vote: "🗳", short: "↓", revision: "✎", filingchange: "📄", redflag: "⚑", activist: "5%", crowding: "📣" };
+const ICON_NAME = { price: "target", target: "target", policy: "alert", earnings: "calendar", insider: "user", vote: "vote", short: "arrow-down", revision: "pencil", filingchange: "doc", redflag: "flag", activist: "percent", crowding: "megaphone" };
+// Icon HTML per alert type (callers drop these straight into markup).
+export const ICON = Object.fromEntries(Object.entries(ICON_NAME).map(([k, n]) => [k, icon(n, { size: 16 })]));
 // Each alert opens the research tab whose panel explains it.
 export const TAB = { earnings: "/street", revision: "/street", insider: "/ownership", activist: "/ownership", target: "/thesis", short: "/risk", filingchange: "/filings", redflag: "/filings" };
 
@@ -49,9 +60,13 @@ function timeAgo(iso) {
   return hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)} days ago`;
 }
 
+// Attention spikes are explained by the "Attention spikes" panel on Holdings.
+export function alertHref(a) {
+  return a.pitchId ? `#/pitches/${a.pitchId}` : a.type === "policy" ? "#/allocation" : a.type === "crowding" ? "#/" : a.symbol ? `#/research/${encodeURIComponent(a.symbol)}${TAB[a.type] || ""}` : null;
+}
+
 export function alertItem(a) {
-  // Attention spikes are explained by the "Attention spikes" panel on Holdings.
-  const href = a.pitchId ? `#/pitches/${a.pitchId}` : a.type === "policy" ? "#/allocation" : a.type === "crowding" ? "#/" : a.symbol ? `#/research/${encodeURIComponent(a.symbol)}${TAB[a.type] || ""}` : null;
+  const href = alertHref(a);
   return `<li class="alert-item alert-${esc(a.level)}">
     <span class="alert-icon" aria-hidden="true">${ICON[a.type] || "•"}</span>
     <div><div class="alert-title">${href ? `<a href="${href}">${esc(a.title)}</a>` : esc(a.title)}</div>
@@ -60,13 +75,27 @@ export function alertItem(a) {
   </li>`;
 }
 
+function signalsStatus(asOf) {
+  const refresh = can("member") ? ` <button type="button" class="btn btn-ghost btn-sm" id="refreshSignalsBtn">Refresh signals</button>` : "";
+  const ageHours = asOf ? (Date.now() - new Date(asOf).getTime()) / 36e5 : Infinity;
+  if (asOf && ageHours <= STALE_HOURS) {
+    return `<p class="small muted page-pad" id="signalsStatus">Insider, short-interest, filing, revision and attention signals: updated ${esc(timeAgo(asOf))}.${refresh}</p>`;
+  }
+  const when = asOf ? `were last updated ${esc(timeAgo(asOf))}` : "have not been computed yet";
+  return `<div class="signals-stale" id="signalsStatus" role="status">
+    <span class="signals-stale-icon">${icon("alert", { size: 18 })}</span>
+    <div><strong>Signals may be out of date.</strong> Insider, short-interest, filing, revision and attention signals ${when}. They refresh when the server's background job runs, so they go stale if the server was off.${refresh}</div>
+  </div>`;
+}
+
 export async function mount(container) {
-  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/alerts") + loading("Checking prices, policy limits, earnings dates and insider filings…");
+  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/alerts") + skeleton("rows", { rows: 5, label: "Checking prices, policy limits, earnings dates and insider filings" });
   let alerts, earnings;
   try {
     [alerts, earnings] = await Promise.all([api("/api/alerts"), api("/api/portfolio/earnings")]);
   } catch (err) {
-    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/alerts") + pageHead("Alerts") + errorBox(`Could not load alerts: ${err.message}`);
+    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/alerts") + pageHead("Alerts") + errorState({ title: "Couldn't load alerts.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const action = alerts.alerts.filter((a) => a.level === "action");
@@ -75,13 +104,17 @@ export async function mount(container) {
   container.innerHTML = `
     ${subTabs(PORTFOLIO_TABS, "#/alerts")}
     ${pageHead("Alerts", "Everything that needs the fund's attention: price targets hit, policy breaches, open votes, upcoming earnings and insider buying.")}
-    <p class="small muted page-pad" id="signalsStatus">
-      Insider, short-interest, filing, revision and attention signals: ${alerts.signalsAsOf ? `updated ${esc(timeAgo(alerts.signalsAsOf))}` : "not computed yet"}.
-      ${can("member") ? `<button type="button" class="btn btn-ghost btn-sm" id="refreshSignalsBtn">Refresh signals</button>` : ""}
-    </p>
+    ${signalsStatus(alerts.signalsAsOf)}
     <section class="panel page-pad-panel" aria-labelledby="brief-h">
       <div class="panel-head"><h3 id="brief-h">Meeting brief</h3>
-        <label class="field-inline small">Since last meeting <input type="date" id="briefSince" /></label></div>
+        <div class="brief-controls">
+          <div class="seg seg-sm" role="group" aria-label="Brief period">
+            <button type="button" class="seg-btn" data-brief="meeting"${lastMeeting ? "" : ` disabled title="Pick a meeting date once and it is saved here"`}>Since last meeting</button>
+            <button type="button" class="seg-btn" data-brief="7">1 week</button>
+            <button type="button" class="seg-btn" data-brief="30">1 month</button>
+          </div>
+          <label class="field-inline small">From <input type="date" id="briefSince" /></label>
+        </div></div>
       <div id="briefBody"></div>
     </section>
     <div class="tab-grid">
@@ -141,20 +174,29 @@ export async function mount(container) {
 
   loadBrief();
   document.getElementById("briefSince").addEventListener("change", (e) => {
+    if (!e.target.value) return;
     briefSince = e.target.value;
+    lastMeeting = briefSince;
     try { localStorage.setItem("pif_meeting_since", briefSince); } catch { /* ignore */ }
+    const m = document.querySelector('[data-brief="meeting"]');
+    if (m) { m.disabled = false; m.removeAttribute("title"); }
     loadBrief();
   });
+  document.querySelectorAll("[data-brief]").forEach((b) => b.addEventListener("click", () => {
+    const k = b.dataset.brief;
+    briefSince = k === "meeting" ? lastMeeting : isoDaysAgo(Number(k));
+    if (briefSince) loadBrief();
+  }));
   document.getElementById("runTriageBtn")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
     e.target.textContent = "Scoring headlines…";
     const body = document.getElementById("triageBody");
-    body.innerHTML = loading("Triaging news for every holding — this can take a minute.");
+    body.innerHTML = loading("Triaging news for every holding. This can take a minute.");
     try {
       const r = await api("/api/news-triage/run", { method: "POST" });
       const withTop = r.bySymbol.filter((s) => s.top?.length);
       body.innerHTML = withTop.length ? `<ul class="link-list small">${withTop.flatMap((s) => s.top.map((t) => `
-        <li><a class="symbol-cell" href="#/research/${encodeURIComponent(s.symbol)}">${esc(s.symbol)}</a> — materiality ${t.materiality}/10, ${esc(t.direction)}: ${esc(t.reason)}</li>`)).join("")}</ul>`
+        <li><a class="symbol-cell" href="#/research/${encodeURIComponent(s.symbol)}">${esc(s.symbol)}</a> (materiality ${t.materiality}/10, ${esc(t.direction)}): ${esc(t.reason)}</li>`)).join("")}</ul>`
         : `<p class="muted small">No material news found across holdings today.</p>`;
     } catch (err) {
       body.innerHTML = `<p class="error small">${esc(err.message)}</p>`;

@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, can, toast, pageHead, loading, errorBox, subTabs, lockedHint } from "../shared.js";
+import { el, esc, api, fmtUSD, can, toast, pageHead, subTabs, lockedHint, errorState, bindRetry, skeleton } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Dividends";
@@ -106,12 +106,13 @@ function render(container, d) {
 }
 
 export async function mount(container) {
-  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/dividends") + loading("Checking dividend rates and dates for each holding…");
+  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/dividends") + skeleton("rows", { label: "Checking dividend rates and dates for each holding" });
   let d;
   try {
     d = await api("/api/dividends");
   } catch (err) {
-    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/dividends") + pageHead("Dividends") + errorBox(`Could not load dividends: ${err.message}`);
+    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/dividends") + pageHead("Dividends") + errorState({ title: "Couldn't load dividends.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   if (!location.hash.startsWith("#/dividends")) return;

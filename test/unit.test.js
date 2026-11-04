@@ -238,29 +238,57 @@ test("short-pressure score: crowded shorts (high days-to-cover, rising short int
   assert.equal(finraTrendSlope([day(0.1, 0), day(0.1, 1)]), null); // too few points
 });
 
-test("red-flag scanner: 8-K items, late filings, and full-text hits", () => {
-  const { scanRedFlags, flagScore } = require("../lib/redFlags");
+test("red-flag scanner: tiers, reading filings, boilerplate filtered out", () => {
+  const R = require("../lib/redFlags");
+  const CAPTION = "Item 5.02. Departure of Directors or Certain Officers; Election of Directors; Appointment of Certain Officers; Compensatory Arrangements of Certain Officers.";
+  const texts = {
+    "https://sec.gov/a": "Item 4.01 Changes in Registrant's Certifying Accountant. On January 8, the Audit Committee dismissed Old LLP. During the two most recent fiscal years there were no disagreements with Old LLP on any matter. There were no reportable events. Item 9.01 Exhibits.",
+    "https://sec.gov/b": `${CAPTION} On February 1, the Board appointed Jane Roe as a director. Item 9.01 Exhibits.`,
+    "https://sec.gov/f": `${CAPTION} John Doe resigned as Chief Financial Officer, effective immediately. His resignation was not the result of any disagreement with the Company. Item 9.01.`,
+    "https://sec.gov/g": `${CAPTION} Mary Major, Chief Executive Officer, informed the Board of her intention to retire at the end of the year as part of a planned succession. Item 9.01.`,
+    // Audit-report and risk-factor boilerplate: not a finding.
+    "https://sec.gov/e": "Our audit included assessing the risk that a material weakness exists. If we fail to maintain effective controls, it could result in a material weakness. These conditions could raise substantial doubt about our ability to continue as a going concern.",
+    "https://sec.gov/h": "Management identified a material weakness in internal control related to revenue recognition. As a result, management concluded that our internal control over financial reporting was not effective as of December 31. These factors raise substantial doubt about the Company's ability to continue as a going concern.",
+  };
   const filings = [
-    { form: "8-K", filingDate: "2026-01-10", items: "4.01", url: "https://sec.gov/a" },
+    { form: "8-K", filingDate: "2026-01-10", items: "4.01,9.01", url: "https://sec.gov/a" },
     { form: "8-K", filingDate: "2026-02-01", items: "5.02,9.01", url: "https://sec.gov/b" },
-    { form: "8-K", filingDate: "2026-03-01", items: "2.02", url: "https://sec.gov/c" }, // earnings only, no flag
+    { form: "8-K", filingDate: "2026-03-01", items: "2.02", url: "https://sec.gov/c" }, // earnings only
     { form: "NT 10-Q", filingDate: "2026-04-01", url: "https://sec.gov/d" },
-    { form: "10-Q", filingDate: "2026-04-15", items: "", url: "https://sec.gov/e" },
+    { form: "8-K", filingDate: "2026-05-01", items: "5.02", url: "https://sec.gov/f" },
+    { form: "8-K", filingDate: "2026-06-01", items: "5.02", url: "https://sec.gov/g" },
   ];
-  const flags = scanRedFlags(filings, {
+  const hits = {
     goingConcern: [{ filedAt: "2026-04-15", form: "10-Q", url: "https://sec.gov/e" }],
-    materialWeakness: [],
-  });
-  assert.equal(flags.length, 4); // auditor change, departure, late filing, going concern
-  assert.equal(flags[0].date, "2026-04-15"); // sorted newest first
-  assert.ok(flags.some((f) => f.type === "auditor_change"));
-  assert.ok(flags.some((f) => f.type === "departure"));
-  assert.ok(flags.some((f) => f.type === "late_filing"));
-  assert.ok(flags.some((f) => f.type === "going_concern"));
-  assert.ok(!flags.some((f) => f.type === "restatement"));
-  assert.ok(flagScore(flags) > flagScore(flags.filter((f) => f.type === "departure")));
+    materialWeakness: [{ filedAt: "2026-04-15", form: "10-Q", url: "https://sec.gov/e" }],
+  };
+  const flags = R.scanRedFlags(filings, hits, texts);
+  const by = (type, date) => flags.find((f) => f.type === type && (!date || f.date === date));
+  assert.equal(by("auditor_change").severity, "watch", "dismissed with no disagreement");
+  assert.equal(by("late_filing").severity, "high");
+  assert.equal(by("departure", "2026-05-01").severity, "high", "CFO out effective immediately");
+  assert.equal(by("officer_change", "2026-02-01").severity, "info", "new director");
+  assert.equal(by("officer_change", "2026-06-01").severity, "info", "planned CEO retirement");
+  assert.ok(!by("going_concern") && !by("material_weakness"), "boilerplate is not a finding");
+  assert.ok(!flags.some((f) => f.url === "https://sec.gov/c"));
+  assert.equal(flags[0].severity, "high", "most severe first");
+  assert.match(by("departure").evidence, /resigned as Chief Financial Officer/);
+  const st = R.summarize(flags);
+  assert.equal(st.level, "concern");
+  assert.equal(st.counts.info, 2);
 
-  assert.deepEqual(scanRedFlags([], {}), []);
+  // A real going-concern doubt and a concluded material weakness.
+  const bad = R.scanRedFlags([], { goingConcern: [{ filedAt: "2026-02-01", form: "10-K", url: "https://sec.gov/h" }], materialWeakness: [{ filedAt: "2026-02-01", form: "10-K", url: "https://sec.gov/h" }] }, texts);
+  assert.equal(bad.find((f) => f.type === "going_concern").severity, "critical");
+  assert.equal(bad.find((f) => f.type === "material_weakness").severity, "high");
+  assert.ok(R.flagScore(bad) > R.flagScore(flags.filter((f) => f.severity === "info")));
+
+  // Auditor change with a real disagreement; restatement; unread hits stay routine.
+  assert.equal(R.classifyAuditorChange("Item 4.01. The former auditor resigned. There was a disagreement regarding revenue recognition that was not resolved.").severity, "critical");
+  assert.equal(R.scanRedFlags([{ form: "8-K", filingDate: "2026-01-01", items: "4.02" }])[0].severity, "critical");
+  assert.equal(R.scanRedFlags([], hits, {})[0].severity, "info");
+  assert.deepEqual(R.scanRedFlags([], {}), []);
+  assert.equal(R.summarize([]).level, "clean");
 });
 
 test("estimate revision score: breadth and drift combine, nearer periods weigh more", () => {
@@ -1025,4 +1053,99 @@ test("chat: mentions, edit window, delete rights, image sniffing", () => {
   assert.equal(chat.sniffImage(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0])), "image/jpeg");
   assert.equal(chat.sniffImage(Buffer.from("<svg xmlns='x'></svg>")), null);
   assert.throws(() => chat.cleanMessage({ body: "", attachment: { kind: "page", pageRef: "#/today" } }) && chat.cleanMessage({}), /Write a message/);
+});
+
+test("symbol search: company names, share classes, owned first, foreign duplicates dropped", () => {
+  const { rankSymbols, directoryMatches, normName } = require("../lib/symbolSearch");
+  assert.equal(normName("COSTCO WHOLESALE CORP /NEW"), "costco wholesale");
+  assert.equal(normName("The Hershey Company"), normName("HERSHEY CO"));
+  const hershey = rankSymbols("hershey", [
+    { symbol: "HSY.HM", name: "Hershey Co", source: "yahoo", yahooRank: 1 },
+    { symbol: "HSHY34.SA", name: "The Hershey Company", source: "yahoo", yahooRank: 2 },
+    { symbol: "HSY", name: "HERSHEY CO", source: "sec" },
+    { symbol: "HSY", name: "The Hershey Company", source: "yahoo", yahooRank: 0, exchange: "NYQ" },
+    { symbol: "HSY=F", name: "Hershey futures", source: "yahoo", type: "FUTURE" },
+  ]);
+  assert.deepEqual(hershey.map((r) => r.symbol), ["HSY"]);
+  assert.equal(hershey[0].name, "The Hershey Company", "Yahoo's name wins over SEC's");
+  // Exact ticker beats a name match; owned beats an unowned match of the same strength.
+  const g = rankSymbols("google", [
+    { symbol: "DEPW", name: "Google DeepMind ETF", source: "yahoo", yahooRank: 0 },
+    { symbol: "GOOG", name: "Alphabet Inc.", source: "fund", owned: true },
+    { symbol: "GOOG", name: "Alphabet Inc.", source: "yahoo", yahooRank: 2 },
+  ]);
+  assert.equal(g[0].symbol, "GOOG");
+  assert.equal(rankSymbols("aapl", [{ symbol: "AAPL", name: "Apple Inc.", source: "sec" }, { symbol: "AAPU", name: "Apple 2x ETF", source: "yahoo", yahooRank: 0 }])[0].symbol, "AAPL");
+  // People type BRK.B; SEC and Yahoo spell it BRK-B.
+  const dir = [{ ticker: "BRK-B", name: "BERKSHIRE HATHAWAY INC" }, { ticker: "BRK-A", name: "BERKSHIRE HATHAWAY INC" }, { ticker: "MSFT", name: "MICROSOFT CORP" }];
+  assert.equal(rankSymbols("brk.b", directoryMatches("brk.b", dir))[0].symbol, "BRK-B");
+  assert.deepEqual(directoryMatches("microsoft", dir).map((r) => r.symbol), ["MSFT"]);
+  assert.deepEqual(rankSymbols("", dir), []);
+});
+
+test("analytics: rolling beta/correlation and the correlation trend verdict", () => {
+  const bench = days(400, (i) => 100 * (1 + 0.02 * Math.sin(i / 3)) * (1 + i * 0.0005));
+  const rb = A.returns(bench.map((p) => p.close));
+  const lev = [{ date: bench[0].date, close: 100 }];
+  rb.forEach((x, i) => lev.push({ date: bench[i + 1].date, close: lev[i].close * (1 + 2 * x) }));
+  const r = A.rollingStats(lev, bench, 63);
+  assert.equal(r.dates.length, rb.length - 63 + 1);
+  assert.equal(r.dates.at(-1), bench.at(-1).date);
+  for (const b of r.beta) close(b, 2, 1e-6);
+  for (const c of r.correlation) close(c, 1, 1e-6);
+  // Matches the full-sample beta when the window covers everything.
+  close(A.rollingStats(lev, bench, rb.length).beta[0], A.riskProfile(lev, bench).beta, 1e-9);
+  assert.equal(A.rollingStats(lev.slice(0, 30), bench, 63), null, "window longer than the data");
+
+  // An asset that is pure noise for the first half, then tracks the benchmark: correlation rises.
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5) * 0.04;
+  const mixed = [{ date: bench[0].date, close: 100 }];
+  rb.forEach((x, i) => mixed.push({ date: bench[i + 1].date, close: mixed[i].close * (1 + (i < 200 ? rand() : x)) }));
+  const t = A.correlationTrend(A.rollingStats(mixed, bench, 63), "SPY");
+  assert.equal(t.direction, "up");
+  assert.match(t.text, /rose from .* to .* over the past year/);
+  assert.equal(A.correlationTrend(r, "SPY").direction, "flat");
+  assert.equal(A.correlationTrend(null), null);
+});
+
+test("chart indicators: SMA, EMA, Bollinger, RSI, MACD, ATR, VWAP, Heikin Ashi", async () => {
+  const I = await import("../public/indicators.js");
+  assert.deepEqual(I.sma([1, 2, 3, 4, 5], 3), [null, null, 2, 3, 4]);
+  // EMA(3) seeded with SMA(1,2,3)=2, k=0.5: 4*.5+2*.5=3, 5*.5+3*.5=4.
+  assert.deepEqual(I.ema([1, 2, 3, 4, 5], 3), [null, null, 2, 3, 4]);
+  const bb = I.bollinger([5, 5, 5, 5], 3, 2);
+  assert.deepEqual([bb.mid[3], bb.upper[3], bb.lower[3]], [5, 5, 5]);
+  const b2 = I.bollinger([1, 2, 3], 3, 1);
+  close(b2.upper[2], 2 + Math.sqrt(2 / 3), 1e-12);
+  // Only gains → 100; only losses → 0; flat → 50.
+  assert.equal(I.rsi([1, 2, 3, 4, 5, 6], 3).at(-1), 100);
+  assert.equal(I.rsi([6, 5, 4, 3, 2, 1], 3).at(-1), 0);
+  assert.equal(I.rsi([2, 2, 2, 2, 2], 3).at(-1), 50);
+  assert.equal(I.rsi([1, 2], 14).every((v) => v === null), true);
+  // Wilder smoothing by hand: first averages gain .5 / loss 0 (RSI 100), then gain .25 / loss .5.
+  const r = I.rsi([10, 11, 11, 10], 2);
+  assert.equal(r[2], 100);
+  close(r[3], 100 - 100 / (1 + 0.25 / 0.5), 1e-12);
+  const m = I.macd(new Array(60).fill(10));
+  assert.equal(m.macd.at(-1), 0);
+  assert.equal(m.signal.at(-1), 0);
+  assert.equal(m.macd[24], null);
+  assert.equal(m.signal[25 + 7], null);
+  assert.equal(m.signal[25 + 8], 0, "signal starts 9 bars after the MACD line");
+  const bars = [
+    { date: "d1", open: 10, high: 12, low: 9, close: 11, volume: 100 },
+    { date: "d1", open: 11, high: 13, low: 10, close: 12, volume: 300 },
+    { date: "d2", open: 12, high: 12, low: 8, close: 9, volume: 50 },
+  ];
+  const a = I.atr(bars, 2);
+  close(a[1], (3 + 3) / 2);
+  close(a[2], (3 * 1 + 4) / 2); // TR = max(12-8, |12-12|, |8-12|) = 4
+  const v = I.vwap(bars);
+  close(v[1], ((32 / 3) * 100 + (35 / 3) * 300) / 400, 1e-12);
+  close(v[2], 29 / 3, 1e-12, "resets on a new day");
+  const ha = I.heikinAshi(bars);
+  close(ha[0].close, 10.5);
+  close(ha[1].open, (ha[0].open + ha[0].close) / 2);
+  assert.ok(ha.every((b) => b.high >= Math.max(b.open, b.close) && b.low <= Math.min(b.open, b.close)));
 });

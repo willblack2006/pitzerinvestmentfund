@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PIF design proposal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* =========================================================================
+   Proposed design tokens for the Pitzer Investment Fund app.
+   Sample screens only: nothing here is wired to the app yet. Numbers shown
+   are sample values for layout, not live data.
+   ========================================================================= */
+:root {
+  /* Type scale (px): 12 / 13 / 14 / 16 / 20 / 24 / 32 */
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 24px; --fs-3xl: 32px;
+  /* Spacing (4px grid) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  /* Radius */
+  --r-sm: 4px; --r-md: 8px; --r-lg: 12px; --r-full: 999px;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+/* Light (default) */
+.theme-light, :root {
+  --bg: #f6f7f9;            /* page */
+  --surface-1: #ffffff;     /* panels */
+  --surface-2: #f1f3f6;     /* insets, table headers */
+  --surface-3: #e6e9ee;     /* hover, pressed */
+  --border: #e3e6eb;
+  --border-strong: #8a93a3; /* inputs: 3:1 on white */
+  --text: #11151c;
+  --text-2: #4d5664;        /* secondary, 7:1 on white */
+  --accent: #2f54eb;        /* links, primary buttons (white text 5.6:1) */
+  --accent-soft: #eef2ff;
+  --positive: #0b7a4b;      /* 5.4:1 on white */
+  --negative: #c42b2b;      /* 5.7:1 on white */
+  --caution: #9a5b00;       /* 5.1:1 on white */
+  --positive-soft: #e7f6ee; --negative-soft: #fdecec; --caution-soft: #fdf3e2;
+  --focus: #2f54eb;
+  --shadow: 0 1px 2px rgba(17, 21, 28, 0.06), 0 4px 16px rgba(17, 21, 28, 0.06);
+  color-scheme: light;
+}
+.theme-dark {
+  --bg: #0b0d12;
+  --surface-1: #12151c;
+  --surface-2: #181c25;
+  --surface-3: #222734;
+  --border: #252a36;
+  --border-strong: #6b7383;
+  --text: #e8eaef;
+  --text-2: #a0a7b4;        /* 7.4:1 on surface-1 */
+  --accent: #7d97ff;
+  --accent-soft: #1b2340;
+  --positive: #3ccf8e;
+  --negative: #ff7474;
+  --caution: #f2b354;
+  --positive-soft: #10281e; --negative-soft: #2e1618; --caution-soft: #2d2212;
+  --focus: #ffd166;
+  --shadow: none;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font); background: #d9dde4; color: var(--text); -webkit-font-smoothing: antialiased; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "cv11"; }
+
+/* Proposal page chrome (not part of the design) */
+.doc { max-width: 1240px; margin: 0 auto; padding: var(--sp-6) var(--sp-4); }
+.doc > h1 { font-size: var(--fs-3xl); letter-spacing: -0.02em; margin: 0 0 var(--sp-2); color: #11151c; }
+.doc > p { margin: 0 0 var(--sp-5); color: #4d5664; max-width: 72ch; line-height: 1.55; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4); margin-bottom: var(--sp-6); }
+.pair-label { font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #4d5664; margin: 0 0 var(--sp-2); }
+.frame { background: var(--bg); color: var(--text); border-radius: var(--r-lg); padding: var(--sp-5); border: 1px solid rgba(0,0,0,0.08); min-width: 0; }
+.phone { width: 375px; margin: 0 auto; }
+.phones { display: flex; gap: var(--sp-5); justify-content: center; flex-wrap: wrap; margin-bottom: var(--sp-6); }
+h2.sec { font-size: var(--fs-xl); margin: var(--sp-6) 0 var(--sp-3); color: #11151c; letter-spacing: -0.01em; }
+
+/* ---------- Components ---------- */
+.topbar { display: flex; align-items: center; gap: var(--sp-3); padding-bottom: var(--sp-4); border-bottom: 1px solid var(--border); margin-bottom: var(--sp-5); }
+.brand { display: flex; align-items: center; gap: var(--sp-2); font-weight: 700; font-size: var(--fs-md); white-space: nowrap; }
+.brand-mark { width: 28px; height: 28px; border-radius: var(--r-md); background: var(--text); color: var(--bg); display: grid; place-items: center; font-size: 11px; letter-spacing: 0.04em; }
+.nav { display: flex; gap: var(--sp-1); margin-left: var(--sp-3); }
+.nav a { padding: 6px 10px; border-radius: var(--r-md); color: var(--text-2); text-decoration: none; font-size: var(--fs-md); font-weight: 500; }
+.nav a[aria-current] { color: var(--text); background: var(--surface-3); }
+.search { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-3); border: 1px solid var(--border); background: var(--surface-1); border-radius: var(--r-md); color: var(--text-2); font-size: var(--fs-md); white-space: nowrap; overflow: hidden; }
+.search kbd { margin-left: auto; font: 500 11px var(--font); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 1px 6px; }
+.icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--r-md); color: var(--text-2); border: 0; background: transparent; }
+.icon-btn:hover { background: var(--surface-3); color: var(--text); }
+.icon { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--sp-4); margin-bottom: var(--sp-5); flex-wrap: wrap; }
+.page-head h1 { font-size: var(--fs-2xl); letter-spacing: -0.02em; margin: 0; }
+.page-head p { margin: var(--sp-1) 0 0; color: var(--text-2); font-size: var(--fs-md); }
+.eyebrow { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+
+.btn { display: inline-flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-4); border-radius: var(--r-md); font: 600 var(--fs-md) var(--font); border: 1px solid var(--border); background: var(--surface-1); color: var(--text); cursor: pointer; }
+.btn:hover { background: var(--surface-2); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.theme-dark .btn-primary { color: #0b0d12; }
+.btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
+.btn-quiet { border-color: transparent; background: transparent; color: var(--text-2); }
+.btn-danger { color: var(--negative); border-color: var(--negative); background: transparent; }
+.btn-sm { height: 30px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
+.btn:focus-visible, .seg button:focus-visible, .field input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--r-full); font-size: var(--fs-xs); font-weight: 600; }
+.badge-neutral { background: var(--surface-3); color: var(--text-2); }
+.badge-pos { background: var(--positive-soft); color: var(--positive); }
+.badge-neg { background: var(--negative-soft); color: var(--negative); }
+.badge-caution { background: var(--caution-soft); color: var(--caution); }
+.badge-accent { background: var(--accent-soft); color: var(--accent); }
+
+.seg { display: inline-flex; padding: 2px; background: var(--surface-2); border-radius: var(--r-md); border: 1px solid var(--border); }
+.seg button { border: 0; background: transparent; color: var(--text-2); font: 600 var(--fs-sm) var(--font); height: 28px; padding: 0 10px; border-radius: 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface-1); color: var(--text); box-shadow: var(--shadow); }
+.theme-dark .seg button[aria-pressed="true"] { background: var(--surface-3); }
+
+.tabs { display: flex; gap: var(--sp-5); border-bottom: 1px solid var(--border); margin-bottom: var(--sp-5); overflow-x: auto; }
+.tabs a { padding: var(--sp-2) 0 10px; font-size: var(--fs-md); font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs a[aria-current] { color: var(--text); border-color: var(--accent); }
+
+.field { display: grid; gap: 6px; font-size: var(--fs-sm); font-weight: 500; }
+.field input { height: 36px; padding: 0 var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface-1); color: var(--text); font: 400 var(--fs-md) var(--font); }
+.field .hint { color: var(--text-2); font-weight: 400; font-size: var(--fs-xs); }
+
+.panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-4) var(--sp-5); box-shadow: var(--shadow); min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.panel-head h3 { font-size: var(--fs-md); font-weight: 600; margin: 0; }
+.panel-head a { font-size: var(--fs-sm); color: var(--accent); text-decoration: none; }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; margin-bottom: var(--sp-4); }
+.stat { background: var(--surface-1); padding: var(--sp-3) var(--sp-4); min-width: 0; }
+.stat .k { font-size: var(--fs-xs); color: var(--text-2); font-weight: 500; }
+.stat .v { font-size: var(--fs-xl); font-weight: 600; margin-top: 2px; letter-spacing: -0.01em; }
+.stat .s { font-size: var(--fs-xs); color: var(--text-2); margin-top: 2px; }
+.pos { color: var(--positive); } .neg { color: var(--negative); }
+
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+th { text-align: left; font-weight: 500; color: var(--text-2); font-size: var(--fs-xs); padding: 8px 10px; background: var(--surface-2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tr:hover td { background: var(--surface-2); }
+th.r, td.r { text-align: right; }
+.sym { font-weight: 600; }
+.sym small { display: block; font-weight: 400; color: var(--text-2); font-size: var(--fs-xs); }
+.table-wrap { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: auto; background: var(--surface-1); }
+
+.quote { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.quote .price { font-size: var(--fs-3xl); font-weight: 600; letter-spacing: -0.02em; }
+.chart { height: 200px; border-radius: var(--r-md); background: linear-gradient(var(--surface-1), var(--surface-1)); position: relative; }
+.chart svg { width: 100%; height: 100%; display: block; }
+
+.status { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); background: var(--caution-soft); border: 1px solid transparent; }
+.status .icon { color: var(--caution); margin-top: 2px; }
+.status strong { display: block; font-size: var(--fs-md); }
+.status span { font-size: var(--fs-sm); color: var(--text-2); }
+.empty { text-align: center; padding: var(--sp-6) var(--sp-4); color: var(--text-2); font-size: var(--fs-md); }
+.empty .icon { width: 28px; height: 28px; color: var(--text-2); margin-bottom: var(--sp-2); }
+.empty strong { display: block; color: var(--text); margin-bottom: var(--sp-1); }
+
+.grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: var(--sp-4); }
+.stack { display: grid; gap: var(--sp-4); }
+.row { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--sp-2); }
+.sw { border-radius: var(--r-md); border: 1px solid var(--border); overflow: hidden; font-size: var(--fs-xs); background: var(--surface-1); }
+.sw i { display: block; height: 36px; }
+.sw span { display: block; padding: 6px 8px; color: var(--text-2); }
+.typescale p { margin: 0 0 var(--sp-2); }
+
+/* Phone frames */
+.phone .topbar { flex-wrap: wrap; }
+.phone .nav { display: none; }
+.phone .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.phone .grid2 { grid-template-columns: 1fr; }
+.phone .frame { padding: var(--sp-4); }
+.phone .hide-sm { display: none; }
+.phone td, .phone th { padding: 8px; }
+@media (max-width: 1100px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- One line-icon set (24px grid, 1.8 stroke) to replace the emoji in the header, alerts and chat. -->
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4"/><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-vote" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4"/><rect x="3" y="3" width="18" height="18" rx="2"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+</svg>
+
+<div class="doc">
+  <h1>PIF design proposal</h1>
+  <p>Sample screens for the new look. Same pages and features, one consistent system: Inter with tabular numbers, a 4px spacing grid, seven type sizes (down from 20), four radii (down from 10), one accent color, soft status colors, and line icons instead of emoji. Light and dark side by side. All numbers are sample values for layout. Approve this, or say what to change, before any page is restyled.</p>
+
+  <h2 class="sec">1. Holdings (desktop)</h2>
+  <div class="pair">
+    <div><p class="pair-label">Light</p><div class="frame theme-light" id="holdings-light"></div></div>
+    <div><p class="pair-label">Dark</p><div class="frame theme-dark" id="holdings-dark"></div></div>
+  </div>
+
+  <h2 class="sec">2. Research overview (desktop)</h2>
+  <div class="pair">
+    <div><p class="pair-label">Light</p><div class="frame theme-light" id="research-light"></div></div>
+    <div><p class="pair-label">Dark</p><div class="frame theme-dark" id="research-dark"></div></div>
+  </div>
+
+  <h2 class="sec">3. Phone, 375px</h2>
+  <div class="phones">
+    <div class="phone"><p class="pair-label">Light</p><div class="frame theme-light" id="phone-light"></div></div>
+    <div class="phone"><p class="pair-label">Dark</p><div class="frame theme-dark" id="phone-dark"></div></div>
+  </div>
+
+  <h2 class="sec">4. Components and tokens</h2>
+  <div class="pair">
+    <div><p class="pair-label">Light</p><div class="frame theme-light" id="kit-light"></div></div>
+    <div><p class="pair-label">Dark</p><div class="frame theme-dark" id="kit-dark"></div></div>
+  </div>
+</div>
+
+<template id="t-topbar">
+  <div class="topbar">
+    <div class="brand"><span class="brand-mark">PIF</span><span class="hide-sm">Pitzer Investment Fund</span></div>
+    <nav class="nav" aria-label="Sample navigation"><a>Today</a><a aria-current="page">Portfolio</a><a>Research</a><a>Ideas</a><a>Market</a></nav>
+    <div class="search"><svg class="icon"><use href="#i-search"/></svg>Ticker or company<kbd>/</kbd></div>
+    <button class="icon-btn" aria-label="Alerts"><svg class="icon"><use href="#i-bell"/></svg></button>
+    <button class="icon-btn hide-sm" aria-label="Chat"><svg class="icon"><use href="#i-chat"/></svg></button>
+    <button class="icon-btn hide-sm" aria-label="Settings"><svg class="icon"><use href="#i-gear"/></svg></button>
+  </div>
+</template>
+
+<template id="t-holdings">
+  <div class="page-head">
+    <div><div class="eyebrow">Portfolio</div><h1>Holdings</h1><p>34 positions · prices live</p></div>
+    <div class="row"><div class="seg" role="group" aria-label="Gains for"><button>1D</button><button>1M</button><button aria-pressed="true">YTD</button><button>1Y</button><button>All</button></div><button class="btn btn-primary btn-sm">Add position</button></div>
+  </div>
+  <div class="stats num">
+    <div class="stat"><div class="k">Total portfolio</div><div class="v">$118,402</div><div class="s">Invested + cash</div></div>
+    <div class="stat"><div class="k">Gain, YTD</div><div class="v pos">▲ $6,120</div><div class="s pos">+5.45%</div></div>
+    <div class="stat"><div class="k">Cash</div><div class="v">$43,236</div><div class="s">36.5% of total</div></div>
+    <div class="stat"><div class="k">Needs attention</div><div class="v">3</div><div class="s">1 policy · 2 earnings</div></div>
+  </div>
+  <div class="table-wrap num">
+    <table>
+      <thead><tr><th>Ticker</th><th class="r">Shares</th><th class="r">Price</th><th class="r">Value</th><th class="r">Gain YTD</th><th class="hide-sm">Status</th></tr></thead>
+      <tbody>
+        <tr><td class="sym">HSY<small>Hershey</small></td><td class="r">4.97</td><td class="r">$171.27</td><td class="r">$850.69</td><td class="r pos">▲ 6.34%</td><td class="hide-sm"><span class="badge badge-caution">1 to watch</span></td></tr>
+        <tr><td class="sym">COST<small>Costco</small></td><td class="r">12.00</td><td class="r">$912.40</td><td class="r">$10,948.80</td><td class="r pos">▲ 3.10%</td><td class="hide-sm"><span class="badge badge-neutral">Earnings in 6d</span></td></tr>
+        <tr><td class="sym">CELH<small>Celsius</small></td><td class="r">40.00</td><td class="r">$41.85</td><td class="r">$1,674.00</td><td class="r neg">▼ 8.21%</td><td class="hide-sm"><span class="badge badge-neg">2 red flags</span></td></tr>
+        <tr><td class="sym">GOOG<small>Alphabet</small></td><td class="r">20.00</td><td class="r">$268.10</td><td class="r">$5,362.00</td><td class="r pos">▲ 14.02%</td><td class="hide-sm"><span class="badge badge-pos">Above target</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</template>
+
+<template id="t-research">
+  <div class="tabs"><a aria-current="page">Overview</a><a>Financials</a><a>Valuation</a><a>Street</a><a>Risk</a><a>Filings</a></div>
+  <div class="page-head">
+    <div><div class="row"><h1>HSY</h1><span class="badge badge-accent">Owned</span><span class="badge badge-caution"><svg class="icon" style="width:12px;height:12px"><use href="#i-flag"/></svg>1 to watch</span></div><p>The Hershey Company · Consumer Defensive</p></div>
+    <div class="quote num"><span class="price">$171.27</span><span class="pos">▲ 3.42% today</span></div>
+  </div>
+  <div class="grid2">
+    <div class="stack">
+      <section class="panel">
+        <div class="panel-head"><h3>Price chart</h3><div class="seg" role="group" aria-label="Timeframe"><button>1D</button><button>1M</button><button>6M</button><button aria-pressed="true">1Y</button><button>5Y</button></div></div>
+        <div class="chart"><svg viewBox="0 0 400 160" preserveAspectRatio="none" aria-hidden="true"><path d="M0 120 L30 112 L60 118 L90 70 L110 40 L140 58 L170 84 L200 96 L230 90 L260 104 L290 98 L320 116 L350 108 L380 92 L400 86" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/><path d="M0 120 L30 112 L60 118 L90 70 L110 40 L140 58 L170 84 L200 96 L230 90 L260 104 L290 98 L320 116 L350 108 L380 92 L400 86 L400 160 L0 160Z" fill="var(--accent)" opacity="0.08"/><line x1="0" x2="400" y1="110" y2="110" stroke="var(--text-2)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg></div>
+      </section>
+    </div>
+    <div class="stack">
+      <section class="panel">
+        <div class="panel-head"><h3>Filing red flags</h3><a>Filings tab</a></div>
+        <div class="status"><svg class="icon"><use href="#i-alert"/></svg><div><strong>1 to watch in the last two years</strong><span>CFO stepped down, Sept 2026. 4 routine items hidden.</span></div></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h3>Price alerts</h3></div>
+        <div class="empty"><svg class="icon"><use href="#i-bell"/></svg><strong>No alerts yet</strong>Get a note when HSY crosses a price.<div style="margin-top:12px"><button class="btn btn-sm">Add an alert</button></div></div>
+      </section>
+    </div>
+  </div>
+</template>
+
+<template id="t-kit">
+  <div class="stack">
+    <div class="row"><button class="btn btn-primary">Primary</button><button class="btn">Secondary</button><button class="btn btn-quiet">Quiet</button><button class="btn btn-danger btn-sm">Delete</button></div>
+    <div class="row"><span class="badge badge-neutral">Neutral</span><span class="badge badge-accent">Owned</span><span class="badge badge-pos">▲ Positive</span><span class="badge badge-neg">▼ Negative</span><span class="badge badge-caution">Watch</span></div>
+    <div class="row"><label class="field" style="flex:1;min-width:180px">Ticker or company<input value="Hershey" /><span class="hint">Pick a match or press Enter</span></label></div>
+    <div class="row" aria-label="Icons">
+      <svg class="icon"><use href="#i-bell"/></svg><svg class="icon"><use href="#i-chat"/></svg><svg class="icon"><use href="#i-gear"/></svg><svg class="icon"><use href="#i-help"/></svg><svg class="icon"><use href="#i-flag"/></svg><svg class="icon"><use href="#i-calendar"/></svg><svg class="icon"><use href="#i-user"/></svg><svg class="icon"><use href="#i-vote"/></svg><svg class="icon"><use href="#i-doc"/></svg><svg class="icon"><use href="#i-inbox"/></svg>
+    </div>
+    <div class="typescale">
+      <p style="font-size:var(--fs-3xl);font-weight:600;letter-spacing:-0.02em" class="num">32 · $171.27</p>
+      <p style="font-size:var(--fs-2xl);font-weight:600">24 · Page title</p>
+      <p style="font-size:var(--fs-xl);font-weight:600">20 · Stat value</p>
+      <p style="font-size:var(--fs-lg)">16 · Lead text</p>
+      <p style="font-size:var(--fs-md)">14 · Body and controls</p>
+      <p style="font-size:var(--fs-sm)">13 · Tables and secondary</p>
+      <p style="font-size:var(--fs-xs);color:var(--text-2)">12 · Labels, captions, badges</p>
+    </div>
+    <div class="swatches">
+      <div class="sw"><i style="background:var(--bg)"></i><span>bg</span></div>
+      <div class="sw"><i style="background:var(--surface-1)"></i><span>surface-1</span></div>
+      <div class="sw"><i style="background:var(--surface-2)"></i><span>surface-2</span></div>
+      <div class="sw"><i style="background:var(--surface-3)"></i><span>surface-3</span></div>
+      <div class="sw"><i style="background:var(--text)"></i><span>text</span></div>
+      <div class="sw"><i style="background:var(--text-2)"></i><span>text-2</span></div>
+      <div class="sw"><i style="background:var(--accent)"></i><span>accent</span></div>
+      <div class="sw"><i style="background:var(--positive)"></i><span>positive</span></div>
+      <div class="sw"><i style="background:var(--negative)"></i><span>negative</span></div>
+      <div class="sw"><i style="background:var(--caution)"></i><span>caution</span></div>
+    </div>
+  </div>
+</template>
+
+<script>
+  // Stamp each sample into its light/dark (and phone) frames.
+  const put = (tpls, ids) => ids.forEach((id) => {
+    const host = document.getElementById(id);
+    for (const t of tpls) host.appendChild(document.getElementById(t).content.cloneNode(true));
+  });
+  put(["t-topbar", "t-holdings"], ["holdings-light", "holdings-dark"]);
+  put(["t-topbar", "t-research"], ["research-light", "research-dark"]);
+  put(["t-topbar", "t-holdings", "t-research"], ["phone-light", "phone-dark"]);
+  put(["t-kit"], ["kit-light", "kit-dark"]);
+</script>
+</body>
+</html>

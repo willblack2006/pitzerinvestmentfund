@@ -1,4 +1,4 @@
-import { esc, api, fmtPct, fmtUSD, signed, pageHead, loading, errorBox, subTabs } from "../shared.js";
+import { esc, api, fmtPct, fmtUSD, signed, pageHead, subTabs, errorState, bindRetry, skeleton, emptyState, can } from "../shared.js";
 import { lineChart } from "../charts.js";
 import { IDEAS_TABS } from "./screener.js";
 import { term } from "../glossary.js";
@@ -21,18 +21,19 @@ function groupTable(title, groups) {
 export const title = "Track record";
 
 export async function mount(container) {
-  container.innerHTML = subTabs(IDEAS_TABS, "#/track-record") + loading("Grading past pitches against what actually happened…");
+  container.innerHTML = subTabs(IDEAS_TABS, "#/track-record") + skeleton("rows", { label: "Grading past pitches against what actually happened" });
   let r;
   try {
     r = await api("/api/track-record");
   } catch (err) {
-    container.innerHTML = subTabs(IDEAS_TABS, "#/track-record") + pageHead("Track record") + errorBox(`Could not load the track record: ${err.message}`);
+    container.innerHTML = subTabs(IDEAS_TABS, "#/track-record") + pageHead("Track record") + errorState({ title: "Couldn't load the track record.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   container.innerHTML = `
     ${subTabs(IDEAS_TABS, "#/track-record")}
     ${pageHead("Track record", "How often the fund's calls play out, graded against stated confidence and the base-case target. Only decided pitches (approved, rejected or executed) with a confidence %, horizon and base-case target are scored.")}
-    ${!r.rows.length ? `<p class="muted page-pad">No graded calls yet — add a confidence % and time horizon when writing a pitch, and once its horizon passes it'll show up here.</p>` : `
+    ${!r.rows.length ? `<div class="page-pad">${emptyState({ icon: "target", title: "No graded calls yet", body: "Add a confidence % and time horizon when writing a pitch. Once its horizon passes it will show up here.", action: can("member") ? { label: "Write a pitch", href: "#/pitches/new" } : null })}</div>` : `
       ${r.rows.length < 20 ? `<p class="notice small page-pad" role="note">Only ${r.rows.length} graded call${r.rows.length === 1 ? "" : "s"} so far. With this few, the hit rate and Brier score mostly reflect luck; read them as a running log, not a verdict.</p>` : ""}
       <section class="summary page-pad" aria-label="Calibration summary">
         <div class="stat"><div class="label">Calls graded</div><div class="value">${r.rows.length}</div><div class="sub">${r.pending.length} still pending (horizon not reached)</div></div>
@@ -66,7 +67,7 @@ export async function mount(container) {
         ${r.pending.length ? `
         <section class="panel span-full" aria-labelledby="pend-h">
           <h3 id="pend-h">Pending (horizon not yet reached)</h3>
-          <ul class="link-list small">${r.pending.map((p) => `<li><a href="#/pitches/${p.id}">${esc(p.symbol)}</a> — ${p.confidencePct}% confidence, target ${fmtUSD(p.basePrice)} by ${esc(p.horizonDate)}</li>`).join("")}</ul>
+          <ul class="link-list small">${r.pending.map((p) => `<li><a href="#/pitches/${p.id}">${esc(p.symbol)}</a>: ${p.confidencePct}% confidence, target ${fmtUSD(p.basePrice)} by ${esc(p.horizonDate)}</li>`).join("")}</ul>
         </section>` : ""}
       </div>`}`;
 

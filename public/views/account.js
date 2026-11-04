@@ -104,7 +104,7 @@ function renderPrefs(presets, settings) {
     <div class="pref-item span-pref">
       <span class="pref-label">Tickers you follow</span>
       <div class="chip-list">${tickers.length ? tickers.map((t) => `<span class="chip"><a href="#/research/${encodeURIComponent(t)}">${esc(t)}</a><button type="button" class="chip-x" data-unfollow="${esc(t)}" aria-label="Stop following ${esc(t)}">×</button></span>`).join("") : `<span class="muted small">None yet. Use ☆ Follow on any company's research page, or add one here.</span>`}</div>
-      <form id="followForm" class="inline-form"><label class="sr-only" for="followInput">Ticker to follow</label><input id="followInput" placeholder="Ticker" maxlength="12" autocomplete="off" /><button class="btn btn-ghost btn-sm">Follow</button></form>
+      <form id="followForm" class="inline-form"><label class="sr-only" for="followInput">Ticker to follow</label><input id="followInput" data-ticker data-ticker-go placeholder="Ticker" maxlength="12" autocomplete="off" /><button class="btn btn-ghost btn-sm">Follow</button></form>
     </div>
     <div class="pref-item span-pref">
       <span class="pref-label">Show on Today</span>

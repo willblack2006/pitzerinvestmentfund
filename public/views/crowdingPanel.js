@@ -1,13 +1,13 @@
 // Shared "attention spike" panel for the Holdings, Watchlist and Discovery pages: volume
 // z-score, opening gap and a news-coverage spike. Barber, Huang, Odean & Schwarz find
 // attention-driven buying tends to underperform ~3% over the following week.
-import { esc, api, loading } from "../shared.js";
+import { esc, api, skeleton, errorState, bindRetry } from "../shared.js";
 
 export function crowdingPanelHtml(id) {
   return `
     <section class="panel page-pad-panel" aria-labelledby="${id}-h">
       <div class="panel-head"><h3 id="${id}-h">Attention spikes</h3><span class="muted small">Volume z-score, opening gap &amp; news-coverage spikes</span></div>
-      <div id="${id}">${loading("Checking volume, gaps and news coverage…")}</div>
+      <div id="${id}">${skeleton("rows", { rows: 4, label: "Checking volume, gaps and news coverage" })}</div>
     </section>`;
 }
 
@@ -21,7 +21,8 @@ export async function loadCrowdingPanel(id, scopeOrSymbols) {
   try {
     r = await api(`/api/crowding?${query}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't load attention data: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't load attention data.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => loadCrowdingPanel(id, scopeOrSymbols));
     return;
   }
   if (!document.getElementById(id)) return;

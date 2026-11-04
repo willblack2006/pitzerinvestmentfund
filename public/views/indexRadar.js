@@ -1,15 +1,16 @@
-import { esc, api, fmtMoneyCompact, fmtRatio, pageHead, loading, errorBox, subTabs } from "../shared.js";
+import { esc, api, fmtMoneyCompact, fmtRatio, pageHead, subTabs, errorState, bindRetry, skeleton } from "../shared.js";
 import { MARKET_TABS } from "./insiders.js";
 
 export const title = "Index radar";
 
 export async function mount(container) {
-  container.innerHTML = subTabs(MARKET_TABS, "#/index-radar") + loading("Screening holdings and watchlist against S&P 500 eligibility criteria…");
+  container.innerHTML = subTabs(MARKET_TABS, "#/index-radar") + skeleton("rows", { label: "Screening holdings and watchlist against S&P 500 criteria" });
   let r;
   try {
     r = await api("/api/index-radar");
   } catch (err) {
-    container.innerHTML = subTabs(MARKET_TABS, "#/index-radar") + pageHead("Index radar") + errorBox(`Could not load the index radar: ${err.message}`);
+    container.innerHTML = subTabs(MARKET_TABS, "#/index-radar") + pageHead("Index radar") + errorState({ title: "Couldn't load the index radar.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const eligible = r.rows.filter((x) => x.eligible);
@@ -18,7 +19,7 @@ export async function mount(container) {
     ${pageHead("Index event radar", "An approximate S&P 500 addition screen for holdings and watchlist names, plus Russell reconstitution dates.")}
     <section class="panel page-pad-panel" aria-labelledby="russ-h">
       <h3 id="russ-h">Russell reconstitution</h3>
-      <p class="small">${r.russellReconstitution.map(esc).join(" · ") || "No upcoming date computed."} — effective the last Friday of June each year.</p>
+      <p class="small">${r.russellReconstitution.map(esc).join(" · ") || "No upcoming date computed."}. Effective the last Friday of June each year.</p>
     </section>
     <section class="panel page-pad-panel" aria-labelledby="sp-h">
       <div class="panel-head"><h3 id="sp-h">S&amp;P 500 addition screen</h3><span class="muted small">${eligible.length} of ${r.rows.length} pass the screen</span></div>
@@ -34,6 +35,6 @@ export async function mount(container) {
             <td class="small muted">${esc(x.reasons[0] || "")}</td>
           </tr>`).join("")}</tbody>
       </table></div>
-      <p class="muted small">Approximate criteria only — S&P's index committee also weighs sector balance, liquidity and judgment calls this screen can't replicate. Research on the index-inclusion effect finds most of the historical price "pop" has moved to the pre-announcement run-up window, since the original effect became well known and arbitraged.</p>
+      <p class="muted small">Approximate criteria only: S&P's index committee also weighs sector balance, liquidity and judgment calls this screen can't replicate. Research on the index-inclusion effect finds most of the historical price "pop" has moved to the pre-announcement run-up window, since the original effect became well known and arbitraged.</p>
     </section>`;
 }

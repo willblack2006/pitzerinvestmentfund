@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, fmtPct, signed, pageHead, loading, errorBox, subTabs, toast, currentMember, can, requestSignIn, confirmAction } from "../shared.js";
+import { el, esc, api, fmtUSD, fmtPct, signed, pageHead, subTabs, toast, currentMember, can, requestSignIn, confirmAction, skeleton, errorState, bindRetry } from "../shared.js";
 import { lineChart } from "../charts.js";
 import { IDEAS_TABS } from "./screener.js";
 
@@ -25,8 +25,7 @@ function orderForm(r) {
   return `
     <form id="paperForm" class="paper-form" novalidate>
       <div class="paper-form-row">
-        <label class="field-inline">Ticker <input name="symbol" required maxlength="10" autocapitalize="characters" autocomplete="off" list="paperHeld" /></label>
-        <datalist id="paperHeld">${r.mine.positions.map((p) => `<option value="${esc(p.symbol)}">`).join("")}</datalist>
+        <label class="field-inline">Ticker <input name="symbol" data-ticker required maxlength="10" autocapitalize="characters" autocomplete="off" /></label>
         <div class="seg seg-sm" role="group" aria-label="Buy or sell">
           <button type="button" class="seg-btn" data-side="buy" aria-pressed="true">Buy</button><button type="button" class="seg-btn" data-side="sell" aria-pressed="false">Sell</button>
         </div>
@@ -123,7 +122,8 @@ async function load(container) {
   try {
     [r, seasons] = await Promise.all([api(`/api/paper${seasonId ? `?season=${seasonId}` : ""}`), api("/api/paper/seasons")]);
   } catch (err) {
-    box.innerHTML = errorBox(`Could not load paper trading: ${err.message}`);
+    box.innerHTML = errorState({ title: "Couldn't load paper trading.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => load(container));
     return;
   }
   if (!el("paperBody")) return;
@@ -219,6 +219,6 @@ async function load(container) {
 export async function mount(container) {
   container.innerHTML = `${subTabs(IDEAS_TABS, "#/paper")}
     ${pageHead("Paper trading", `Each member gets a virtual portfolio per semester. Every order needs a reason, so you can look back at what you expected. ${currentMember() ? "" : "Sign in to trade."}`)}
-    <div id="paperBody">${loading("Loading the leaderboard…")}</div>`;
+    <div id="paperBody">${skeleton("rows", { rows: 5, label: "Loading the leaderboard" })}</div>`;
   load(container);
 }

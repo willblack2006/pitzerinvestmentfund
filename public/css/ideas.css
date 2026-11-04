@@ -1,0 +1,36 @@
+/* ideas page styles (product experience pass). Uses the tokens from style.css. */
+
+/* Watchlist: whole-row link, icons in the list nav */
+.row-link { cursor: pointer; }
+.row-link:hover > * { background: var(--surface-2); }
+.row-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.list-tab-icon, .list-title-icon { display: inline-flex; align-items: center; color: var(--text-2); vertical-align: middle; }
+.list-tab[aria-current="page"] .list-tab-icon { color: var(--accent); }
+
+/* Signed-out new pitch */
+.pitch-intro { max-width: 640px; margin: var(--sp-4, 16px) 0; padding: var(--sp-5, 24px); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg, 12px); }
+.pitch-intro h3 { margin: 0 0 6px; }
+.pitch-parts { list-style: none; margin: var(--sp-4, 16px) 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pitch-parts li { display: flex; gap: 12px; align-items: flex-start; }
+.pitch-part-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--r-md, 8px); background: var(--accent-soft); color: var(--accent); }
+.pitch-intro-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+
+/* Settings read-only view */
+.kv-list { margin: 0 0 var(--sp-3, 12px); display: flex; flex-direction: column; }
+.kv-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.kv-row:last-child { border-bottom: 0; }
+.kv-row dt { color: var(--text-2); min-width: 0; }
+.kv-row dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Discovery chips */
+.filter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 var(--sp-3, 12px); }
+.filter-label { font-size: var(--fs-xs); font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; }
+.filter-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+.filter-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 4px 12px; border: 1px solid var(--border); border-radius: var(--r-full, 999px); background: var(--surface-1); color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.filter-chip:hover { border-color: var(--accent); }
+.filter-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.filter-chip-n { color: var(--text-2); font-size: var(--fs-xs); }
+.peer-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; vertical-align: middle; }
+.peer-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 2px 10px; border: 1px solid var(--border); border-radius: var(--r-full, 999px); background: var(--surface-2); color: var(--accent); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; }
+.peer-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+@media (max-width: 560px) { .filter-sep { display: none; } .kv-row { flex-direction: column; gap: 2px; } .kv-row dd { text-align: left; } }

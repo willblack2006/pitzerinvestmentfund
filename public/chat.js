@@ -1,7 +1,8 @@
 // Club chat (members only): a side panel on every page (a full page on phones at #/chat), live
 // over the /api/events stream. Members can send a highlighted quote or a snapshot of any panel
 // with a comment, so others land on exactly what they're talking about.
-import { el, esc, api, toast, can, currentMember, safeUrl } from "./shared.js";
+import { el, esc, api, toast, can, currentMember, safeUrl, icon } from "./shared.js";
+import { openPopover } from "./ui/popover.js";
 import { pageContext } from "./notes.js";
 
 const state = {
@@ -61,8 +62,8 @@ function messageHtml(m, prev) {
     ${m.deleted ? "" : `<div class="chat-tools">
       <button type="button" data-reply aria-label="Reply">↪</button>
       <button type="button" data-react-menu aria-label="React">☺</button>
-      ${canEdit ? `<button type="button" data-edit aria-label="Edit">✎</button>` : ""}
-      ${canDelete ? `<button type="button" data-del aria-label="Delete">🗑</button>` : ""}
+      ${canEdit ? `<button type="button" data-edit aria-label="Edit">${icon("pencil", { size: 16 })}</button>` : ""}
+      ${canDelete ? `<button type="button" data-del aria-label="Delete">${icon("trash", { size: 16 })}</button>` : ""}
     </div>`}
   </article>`;
 }
@@ -73,7 +74,7 @@ function shellHtml(mode) {
   return `<div class="chat ${mode === "page" ? "chat-page" : ""}">
     <div class="chat-head">
       <div><h2 id="chatTitle">Club chat</h2><span class="muted small" id="chatOnline"></span></div>
-      ${mode === "panel" ? `<button type="button" class="btn-link" id="chatClose" aria-label="Close chat">✕</button>` : ""}
+      ${mode === "panel" ? `<button type="button" class="btn-link" id="chatClose" aria-label="Close chat">${icon("x", { size: 16 })}</button>` : ""}
     </div>
     <div class="chat-list" id="chatList" role="log" aria-live="polite" aria-labelledby="chatTitle" tabindex="0"></div>
     <form class="chat-compose" id="chatForm">
@@ -344,11 +345,18 @@ function wire(container) {
       if (e.target.closest("[data-reply]")) { state.replyTo = m; renderPending(); input.focus(); }
       const reactBtn = e.target.closest("[data-react]");
       if (reactBtn) { upsert(await api(`/api/chat/messages/${m.id}/react`, { method: "POST", body: JSON.stringify({ emoji: reactBtn.dataset.react }) })); renderList(); }
-      if (e.target.closest("[data-react-menu]")) {
-        const tools = art.querySelector(".chat-tools");
-        if (!tools.querySelector(".react-menu")) {
-          tools.insertAdjacentHTML("beforeend", `<div class="react-menu" role="group" aria-label="Pick a reaction">${state.reactions.map((r) => `<button type="button" data-react="${esc(r)}">${esc(r)}</button>`).join("")}</div>`);
-        }
+      const menuBtn = e.target.closest("[data-react-menu]");
+      if (menuBtn) {
+        const pop = openPopover({
+          anchor: menuBtn, label: "Pick a reaction", placement: "top-end", width: "auto",
+          content: `<div class="react-menu" role="group" aria-label="Pick a reaction">${state.reactions.map((r) => `<button type="button" data-react="${esc(r)}">${esc(r)}</button>`).join("")}</div>`,
+        });
+        pop.el.querySelector(".react-menu").addEventListener("click", async (ev) => {
+          const b = ev.target.closest("[data-react]");
+          if (!b) return;
+          pop.close();
+          try { upsert(await api(`/api/chat/messages/${m.id}/react`, { method: "POST", body: JSON.stringify({ emoji: b.dataset.react }) })); renderList(); } catch (err) { toast(err.message, { type: "error" }); }
+        });
       }
       if (e.target.closest("[data-edit]")) {
         const body = art.querySelector(".chat-body");
@@ -373,7 +381,9 @@ function wire(container) {
 function closePanel() {
   state.open = false;
   panel?.close();
-  el("chatBtn")?.focus();
+  // On phones the chat button lives in the account menu, so fall back to the menu button.
+  const btn = el("chatBtn");
+  (btn && btn.offsetParent !== null ? btn : el("accountBtn"))?.focus();
 }
 
 export async function openChat() {

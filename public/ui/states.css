@@ -1,0 +1,38 @@
+/* State helpers (skeleton, empty, error, icon). New tokens fall back to the old ones. */
+
+.icon { width: 1em; height: 1em; vertical-align: -0.15em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* Skeleton: shapes stay invisible for 300ms, then fade in, so quick loads show nothing. */
+.skeleton { display: block; }
+.skeleton-shapes { display: grid; gap: 10px; opacity: 0; animation: skeleton-in 0.2s ease 0.3s forwards; }
+.skeleton-bar, .skeleton-block { display: block; border-radius: var(--r-sm, 6px); background: var(--surface-2, var(--panel-2)); position: relative; overflow: hidden; }
+.skeleton-bar { height: 12px; }
+.skeleton-short { width: 60%; }
+.skeleton-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; align-items: center; padding: 6px 0; }
+.skeleton-chart { height: 240px; border-radius: var(--r-md, 8px); }
+.skeleton-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.skeleton-card { height: 84px; border-radius: var(--r-md, 8px); }
+@keyframes skeleton-in { to { opacity: 1; } }
+@keyframes skeleton-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-bar::after, .skeleton-block::after {
+    content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-2, var(--muted)) 14%, transparent), transparent);
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shapes { animation-duration: 0.01s; }
+}
+
+/* Empty state */
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 32px 16px; color: var(--text-2, var(--muted)); }
+.empty-state-icon { display: inline-flex; opacity: 0.7; }
+.empty-state-title { margin: 0; font-weight: 600; color: var(--text, inherit); }
+.empty-state-body { margin: 0; max-width: 42ch; }
+.empty-state .btn { margin-top: 6px; }
+
+/* Error state */
+.error-state { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--negative, var(--red)) 45%, transparent); border-radius: var(--r-md, 8px); background: color-mix(in srgb, var(--negative, var(--red)) 8%, transparent); }
+.error-state-title { margin: 0; font-weight: 600; color: var(--negative, var(--red)); }
+.error-state-detail { margin: 0; color: var(--text-2, var(--muted)); }

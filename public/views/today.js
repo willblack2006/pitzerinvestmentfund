@@ -1,4 +1,4 @@
-import { el, esc, api, safeUrl, loading, errorBox, getPref, can, currentMember } from "../shared.js";
+import { el, esc, api, safeUrl, getPref, can, currentMember, skeleton, errorState, bindRetry } from "../shared.js";
 import { openChat } from "../chat.js";
 import { term } from "../glossary.js";
 
@@ -78,7 +78,7 @@ function wireImageFallbacks(root) {
   }, { once: true }));
 }
 
-// ---- Market clock (regular session 9:30–16:00 ET, weekdays; Yahoo's state catches holidays) ----
+// ---- Market clock (regular session 9:30 to 16:00 ET, weekdays; Yahoo's state catches holidays) ----
 
 function marketClock() {
   const t = ny();
@@ -161,7 +161,7 @@ function readSection(lines, ed) {
 }
 
 function tilesSection() {
-  if (!live) return `<section class="tiles-wrap">${loading("Loading markets…")}</section>`;
+  if (!live) return `<section class="tiles-wrap">${skeleton("cards", { rows: 6, label: "Loading markets" })}</section>`;
   const by = Object.fromEntries(live.snapshot.map((r) => [r.symbol, r]));
   const tiles = ["^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "^TNX"].map((s) => by[s]).filter(Boolean);
   const chips = live.snapshot.filter((r) => !tiles.includes(r));
@@ -416,7 +416,8 @@ async function loadEdition(container) {
     const q = state.date && state.slot ? `?date=${state.date}&slot=${state.slot}` : "";
     current = await api(`/api/today/editions${q}`);
   } catch (err) {
-    container.innerHTML = errorBox(`Could not load the news: ${err.message}`);
+    container.innerHTML = errorState({ title: "Couldn't load the news.", detail: err.message, retryId: "load" });
+    bindRetry(container, "load", () => loadEdition(container));
     return;
   }
   render(container);
@@ -424,7 +425,7 @@ async function loadEdition(container) {
 
 export async function mount(container) {
   live = null; current = null; forYou = null;
-  container.innerHTML = loading("Loading your briefing…");
+  container.innerHTML = skeleton("cards", { rows: 6, label: "Loading your briefing" });
   const livePromise = api("/api/today/live").then((d) => { live = d; }).catch(() => { live = null; });
   const forYouPromise = can("member") && !getPref("todayHidden", []).includes("foryou")
     ? api("/api/today/foryou").then((d) => { forYou = d; }).catch(() => { forYou = { tickers: [], notes: [], chat: { unread: 0, mentions: [] }, toVote: [], paper: null }; })

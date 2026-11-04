@@ -1,0 +1,81 @@
+/* Research page: header, key stats, signal chips, peer table. Loaded after style.css, so these
+   rules win over the older .summary / .stat rules, which the Research Overview no longer uses. */
+
+/* ---- Header ---- */
+.head-pills { display: inline-flex; flex-wrap: wrap; gap: 6px; vertical-align: middle; margin-left: var(--sp-2); }
+.head-pills .badge { margin-left: 0; font-size: var(--fs-xs); padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.research-head .company-name { font-size: var(--fs-md); }
+.research-head .page-actions { flex-wrap: nowrap; }
+.menu-list { display: flex; flex-direction: column; padding: var(--sp-1); }
+.menu-item {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: var(--sp-3);
+  padding: 10px 12px; min-height: 40px; border-radius: var(--r-md); cursor: pointer; color: var(--text); font-size: var(--fs-sm);
+}
+.menu-item:hover { background: var(--surface-2); }
+.menu-item:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.menu-item[disabled] { opacity: 0.5; cursor: default; }
+.menu-item .icon { color: var(--text-2); flex: none; }
+
+/* ---- Chart on top ---- */
+.research-top { padding: var(--sp-3) var(--gutter) 0; }
+
+/* ---- Key stats strip ---- */
+.keystats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: var(--sp-3) var(--gutter) 0; overflow: hidden;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg);
+  gap: 1px; background-color: var(--border); /* the gap shows the border color as dividers */
+}
+.ks {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: var(--sp-3) var(--sp-4); background: var(--surface-1); color: var(--text); text-decoration: none;
+}
+a.ks:hover { background: var(--surface-2); }
+a.ks:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.ks-label { color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.ks-value { font-size: var(--fs-lg); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ks-range { font-size: var(--fs-md); }
+.ks-sub { color: var(--text-2); font-size: var(--fs-xs); }
+.ks .consensus-bar, .ks .range-track { margin-top: 6px; }
+
+/* ---- Signal chips ---- */
+.sig-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) var(--gutter) 0; }
+.sig-row[hidden] { display: none; }
+.sig-chip {
+  display: inline-flex; align-items: baseline; gap: var(--sp-2); padding: 5px 12px; min-height: 32px;
+  border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-1);
+  color: var(--text); text-decoration: none; font-size: var(--fs-sm);
+}
+.sig-chip:hover { background: var(--surface-2); }
+.sig-chip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.sig-label { color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; }
+.sig-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.sig-chip.tone-good { background: var(--positive-soft); border-color: transparent; color: var(--positive); }
+.sig-chip.tone-bad { background: var(--negative-soft); border-color: transparent; color: var(--negative); }
+.sig-chip.tone-warn { background: var(--caution-soft); border-color: transparent; color: var(--caution); }
+.sig-chip.tone-good .sig-label, .sig-chip.tone-bad .sig-label, .sig-chip.tone-warn .sig-label { color: inherit; }
+
+/* ---- Valuation: peer table ---- */
+.comps-table.table-sticky-first th:first-child,
+.comps-table.table-sticky-first td:first-child { background: var(--surface-1); }
+.comps-table.table-sticky-first thead th:first-child { background: var(--surface-2); }
+.comps-table .row-self th:first-child, .comps-table .row-self td { background: color-mix(in srgb, var(--accent) 10%, var(--surface-1)); }
+.comps-table .row-median th:first-child, .comps-table .row-median td { background: var(--surface-2); }
+.comps-table { min-width: 760px; }
+.peer-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-3); }
+.peer-suggest .chip { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+
+/* ---- Phone ---- */
+@media (max-width: 720px) {
+  .research-head { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; }
+  .research-head > div:first-child { grid-column: 1 / -1; }
+  .research-head h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .research-head .company-name { font-size: var(--fs-sm); }
+  .head-pills { margin-left: 0; }
+  .research-head .research-price { width: auto; }
+  .research-head .price-tag { font-size: var(--fs-2xl); }
+  .research-head .page-desc, .research-head .price-time { display: none; }
+  .research-head .page-actions .btn { min-height: 40px; }
+  .more-label { display: none; }
+  .keystats { grid-template-columns: 1fr 1fr; }
+}

@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, pageHead, loading, errorBox, subTabs, can, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam } from "../shared.js";
+import { el, esc, api, fmtUSD, pageHead, subTabs, can, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam, errorState, bindRetry, skeleton } from "../shared.js";
 import { barChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
@@ -6,12 +6,13 @@ export const title = "Allocation & policy";
 
 export async function mount(container) {
   destroyAll();
-  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/allocation") + loading("Classifying holdings by sector…");
+  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/allocation") + skeleton("rows", { label: "Classifying holdings by sector" });
   let a, presets;
   try {
     [a, presets] = await Promise.all([api(`/api/portfolio/allocation${benchParam()}`), benchmarkPresets()]);
   } catch (err) {
-    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/allocation") + pageHead("Allocation & policy") + errorBox(`Could not load allocation: ${err.message}`);
+    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/allocation") + pageHead("Allocation & policy") + errorState({ title: "Couldn't load allocation.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const s = a.settings;
@@ -34,10 +35,10 @@ export async function mount(container) {
         const parts = [
           s.maxPositionPct != null && `≤${s.maxPositionPct}% per position`,
           s.maxSectorPct != null && `≤${s.maxSectorPct}% per sector`,
-          (s.minPositions != null || s.maxPositions != null) && `${s.minPositions ?? "any"}–${s.maxPositions ?? "any"} holdings`,
+          (s.minPositions != null || s.maxPositions != null) && `${s.minPositions ?? "any"} to ${s.maxPositions ?? "any"} holdings`,
           s.minCashPct != null && `≥${s.minCashPct}% cash`,
         ].filter(Boolean);
-        return parts.length ? `Limits: ${parts.join(" · ")}.` : `No policy limits set yet — <a href="#/settings">add your IPS limits in Settings</a> to enable compliance checks.`;
+        return parts.length ? `Limits: ${parts.join(" · ")}.` : `No policy limits set yet: <a href="#/settings">add your IPS limits in Settings</a> to enable compliance checks.`;
       })()}</p>
     </section>
 
@@ -64,7 +65,7 @@ export async function mount(container) {
               <td class="num">${r.weight.toFixed(1)}%</td>
               <td class="num">${r.benchmarkWeight != null ? r.benchmarkWeight.toFixed(1) + "%" : "—"}</td>
               <td class="num">${r.active == null ? "—" : `<span class="${Math.abs(r.active) > 10 ? (r.active > 0 ? "tone-bad" : "tone-warn") : ""}">${r.active > 0 ? "+" : ""}${r.active.toFixed(1)} pts</span>`}</td>
-              <td class="small">${r.symbols.map((sym) => `<a href="#/research/${encodeURIComponent(sym)}">${esc(sym)}</a>`).join(", ") || `<span class="muted">none — <a href="#/screener">find ideas</a></span>`}</td>
+              <td class="small">${r.symbols.map((sym) => `<a href="#/research/${encodeURIComponent(sym)}">${esc(sym)}</a>`).join(", ") || `<span class="muted">none: <a href="#/screener">find ideas</a></span>`}</td>
             </tr>`).join("")}</tbody>
           </table>
         </div>

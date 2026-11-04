@@ -1,4 +1,4 @@
-import { esc, api, pageHead, loading, subTabs } from "../shared.js";
+import { esc, api, pageHead, subTabs, skeleton, errorState, bindRetry } from "../shared.js";
 import { MARKET_TABS } from "./insiders.js";
 
 const TYPE_LABEL = { earnings: "Earnings", "ex-dividend": "Ex-dividend", macro: "Macro", fomc: "FOMC", opex: "Options expiration", "month-end": "Month end" };
@@ -22,7 +22,7 @@ function listView(events) {
     <section class="panel" aria-label="${esc(month)}">
       <h3>${esc(new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }))}</h3>
       <ul class="link-list small">${rows.map((e) => `
-        <li><strong>${esc(e.date)}</strong> — <span class="badge ${TYPE_CLASS[e.type] || ""}">${esc(TYPE_LABEL[e.type] || e.type)}</span> ${esc(e.title)}${e.detail ? ` <span class="muted">(${esc(e.detail)})</span>` : ""}</li>`).join("")}</ul>
+        <li><strong>${esc(e.date)}</strong>: <span class="badge ${TYPE_CLASS[e.type] || ""}">${esc(TYPE_LABEL[e.type] || e.type)}</span> ${esc(e.title)}${e.detail ? ` <span class="muted">(${esc(e.detail)})</span>` : ""}</li>`).join("")}</ul>
     </section>`).join("");
 }
 
@@ -53,7 +53,7 @@ function monthGrid(events, monthKey) {
   for (let i = 0; i < startDow; i++) cells.push(`<div class="cal-cell cal-empty" aria-hidden="true"></div>`);
   for (let d = 1; d <= daysInMonth; d++) {
     const dayEvents = byDay.get(d) || [];
-    cells.push(`<div class="cal-cell"><div class="cal-daynum">${d}</div>${dayEvents.map((e) => `<div class="cal-event cal-${e.type}" title="${esc(e.title)}${e.detail ? ` — ${esc(e.detail)}` : ""}"><span class="sr-only">${esc(TYPE_LABEL[e.type] || e.type)}: </span>${esc(shortLabel(e))}</div>`).join("")}</div>`);
+    cells.push(`<div class="cal-cell"><div class="cal-daynum">${d}</div>${dayEvents.map((e) => `<div class="cal-event cal-${e.type}" title="${esc(e.title)}${e.detail ? `: ${esc(e.detail)}` : ""}"><span class="sr-only">${esc(TYPE_LABEL[e.type] || e.type)}: </span>${esc(shortLabel(e))}</div>`).join("")}</div>`);
   }
   const monthName = first.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
   return `
@@ -65,12 +65,13 @@ function monthGrid(events, monthKey) {
 async function load(container) {
   const box = document.getElementById("calBody");
   if (!box) return;
-  box.innerHTML = loading("Gathering earnings, ex-dividend dates, CPI/jobs releases and options-expiration dates…");
+  box.innerHTML = skeleton("rows", { rows: 6, label: "Gathering earnings, ex-dividend dates, CPI/jobs releases and options-expiration dates" });
   let r;
   try {
     r = await api(`/api/calendar?months=${state.months}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't load the calendar: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't load the calendar.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => load(container));
     return;
   }
   if (!document.getElementById("calBody")) return;

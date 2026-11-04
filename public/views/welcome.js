@@ -1,10 +1,10 @@
-import { el, esc, api, toast, setSession, loading } from "../shared.js";
+import { el, esc, api, toast, setSession, skeleton } from "../shared.js";
 
 export const title = "Welcome";
 
 // Opened from an admin's one-time link: set a password and you're signed in.
 export async function mount(container, params) {
-  container.innerHTML = loading("Checking your link…");
+  container.innerHTML = skeleton("text", { rows: 2, label: "Checking your link" });
   let info;
   try {
     info = await api(`/api/auth/invite/${encodeURIComponent(params.token)}`);

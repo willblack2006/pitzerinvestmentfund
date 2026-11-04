@@ -1,15 +1,13 @@
-import {
-  el, esc, fmtUSD, fmtPct, api, can, toast, getPref, setPref, confirmAction, lockedHint, signed,
-  sortHeader, sortRows, bindSort, pageHead, loading, errorBox, invalidateContext, subTabs,
-} from "../shared.js";
+import { el, esc, fmtUSD, fmtPct, api, can, toast, getPref, setPref, confirmAction, lockedHint, signed, sortHeader, sortRows, bindSort, pageHead, invalidateContext, subTabs, icon, errorState, bindRetry, skeleton } from "../shared.js";
+import { openPopover } from "../ui/popover.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
-import { alertItem, ICON, TAB } from "./alerts.js";
+import { alertHref, ICON, TAB } from "./alerts.js";
 import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
 import { noteCounts, noteMarker } from "../notes.js";
 
 export const title = "Portfolio";
 
-const state = { positions: [], quotes: {}, market: null, sort: { key: "marketValue", dir: -1 }, filter: "", signals: {}, period: "all", bases: null, basesError: null, cash: null, dividends: null };
+const state = { positions: [], quotes: {}, market: null, sort: { key: "marketValue", dir: -1 }, filter: "", signals: {}, signalsLoaded: false, period: "all", bases: null, basesError: null, cash: null, dividends: null };
 
 // Time frames for the gain columns and summary. "all" = since purchase (vs cost basis);
 // "1d" = live day change; the rest compare the live price with the close before the frame
@@ -46,9 +44,10 @@ function signalBadges(symbol) {
   const seen = new Set();
   const badges = sig.badges.filter((b) => (seen.has(b.type) ? false : (seen.add(b.type), true)));
   // Attention spikes are explained by the panel further down this page; the rest by a research tab.
+  const chip = (b, attrs) => `<a class="sig-chip sig-chip-${esc(b.level)}" ${attrs} aria-label="${esc(b.title)}" data-tip="${esc(b.title)}" title="${esc(b.title)}">${ICON[b.type] || icon("flag", { size: 16 })}</a>`;
   return badges.map((b) => b.type === "crowding"
-    ? `<a class="sig-chip sig-chip-${esc(b.level)}" href="#crowdPanel-h" data-scroll-to="crowdPanel-h" title="${esc(b.title)}">${ICON[b.type] || "•"}</a>`
-    : `<a class="sig-chip sig-chip-${esc(b.level)}" href="#/research/${encodeURIComponent(symbol)}${TAB[b.type] || ""}" title="${esc(b.title)}">${ICON[b.type] || "•"}</a>`).join("");
+    ? chip(b, `href="#crowdPanel-h" data-scroll-to="crowdPanel-h"`)
+    : chip(b, `href="#/research/${encodeURIComponent(symbol)}${TAB[b.type] || ""}"`)).join("");
 }
 
 // Overlay live quotes on the stored positions: price, market value and today's move. The
@@ -104,21 +103,23 @@ function renderSummary(rows) {
   // Day change as a share of the whole portfolio (cash included), the way Schwab reports it.
   const dayPct = dayBase ? (dayChange / (dayBase + cash)) * 100 : null;
 
+  const topFive = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 5).reduce((t, r) => t + r.weight, 0);
+
   el("summary").innerHTML = `
     <div class="stat stat-lg"><div class="label">Total portfolio</div><div class="value">${fmtUSD(portfolioTotal)}</div>
       <div class="sub">Invested + cash${liveRows.length ? ` · <span class="nowrap">${dayLabel()} ${signed(dayChange, fmtUSD(dayChange))} (${fmtPct(dayPct)})</span>` : ""}</div></div>
-    <div class="stat"><div class="label">Invested</div><div class="value">${fmtUSD(totalValue)}</div>
-      <div class="sub">${rows.length} positions · ${share(totalValue)}</div></div>
-    <div class="stat"><div class="label">Cash</div><div class="value">${state.cash == null ? "…" : fmtUSD(cash)}</div>
-      <div class="sub">${share(cash)}</div></div>
     <div class="stat"><div class="label">${state.period === "all" ? "Total gain" : `Gain, ${esc(periodLabel(state.period))}`}</div>
       ${pending ? `<div class="value muted">${state.basesError ? "Unavailable" : "Loading…"}</div><div class="sub">${state.basesError ? esc(state.basesError) : "Fetching price history"}</div>`
         : `<div class="value">${signed(totalGain, fmtUSD(totalGain))}</div><div class="sub">${gainSub}</div>`}</div>
+    <div class="stat"><div class="label">Cash</div><div class="value">${state.cash == null ? "…" : fmtUSD(cash)}</div>
+      <div class="sub">${share(cash)}</div></div>
     <div class="stat"><div class="label">Dividends, next 12 months</div><div class="value">${div ? `${fmtUSD(div.totals.annualIncome)}` : `<span class="muted">…</span>`}</div>
       <div class="sub">${div ? `Projected · ${fmtUSD(div.totals.receivedSinceStart)} received since tracking began · <a href="#/dividends">Details</a>` : "Loading dividend rates…"}</div></div>
-    <div class="stat"><div class="label">Winners / losers</div><div class="value">${pending ? "…" : `${winners} / ${losers}`}</div>
-      <div class="sub">${state.period === "all" ? "positions above / below cost" : `positions up / down, ${esc(periodLabel(state.period))}`}</div></div>
   `;
+  el("summaryMore").innerHTML = `
+    <span><strong>Invested</strong> ${fmtUSD(totalValue)} <span class="muted">(${rows.length} positions · ${share(totalValue)})</span></span>
+    <span><strong>Winners / losers</strong> ${pending ? "…" : `${winners} / ${losers}`} <span class="muted">${state.period === "all" ? "above / below cost" : `up / down, ${esc(periodLabel(state.period))}`}</span></span>
+    <span><strong>Top 5</strong> = ${topFive.toFixed(1)}% <span class="muted">of invested</span></span>`;
 }
 
 // Concentration view: the biggest weights as labelled bars (a list, so it reads fine
@@ -126,9 +127,8 @@ function renderSummary(rows) {
 function renderConcentration(rows) {
   const top = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 8);
   const max = top[0]?.weight || 1;
-  const topFive = top.slice(0, 5).reduce((s, r) => s + r.weight, 0);
   el("concentration").innerHTML = `
-    <div class="panel-head"><h3>Largest positions</h3><span class="muted small">Top 5 = ${topFive.toFixed(1)}% of invested</span></div>
+    <div class="panel-head"><h3>Largest positions</h3></div>
     <ol class="bar-list">
       ${top.map((r) => `
         <li>
@@ -137,6 +137,64 @@ function renderConcentration(rows) {
           <span class="bar-value">${r.weight.toFixed(1)}%${r.weight > 10 ? ` <span class="badge badge-warn" title="Above 10% of the fund">&gt;10%</span>` : ""}</span>
         </li>`).join("")}
     </ol>`;
+}
+
+// Table columns the member can show or hide (the ticker always shows). A column with
+// nothing in it (no signals, no dividends) starts hidden unless the member chose otherwise.
+const periodShort = () => PERIODS.find(([p]) => p === state.period)[1];
+const COLS = [
+  { key: "signals", label: "Signals", plain: true, empty: (rows) => state.signalsLoaded && !rows.some((r) => state.signals[r.symbol]?.badges?.length),
+    cell: (r) => `<td class="signals-cell">${signalBadges(r.symbol)}</td>` },
+  { key: "weight", label: "Weight", cell: (r) => `<td>${r.weight.toFixed(1)}%</td>` },
+  { key: "shares", label: "Shares", cell: (r) => `<td>${r.shares.toLocaleString()}</td>` },
+  { key: "lastPrice", label: "Price", cell: (r) => `<td>${fmtUSD(r.lastPrice)}${r.live ? "" : `<span class="stale-dot" title="Live price unavailable, showing the last saved price" aria-label="saved price, not live">*</span>`}</td>` },
+  { key: "dayChangePct", label: "Day", cell: (r) => `<td>${r.dayChangePct == null ? `<span class="muted">—</span>` : signed(r.dayChangePct, fmtPct(r.dayChangePct))}</td>` },
+  { key: "avgCost", label: "Avg cost", cell: (r) => `<td>${fmtUSD(r.avgCost)}</td>` },
+  { key: "marketValue", label: "Market value", cell: (r) => `<td>${fmtUSD(r.marketValue)}</td>` },
+  { key: "gain", label: () => (state.period === "all" ? "Gain $" : `Gain $ (${periodShort()})`), cell: (r) => `<td>${r.gain == null ? `<span class="muted">—</span>` : signed(r.gain, fmtUSD(r.gain))}</td>` },
+  { key: "gainPct", label: () => (state.period === "all" ? "Gain %" : `Gain % (${periodShort()})`), cell: (r) => `<td>${r.gainPct == null ? `<span class="muted">—</span>` : signed(r.gainPct, fmtPct(r.gainPct))}</td>` },
+  { key: "divIncome", label: "Div. received", empty: (rows) => !rows.some((r) => r.divIncome), cell: (r) => `<td>${fmtUSD(r.divIncome)}</td>` },
+];
+const colLabel = (c) => (typeof c.label === "function" ? c.label() : c.label);
+const savedCols = () => { const v = getPref("holdingsColumns", {}); return v && typeof v === "object" ? v : {}; };
+// Why a column is hidden: "chosen" (member turned it off), "empty" (nothing in it), or null (shown).
+function hiddenReason(c, all) {
+  const chosen = savedCols()[c.key];
+  if (chosen === true) return null;
+  if (chosen === false) return "chosen";
+  return c.empty?.(all) ? "empty" : null;
+}
+
+function renderColumnsButton(all) {
+  const btn = el("columnsBtn");
+  if (!btn) return;
+  const n = COLS.filter((c) => hiddenReason(c, all)).length;
+  btn.innerHTML = `${icon("sliders", { size: 16 })} Columns${n ? ` <span class="cols-count">${n} hidden</span>` : ""}`;
+}
+
+function openColumnsMenu(anchor) {
+  const box = document.createElement("div");
+  box.className = "cols-menu";
+  const draw = () => {
+    const all = withDerived(state.positions);
+    box.innerHTML = `<p class="small muted">Choose which columns to show. Ticker always shows.</p>
+      ${COLS.map((c) => `<label class="check cols-row"><input type="checkbox" data-col="${c.key}" ${hiddenReason(c, all) ? "" : "checked"} /> ${esc(colLabel(c))}${hiddenReason(c, all) === "empty" ? ` <span class="muted small">(empty)</span>` : ""}</label>`).join("")}
+      <button type="button" class="btn-link small" data-cols-reset>Reset to default</button>`;
+  };
+  draw();
+  box.addEventListener("change", (e) => {
+    const k = e.target.dataset?.col;
+    if (!k) return;
+    setPref("holdingsColumns", { ...savedCols(), [k]: e.target.checked });
+    renderTable();
+  });
+  box.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-cols-reset]")) return;
+    setPref("holdingsColumns", {});
+    renderTable();
+    draw();
+  });
+  openPopover({ anchor, content: box, label: "Table columns", placement: "bottom-end", width: 260 });
 }
 
 function renderTable() {
@@ -153,18 +211,11 @@ function renderTable() {
   renderConcentration(all);
 
   const s = state.sort;
+  const cols = COLS.filter((c) => !hiddenReason(c, all));
+  renderColumnsButton(all);
   el("thead").innerHTML = `<tr>
     ${sortHeader("symbol", "Ticker", s, { align: "left sticky-col" })}
-    <th scope="col"><span class="sr-only">Signals</span></th>
-    ${sortHeader("weight", "Weight", s)}
-    ${sortHeader("shares", "Shares", s)}
-    ${sortHeader("lastPrice", "Price", s)}
-    ${sortHeader("dayChangePct", "Day", s)}
-    ${sortHeader("avgCost", "Avg cost", s)}
-    ${sortHeader("marketValue", "Market value", s)}
-    ${sortHeader("gain", state.period === "all" ? "Gain $" : `Gain $ (${PERIODS.find(([p]) => p === state.period)[1]})`, s)}
-    ${sortHeader("gainPct", state.period === "all" ? "Gain %" : `Gain % (${PERIODS.find(([p]) => p === state.period)[1]})`, s)}
-    ${sortHeader("divIncome", "Div. received", s)}
+    ${cols.map((c) => c.plain ? `<th scope="col">${esc(colLabel(c))}</th>` : sortHeader(c.key, esc(colLabel(c)), s)).join("")}
     ${unlocked ? `<th scope="col"><span class="sr-only">Actions</span></th>` : ""}
   </tr>`;
 
@@ -174,16 +225,7 @@ function renderTable() {
         <a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a>${noteMarker(r.symbol, state.noteCounts)}
         ${r.notes ? `<div class="muted small cell-note">${esc(r.notes)}</div>` : ""}
       </th>
-      <td class="signals-cell">${signalBadges(r.symbol)}</td>
-      <td>${r.weight.toFixed(1)}%</td>
-      <td>${r.shares.toLocaleString()}</td>
-      <td>${fmtUSD(r.lastPrice)}${r.live ? "" : `<span class="stale-dot" title="Live price unavailable — showing the last saved price" aria-label="saved price, not live">*</span>`}</td>
-      <td>${r.dayChangePct == null ? `<span class="muted">—</span>` : signed(r.dayChangePct, fmtPct(r.dayChangePct))}</td>
-      <td>${fmtUSD(r.avgCost)}</td>
-      <td>${fmtUSD(r.marketValue)}</td>
-      <td>${r.gain == null ? `<span class="muted">—</span>` : signed(r.gain, fmtUSD(r.gain))}</td>
-      <td>${r.gainPct == null ? `<span class="muted">—</span>` : signed(r.gainPct, fmtPct(r.gainPct))}</td>
-      <td>${fmtUSD(r.divIncome)}</td>
+      ${cols.map((c) => c.cell(r)).join("")}
       ${unlocked ? `<td>
         <div class="row-actions">
           <button class="btn btn-ghost btn-sm" data-edit="${r.id}" aria-label="Edit ${esc(r.symbol)}">Edit</button>
@@ -228,7 +270,7 @@ const STATE_LABEL = { REGULAR: "Market open", PRE: "Pre-market", POST: "After ho
 function marketLine() {
   const m = state.market;
   if (!m) return "Loading live prices…";
-  if (m.error) return `Live prices unavailable — showing last saved prices. <button type="button" class="btn-link" id="retryQuotes">Retry</button>`;
+  if (m.error) return `Live prices unavailable. Showing last saved prices. <button type="button" class="btn-link" id="retryQuotes">Retry</button>`;
   const t = m.asOf ? new Date(m.asOf).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }) : null;
   const live = LIVE_STATES.has(m.marketState);
   return `<span class="live-dot ${live ? "on" : ""}" aria-hidden="true"></span>${STATE_LABEL[m.marketState] || "Live prices"}${t ? ` · prices as of ${t} ET` : ""}${live ? " · updates every minute" : ""}`;
@@ -270,13 +312,58 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && el("tbody")) refreshQuotes();
 });
 
+// "Needs attention": grouped by type, one compact line each, the suggested action once per group.
+const ATT_GROUPS = {
+  earnings: { head: "Earnings this week", icon: "calendar", action: "Assign someone to cover each call." },
+  crowding: { head: "Attention spikes", icon: "megaphone", action: "Check the Attention spikes panel below." },
+  insider: { head: "Insider activity", icon: "user" },
+  policy: { head: "Policy", icon: "alert" },
+  vote: { head: "Open votes", icon: "vote", action: "Cast your vote on each pitch page." },
+  price: { head: "Price alerts", icon: "target" },
+  target: { head: "Price targets", icon: "target" },
+  short: { head: "Short pressure", icon: "arrow-down" },
+  revision: { head: "Estimate revisions", icon: "pencil" },
+  filingchange: { head: "Filing changes", icon: "doc" },
+  redflag: { head: "Red flags", icon: "flag" },
+  activist: { head: "Activist filings", icon: "percent" },
+};
+const ATT_SHOW = 5;
+
+function attentionHtml(alerts) {
+  const groups = new Map();
+  for (const a of alerts) {
+    if (!groups.has(a.type)) groups.set(a.type, []);
+    groups.get(a.type).push(a);
+  }
+  // Groups with something that needs action first.
+  const order = [...groups.entries()].sort((x, y) => (y[1].some((a) => a.level === "action") - x[1].some((a) => a.level === "action")));
+  return order.map(([type, items], i) => {
+    const g = ATT_GROUPS[type] || { head: type, icon: "flag" };
+    const line = (a) => {
+      const href = alertHref(a);
+      const detail = (a.detail || "").replace(/\s*Assign someone to cover the call\.?/, "").trim();
+      return `<li class="att-item att-${esc(a.level)}">
+        <span class="att-icon">${icon(g.icon, { size: 16 })}</span>
+        <span class="att-text">${href ? `<a href="${href}">${esc(a.title)}</a>` : esc(a.title)}${detail ? ` <span class="muted small">${esc(detail)}</span>` : ""}</span>
+        <span class="sr-only">${a.level === "action" ? "Needs action" : "For awareness"}</span>
+      </li>`;
+    };
+    return `<details class="att-group"${i < 2 || items.some((a) => a.level === "action") ? " open" : ""}>
+      <summary><span class="att-head">${esc(g.head)}</span> <span class="count-pill">${items.length}</span></summary>
+      ${g.action ? `<p class="att-action small muted">${esc(g.action)}</p>` : ""}
+      <ul class="att-list">${items.slice(0, ATT_SHOW).map(line).join("")}</ul>
+      ${items.length > ATT_SHOW ? `<p class="small att-more"><a href="#/alerts">${items.length - ATT_SHOW} more…</a></p>` : ""}
+    </details>`;
+  }).join("");
+}
+
 async function loadAlertPreview() {
   const box = el("alertPreview");
   try {
     const { alerts } = await api("/api/alerts");
     if (!el("alertPreview")) return;
     box.innerHTML = alerts.length
-      ? `<ul class="alert-list compact">${alerts.slice(0, 5).map(alertItem).join("")}</ul>${alerts.length > 5 ? `<p class="small"><a href="#/alerts">${alerts.length - 5} more…</a></p>` : ""}`
+      ? attentionHtml(alerts)
       : `<p class="muted small">Nothing needs attention. <a href="#/screener">Find new ideas →</a></p>`;
   } catch {
     if (el("alertPreview")) box.innerHTML = `<p class="muted small">Alerts unavailable right now.</p>`;
@@ -403,13 +490,14 @@ async function deletePosition(p) {
 }
 
 export async function mount(container) {
-  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/") + loading("Loading holdings…");
+  container.innerHTML = subTabs(PORTFOLIO_TABS, "#/") + skeleton("rows", { label: "Loading holdings" });
   state.bases = null; // re-fetched per visit (server caches the histories for 6h)
   state.period = getPref("holdingsPeriod", "all");
   try {
     state.positions = await api("/api/positions");
   } catch (err) {
-    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/") + pageHead("Portfolio") + errorBox(`Could not load holdings: ${err.message}`);
+    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/") + pageHead("Portfolio") + errorState({ title: "Couldn't load holdings.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const unlocked = can("trade");
@@ -427,12 +515,13 @@ export async function mount(container) {
         ${PERIODS.map(([k, short, long]) => `<button type="button" class="seg-btn" data-period="${k}" aria-pressed="${state.period === k}" title="${esc(long)}">${short}</button>`).join("")}
       </div>
     </div>
-    <section class="summary" id="summary" aria-label="Portfolio summary"></section>
+    <section class="summary summary-main" id="summary" aria-label="Portfolio summary"></section>
+    <p class="summary-more small" id="summaryMore"></p>
     <div class="two-col">
       <section class="panel" id="concentration" aria-label="Largest positions"></section>
       <section class="panel quick-links" aria-labelledby="ql-title">
         <div class="panel-head"><h3 id="ql-title">Needs attention</h3><a class="small" href="#/alerts">All alerts →</a></div>
-        <div id="alertPreview">${loading("Checking alerts…")}</div>
+        <div id="alertPreview">${skeleton("cards", { label: "Checking alerts" })}</div>
       </section>
     </div>
     <section class="toolbar">
@@ -441,6 +530,7 @@ export async function mount(container) {
         <input id="search" type="search" placeholder="Filter by ticker or note…" autocomplete="off" />
         <span id="filterCount" class="muted small" role="status"></span>
       </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="columnsBtn" aria-haspopup="dialog" aria-expanded="false"></button>
       ${unlocked ? "" : lockedHint("Sign in to add, edit, or delete positions.", "trade")}
     </section>
     <section class="table-wrap">
@@ -455,11 +545,12 @@ export async function mount(container) {
   `;
 
   wireGlobalOnce();
+  el("columnsBtn").addEventListener("click", (e) => openColumnsMenu(e.currentTarget));
   renderTable();
   loadAlertPreview();
   loadCrowdingPanel("crowdPanel", "holdings");
   refreshQuotes().then(startPolling);
-  api("/api/signals").then((r) => { state.signals = r.bySymbol; if (el("tbody")) renderTable(); }).catch(() => { /* badges just stay blank */ });
+  api("/api/signals").then((r) => { state.signals = r.bySymbol; state.signalsLoaded = true; if (el("tbody")) renderTable(); }).catch(() => { /* badges just stay blank */ });
 
   loadBases();
   // 📝 next to tickers you (or the club) have notes on.

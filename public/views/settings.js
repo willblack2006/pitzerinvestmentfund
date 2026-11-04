@@ -1,10 +1,10 @@
-import { el, esc, api, can, currentMember, toast, lockedHint, pageHead, loading, errorBox, confirmAction, benchmarkPresets, benchmarkPicker, readBenchmark } from "../shared.js";
+import { el, esc, api, can, currentMember, toast, lockedHint, pageHead, confirmAction, benchmarkPresets, benchmarkPicker, readBenchmark, skeleton, errorState, bindRetry } from "../shared.js";
 
 export const title = "Settings";
 
 const POLICY = [
-  ["maxPositionPct", "Max single position (% of fund)", "Most student-fund IPSs cap a single name at 5–10%."],
-  ["maxSectorPct", "Max sector weight (% of fund)", "Limits concentration in one sector; 25–35% is common."],
+  ["maxPositionPct", "Max single position (% of fund)", "Most student-fund IPSs cap a single name at 5 to 10%."],
+  ["maxSectorPct", "Max sector weight (% of fund)", "Limits concentration in one sector; 25 to 35% is common."],
   ["minPositions", "Minimum number of holdings", "Diversification floor."],
   ["maxPositions", "Maximum number of holdings", "Keeps coverage manageable for the analyst team."],
   ["minCashPct", "Minimum cash (% of fund)", "Liquidity buffer for new ideas or withdrawals."],
@@ -23,6 +23,9 @@ export function activityText(a) {
   const what = [d.symbol, d.shares != null ? `${Number(d.shares).toLocaleString("en-US", { maximumFractionDigits: 4 })} sh` : "", d.name].filter(Boolean).join(" · ");
   return `${ACTION_LABEL[a.action] || a.action}${what ? `: ${what}` : ""}`;
 }
+
+// Read-only label and value pair, shown instead of a disabled input.
+const kvRow = (label, value) => `<div class="kv-row"><dt>${esc(label)}</dt><dd>${value == null || value === "" ? `<span class="muted">Not set</span>` : esc(value)}</dd></div>`;
 
 const joinUrl = (token) => `${location.origin}${location.pathname}#/join/${token}`;
 const day = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -53,7 +56,7 @@ function inviteBox(name, token) {
 }
 
 export async function mount(container) {
-  container.innerHTML = loading("Loading settings…");
+  container.innerHTML = skeleton("text", { rows: 5, label: "Loading settings" });
   const admin = can("admin"), trader = can("trade"), member = can("member");
   let s, members, presets, managers, activity;
   try {
@@ -62,10 +65,10 @@ export async function mount(container) {
       admin ? api("/api/activity?limit=40") : Promise.resolve([]),
     ]);
   } catch (err) {
-    container.innerHTML = pageHead("Settings") + errorBox(err.message);
+    container.innerHTML = pageHead("Settings") + errorState({ title: "Couldn't load settings.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
-  const dis = admin ? "" : "disabled";
 
   container.innerHTML = `
     ${pageHead("Settings", "The fund's investment policy, voting rules, cash and members. Admins change policy and members; portfolio managers maintain cash.")}
@@ -73,25 +76,33 @@ export async function mount(container) {
     <div class="tab-grid">
       <section class="panel" aria-labelledby="ips-h">
         <h3 id="ips-h">Investment policy limits</h3>
-        <form id="policyForm" class="stack-form">
-          ${POLICY.map(([k, label, hint]) => `<label>${label}<input name="${k}" type="number" step="any" min="0" value="${s[k] ?? ""}" placeholder="Not set" ${dis} inputmode="decimal" /><span class="field-hint">${hint} Leave blank for no limit.</span></label>`).join("")}
-          ${admin ? `<button class="btn btn-primary">Save limits</button>` : member ? lockedHint("", "admin") : ""}
-        </form>
+        ${admin ? `<form id="policyForm" class="stack-form">
+          ${POLICY.map(([k, label, hint]) => `<label>${label}<input name="${k}" type="number" step="any" min="0" value="${s[k] ?? ""}" placeholder="Not set" inputmode="decimal" /><span class="field-hint">${hint} Leave blank for no limit.</span></label>`).join("")}
+          <button class="btn btn-primary">Save limits</button>
+        </form>` : `<dl class="kv-list">${POLICY.map(([k, label]) => kvRow(label, s[k] == null ? null : Number(s[k]).toLocaleString("en-US", { maximumFractionDigits: 2 }))).join("")}</dl>
+        ${member ? lockedHint("", "admin") : ""}`}
         <p class="muted small">Breaches show on <a href="#/allocation">Allocation &amp; policy</a> and in <a href="#/alerts">Alerts</a>.</p>
       </section>
       <section class="panel" aria-labelledby="vote-h">
         <h3 id="vote-h">Voting rules &amp; official benchmark</h3>
-        <form id="voteForm" class="stack-form">
-          <label>Approval threshold (% yes of yes+no votes)<input name="voteThresholdPct" type="number" min="0" max="100" step="1" value="${s.voteThresholdPct}" ${dis} /><span class="field-hint">50 = simple majority; 66.7 = two-thirds.</span></label>
-          <label>Quorum (minimum votes cast)<input name="voteQuorum" type="number" min="1" step="1" value="${s.voteQuorum}" ${dis} /></label>
-          ${benchmarkPicker("fundBench", s.benchmark, presets, { label: "Fund benchmark", disabled: !admin })}
+        ${admin ? `<form id="voteForm" class="stack-form">
+          <label>Approval threshold (% yes of yes+no votes)<input name="voteThresholdPct" type="number" min="0" max="100" step="1" value="${s.voteThresholdPct}" /><span class="field-hint">50 = simple majority; 66.7 = two-thirds.</span></label>
+          <label>Quorum (minimum votes cast)<input name="voteQuorum" type="number" min="1" step="1" value="${s.voteQuorum}" /></label>
+          ${benchmarkPicker("fundBench", s.benchmark, presets, { label: "Fund benchmark" })}
           <span class="field-hint">Currently <strong>${esc(s.benchmarkLabel)}</strong>. The fund's official comparison for reports and the default for visitors. Each member can compare against something else with "Compare with" on Performance, Allocation and Research. Any Yahoo ticker works, or a blend like <code>SPY:60,AGG:40</code>.</span>
-          ${admin ? `<button class="btn btn-primary">Save</button>` : member ? lockedHint("", "admin") : ""}
-        </form>
-        <form id="cashForm" class="stack-form">
-          <label>Cash balance ($)<input name="cash" type="number" step="any" min="0" value="${s.cash}" ${trader ? "" : "disabled"} /><span class="field-hint">Normally kept up to date by the Transactions ledger and confirmed dividends.</span></label>
-          ${trader ? `<button class="btn btn-ghost">Save cash</button>` : member ? lockedHint("", "trade") : ""}
-        </form>
+          <button class="btn btn-primary">Save</button>
+        </form>` : `<dl class="kv-list">
+          ${kvRow("Approval threshold", `${s.voteThresholdPct}% yes of yes and no votes`)}
+          ${kvRow("Quorum", `${s.voteQuorum} vote${Number(s.voteQuorum) === 1 ? "" : "s"} minimum`)}
+          ${kvRow("Fund benchmark", s.benchmarkLabel)}
+        </dl>
+        <p class="muted small">The fund's official comparison for reports. Each member can compare against something else with "Compare with" on Performance, Allocation and Research.</p>
+        ${member ? lockedHint("", "admin") : ""}`}
+        ${trader ? `<form id="cashForm" class="stack-form">
+          <label>Cash balance ($)<input name="cash" type="number" step="any" min="0" value="${s.cash}" /><span class="field-hint">Normally kept up to date by the Transactions ledger and confirmed dividends.</span></label>
+          <button class="btn btn-ghost">Save cash</button>
+        </form>` : `<dl class="kv-list">${kvRow("Cash balance", Number(s.cash).toLocaleString("en-US", { style: "currency", currency: "USD" }))}</dl>
+        ${member ? lockedHint("", "trade") : ""}`}
       </section>
       <section class="panel span-full" aria-labelledby="mem-h">
         <div class="panel-head"><h3 id="mem-h">Members</h3><span class="muted small">${admin ? "Share the sign-up link, or add people one at a time" : "Club members"}</span></div>
@@ -161,18 +172,18 @@ export async function mount(container) {
       mount(container);
     } catch (err) { toast(err.message, { type: "error" }); }
   };
-  el("policyForm").addEventListener("submit", (e) => {
+  el("policyForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const body = {};
     for (const [k, v] of new FormData(e.target).entries()) body[k] = v.trim() === "" ? null : Number(v); // blank = no limit
     save(body, "Policy limits saved.");
   });
-  el("voteForm").addEventListener("submit", (e) => {
+  el("voteForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
     save({ voteThresholdPct: Number(f.get("voteThresholdPct")), voteQuorum: Number(f.get("voteQuorum")), benchmark: readBenchmark("fundBench") }, "Voting rules and benchmark saved.");
   });
-  el("cashForm").addEventListener("submit", (e) => {
+  el("cashForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     save({ cash: Number(new FormData(e.target).get("cash")) }, "Cash saved.");
   });

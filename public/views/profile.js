@@ -1,4 +1,4 @@
-import { esc, api, can, currentMember, pageHead, loading, lockedHint, errorBox, fmtUSD, fmtPct, signed } from "../shared.js";
+import { esc, api, can, currentMember, pageHead, lockedHint, fmtUSD, fmtPct, signed, skeleton, emptyState, errorState } from "../shared.js";
 import { noteCard } from "../notes.js";
 
 export const title = "Profile";
@@ -33,7 +33,7 @@ function pitchesPanel(d) {
         <td class="num">${pct(p.returnSince)}</td><td class="num">${pct(p.excess)}</td></tr>`).join("")}</tbody>
     </table></div>
     <p class="muted small">"Call vs ${esc(d.benchmark)}" is the stock's return since the pitch minus ${esc(d.benchmark)}'s over the same days, flipped for sell and trim pitches (those are right when the stock lags).</p>`
-    : `<p class="muted small">No pitches yet${d.self ? `. <a href="#/pitches/new">Start one</a>.` : "."}</p>`}
+    : emptyState({ icon: "megaphone", title: "No pitches yet", action: d.self ? { label: "Write a pitch", href: "#/pitches/new" } : null })}
   </section>`;
 }
 
@@ -68,9 +68,9 @@ export async function mount(container, params) {
     return;
   }
   const id = params.id === "me" ? currentMember().id : Number(params.id);
-  container.innerHTML = pageHead("Profile") + loading("Loading the track record…");
+  container.innerHTML = pageHead("Profile") + skeleton("cards", { rows: 4, label: "Loading the track record" });
   let d;
-  try { d = await api(`/api/members/${id}/profile`); } catch (err) { container.innerHTML = pageHead("Profile") + errorBox(err.message, false); return; }
+  try { d = await api(`/api/members/${id}/profile`); } catch (err) { container.innerHTML = pageHead("Profile") + errorState({ title: "Couldn't load this profile.", detail: err.message }); return; }
   if (!container.isConnected) return;
   const m = d.member;
   const roles = [m.title, m.isAdmin ? "Admin" : "", m.canTrade ? "Portfolio manager" : "", m.active ? "" : "Alumni"].filter(Boolean).join(" · ");

@@ -1,6 +1,4 @@
-import {
-  esc, api, fmtUSD, fmtPct, signed, can, toast, confirmAction, lockedHint, pageHead, loading, errorBox, subTabs, invalidateContext, loadSession,
-} from "../shared.js";
+import { esc, api, fmtUSD, fmtPct, signed, can, toast, confirmAction, lockedHint, pageHead, icon as svgIcon, subTabs, invalidateContext, loadSession, errorState, bindRetry, skeleton, emptyState } from "../shared.js";
 import { IDEAS_TABS } from "./screener.js";
 import { openPositionDialog } from "./holdings.js";
 import { crowdingPanelHtml, loadCrowdingPanel } from "./crowdingPanel.js";
@@ -16,13 +14,13 @@ let quotes = {};
 let noteMap = {};
 let showNew = false;
 
-const icon = (l) => (l.kind === "holdings" ? "💼" : l.kind === "fund" ? "👀" : l.kind === "following" ? "★" : l.visibility === "club" ? "👥" : "🔒");
+const icon = (l) => svgIcon(l.kind === "holdings" ? "briefcase" : l.kind === "fund" ? "eye" : l.kind === "following" ? "star-filled" : l.visibility === "club" ? "users" : "lock");
 const who = (l) => (l.kind === "custom" ? (l.visibility === "club" ? `Shared with the club${l.owner ? ` · made by ${l.mine ? "you" : l.owner}` : ""}` : "Only you can see this") : "");
 
 function picker(activeKey) {
   const group = (label, items) => (items.length ? `<p class="list-group-label">${esc(label)}</p>${items.map((l) => `
     <a class="list-tab" href="#/watchlist/${encodeURIComponent(l.key)}" ${l.key === activeKey ? 'aria-current="page"' : ""}>
-      <span aria-hidden="true">${icon(l)}</span><span class="list-tab-name">${esc(l.name)}</span><span class="list-count">${l.count}</span>
+      <span class="list-tab-icon">${icon(l)}</span><span class="list-tab-name">${esc(l.name)}</span><span class="list-count">${l.count}</span>
     </a>`).join("")}` : "");
   return `<nav class="list-picker" aria-label="Lists">
     ${group("Fund", lists.filter((l) => l.kind === "holdings" || l.kind === "fund"))}
@@ -37,8 +35,8 @@ function newListForm() {
     <h3>New list</h3>
     <label class="field-inline">Name <input name="name" maxlength="60" required placeholder="e.g. Consumer names, Earnings plays" /></label>
     <fieldset class="vis-choice"><legend class="sr-only">Who can see it</legend>
-      <label class="check"><input type="radio" name="visibility" value="private" checked /> 🔒 Private: only you</label>
-      <label class="check"><input type="radio" name="visibility" value="club" /> 👥 Shared: everyone in the club can see it and add to it</label>
+      <label class="check"><input type="radio" name="visibility" value="private" checked /> ${svgIcon("lock", { size: 14 })} Private: only you</label>
+      <label class="check"><input type="radio" name="visibility" value="club" /> ${svgIcon("users", { size: 14 })} Shared: everyone in the club can see it and add to it</label>
     </fieldset>
     <label class="field-inline">Description <input name="description" maxlength="300" placeholder="Optional" /></label>
     <div><button class="btn btn-primary btn-sm">Create list</button> <button type="button" class="btn btn-ghost btn-sm" id="cancelNew">Cancel</button></div>
@@ -50,7 +48,7 @@ function listHead() {
   const meta = lists.find((x) => x.key === l.key) || l;
   return `<div class="list-head">
     <div>
-      <h3 id="listTitle">${icon(meta)} ${esc(meta.name)}</h3>
+      <h3 id="listTitle"><span class="list-title-icon">${icon(meta)}</span> ${esc(meta.name)}</h3>
       <p class="muted small">${esc(meta.description || "")}${meta.description && who(meta) ? " · " : ""}${esc(who(meta))}</p>
     </div>
     ${meta.canManage ? `<div class="row-actions">
@@ -60,7 +58,7 @@ function listHead() {
     </div>` : ""}
   </div>
   ${meta.canEdit ? `<form id="addItemForm" class="inline-form add-item" novalidate>
-    <label class="sr-only" for="addSym">Ticker to add</label><input id="addSym" name="symbol" placeholder="Ticker" maxlength="12" autocomplete="off" autocapitalize="characters" style="width:100px" />
+    <label class="sr-only" for="addSym">Ticker to add</label><input id="addSym" name="symbol" data-ticker placeholder="Ticker" maxlength="12" autocomplete="off" autocapitalize="characters" style="width:100px" />
     ${meta.kind === "following" ? "" : `<label class="sr-only" for="addNote">Note</label><input id="addNote" name="note" placeholder="Why it's here (optional)" maxlength="200" />`}
     <button class="btn btn-primary btn-sm">Add</button>
   </form>` : current.list.kind === "holdings" ? "" : !can("member") ? lockedHint("Sign in to make your own lists and add to shared ones.") : ""}`;
@@ -73,14 +71,13 @@ function rowsHtml() {
   const dated = current.items.some((i) => i.addedAt);
   return current.items.map((r) => {
     const q = quotes[r.symbol];
-    return `<tr>
+    return `<tr class="row-link" tabindex="0" data-href="#/research/${encodeURIComponent(r.symbol)}">
       <th scope="row" class="left"><a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a>${noteMarker(r.symbol, noteMap)}</th>
       <td>${q ? fmtUSD(q.price) : `<span class="muted">—</span>`}</td>
       <td>${q?.changePct != null ? signed(q.changePct, fmtPct(q.changePct)) : `<span class="muted">—</span>`}</td>
       <td class="left muted small">${esc(r.note || "—")}</td>
       ${dated ? `<td class="left small">${r.addedAt ? esc(r.addedAt.slice(0, 10)) : "—"}${r.addedBy ? `<div class="muted">${esc(r.addedBy)}</div>` : ""}</td>` : ""}
       <td><div class="row-actions">
-        <a class="btn btn-ghost btn-sm" href="#/research/${encodeURIComponent(r.symbol)}" aria-label="Research ${esc(r.symbol)}">Research</a>
         ${trader ? `<button class="btn btn-ghost btn-sm" data-buy="${esc(r.symbol)}" aria-label="Add ${esc(r.symbol)} to the fund's holdings">Add to holdings</button>` : ""}
         ${editable ? `<button class="btn btn-danger btn-sm" data-remove="${esc(r.symbol)}" aria-label="Remove ${esc(r.symbol)} from ${esc(l.name)}">Remove</button>` : ""}
       </div></td></tr>`;
@@ -90,9 +87,9 @@ function rowsHtml() {
 function emptyHtml() {
   const k = current.list.kind;
   if (k === "holdings") return `<p class="muted page-pad">The fund doesn't own anything yet.</p>`;
-  if (k === "following") return `<div class="empty-state"><p class="empty-title">You're not following anything yet</p><p class="muted">Add a ticker above, or use ☆ Follow on any company's research page. Followed tickers show up in "For you" on Today.</p></div>`;
-  if (k === "fund") return `<div class="empty-state"><p class="empty-title">Nothing on the fund watchlist yet</p><p class="muted">Add candidates from Discovery or any research page, then build the thesis before pitching.</p><p><a class="btn btn-primary" href="#/screener">Find ideas in Discovery</a></p></div>`;
-  return `<div class="empty-state"><p class="empty-title">This list is empty</p><p class="muted">Add a ticker above, or use "Lists" on any company's research page.</p></div>`;
+  if (k === "following") return emptyState({ icon: "eye", title: "You're not following anything yet", body: "Add a ticker above, or use Follow on any company's research page. Followed tickers show up in \"For you\" on Today." });
+  if (k === "fund") return emptyState({ icon: "star", title: "Nothing on the fund watchlist yet", body: "Add candidates from Discovery or any research page, then build the thesis before pitching.", action: { label: "Find ideas in Discovery", href: "#/screener" } });
+  return emptyState({ icon: "star", title: "This list is empty", body: "Add a ticker above, or use \"Lists\" on any company's research page." });
 }
 
 function renderList(container) {
@@ -107,11 +104,14 @@ function renderList(container) {
 
 async function loadList(container, key) {
   const box = container.querySelector("#listBody");
-  box.innerHTML = loading("Loading the list…");
+  box.innerHTML = skeleton("rows", { label: "Loading the list" });
   try {
     current = await api(`/api/watchlists/${encodeURIComponent(key)}`);
   } catch (err) {
-    box.innerHTML = errorBox(err.code === "signin_required" ? "Sign in to see members' lists." : err.message, false);
+    box.innerHTML = err.code === "signin_required"
+      ? errorState({ title: "Sign in to see members' lists." })
+      : errorState({ title: "Couldn't load this list.", detail: err.message, retryId: "list" });
+    bindRetry(box, "list", () => loadList(container, key));
     return;
   }
   quotes = {};
@@ -132,9 +132,10 @@ async function refreshLists(container, key) {
 }
 
 export async function mount(container, params = {}) {
-  container.innerHTML = subTabs(IDEAS_TABS, "#/watchlist") + loading("Loading watchlists…");
+  container.innerHTML = subTabs(IDEAS_TABS, "#/watchlist") + skeleton("rows", { label: "Loading watchlists" });
   try { lists = await api("/api/watchlists"); } catch (err) {
-    container.innerHTML = subTabs(IDEAS_TABS, "#/watchlist") + pageHead("Watchlists") + errorBox(`Could not load watchlists: ${err.message}`);
+    container.innerHTML = subTabs(IDEAS_TABS, "#/watchlist") + pageHead("Watchlists") + errorState({ title: "Couldn't load watchlists.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container, params));
     return;
   }
   const key = lists.some((l) => l.key === params.key) ? params.key : "holdings";
@@ -154,6 +155,17 @@ export async function mount(container, params = {}) {
   // Listen on this page's own wrapper (rebuilt on every visit), not the shared #view element.
   const root = container.querySelector(".lists-layout");
   if (!root) return;
+
+  // Whole row opens research. Links and buttons inside the row keep their own behavior.
+  root.addEventListener("click", (e) => {
+    const row = e.target.closest("tr[data-href]");
+    if (!row || e.target.closest("a, button, input, select, textarea, label")) return;
+    location.hash = row.dataset.href;
+  });
+  root.addEventListener("keydown", (e) => {
+    const row = e.target.closest("tr[data-href]");
+    if (e.key === "Enter" && row && e.target === row) location.hash = row.dataset.href;
+  });
 
   root.addEventListener("click", async (e) => {
     if (e.target.closest("#newListBtn")) {

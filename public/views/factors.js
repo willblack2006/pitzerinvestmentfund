@@ -1,4 +1,4 @@
-import { esc, api, pageHead, loading, errorBox, subTabs, sortHeader, sortRows, bindSort } from "../shared.js";
+import { esc, api, pageHead, loading, subTabs, sortHeader, sortRows, bindSort, errorState, bindRetry } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { barChart } from "../charts.js";
 import { GLOSSARY, term } from "../glossary.js";
@@ -28,12 +28,13 @@ const state = { scope: "all", sort: { key: "value", dir: -1 } }; // sortRows/bin
 async function load(container) {
   const box = document.getElementById("factorsBody");
   if (!box) return;
-  box.innerHTML = loading("Scoring value, momentum, quality, low-volatility and size — this pulls fundamentals and price history for each stock, so first load can take a while.");
+  box.innerHTML = loading("Scoring value, momentum, quality, low-volatility and size: this pulls fundamentals and price history for each stock, so first load can take a while.");
   let r;
   try {
     r = await api(`/api/factors?scope=${state.scope}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't load factor scores: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't load factor scores.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => load(container));
     return;
   }
   if (!document.getElementById("factorsBody")) return;
@@ -46,7 +47,7 @@ async function load(container) {
         if (!entries.length) return "";
         const [topKey, topLabel] = entries.reduce((a, b) => (Math.abs(t[b[0]] - 50) > Math.abs(t[a[0]] - 50) ? b : a));
         const v = t[topKey];
-        return Math.abs(v - 50) >= 10 ? `Biggest tilt: <strong>${esc(topLabel.toLowerCase())}</strong> (${v >= 50 ? "high" : "low"}) — the fund looks like a ${topLabel.toLowerCase()}${v < 50 ? "-avoiding" : ""} bet relative to its own universe.` : "No strong factor tilt right now.";
+        return Math.abs(v - 50) >= 10 ? `Biggest tilt: <strong>${esc(topLabel.toLowerCase())}</strong> (${v >= 50 ? "high" : "low"}). The fund looks like a ${topLabel.toLowerCase()}${v < 50 ? "-avoiding" : ""} bet relative to its own universe.` : "No strong factor tilt right now.";
       })()}</p>` : ""}
     <div class="table-scroll"><table class="mini-table" id="factorsTable">
       <caption class="sr-only">Factor percentiles by stock, 0-100 within this universe</caption>
@@ -88,7 +89,7 @@ export const title = "Factors";
 
 export async function mount(container) {
   container.innerHTML = subTabs(PORTFOLIO_TABS, "#/factors") +
-    pageHead("Factor scorecard", "Value, momentum, quality, low-volatility and size — each holding and watchlist name ranked against the rest of this group, plus the fund's overall tilt.");
+    pageHead("Factor scorecard", "Value, momentum, quality, low-volatility and size: each holding and watchlist name ranked against the rest of this group, plus the fund's overall tilt.");
   container.innerHTML += `
     <section class="panel page-pad-panel" aria-labelledby="fac-h">
       <div class="panel-head">

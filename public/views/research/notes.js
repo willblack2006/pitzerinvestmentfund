@@ -1,4 +1,4 @@
-import { esc, api, can, loading, lockedHint } from "../../shared.js";
+import { esc, api, can, lockedHint, skeleton } from "../../shared.js";
 import { noteCard, wireNoteCards, openNoteDrawer, invalidateNoteCounts } from "../../notes.js";
 
 // Notes on one company: yours (private or shared) plus notes others shared with the club.
@@ -8,7 +8,7 @@ export async function render(c, { symbol, compact = false }) {
     c.innerHTML = compact ? "" : `<div class="page-pad">${lockedHint("Sign in to keep notes on this company.")}</div>`;
     return;
   }
-  c.innerHTML = loading("Loading notes…");
+  c.innerHTML = skeleton("text", { rows: 3, label: "Loading notes" });
   let notes = [];
   const load = async () => {
     try { notes = await api(`/api/notes?symbol=${encodeURIComponent(symbol)}`); } catch (err) { c.innerHTML = `<p class="muted">${esc(err.message)}</p>`; return; }

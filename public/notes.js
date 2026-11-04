@@ -1,7 +1,7 @@
 // Personal notes, available everywhere: a floating "Note" button (and the N key) opens a drawer
 // that already knows which company/page you're on; highlighted text can be quoted into it.
 // Also exports the note card used by the Research notes panel and the My notes page.
-import { esc, api, toast, can, currentMember, confirmAction } from "./shared.js";
+import { esc, api, toast, can, currentMember, confirmAction, icon } from "./shared.js";
 
 const DRAFT_KEY = "pif_note_draft";
 const SITE = " · Pitzer Investment Fund";
@@ -99,8 +99,8 @@ function ensureDrawer() {
   drawer.setAttribute("aria-labelledby", "noteDrawerTitle");
   drawer.innerHTML = `
     <form id="noteForm" class="stack-form" method="dialog">
-      <div class="drawer-head"><h2 id="noteDrawerTitle">New note</h2><button type="button" class="btn-link" id="noteClose" aria-label="Close notes">✕</button></div>
-      <label>Company (optional) <input name="symbol" maxlength="12" autocomplete="off" placeholder="Ticker, e.g. COST" /></label>
+      <div class="drawer-head"><h2 id="noteDrawerTitle">New note</h2><button type="button" class="btn-link" id="noteClose" aria-label="Close notes">${icon("x", { size: 16 })}</button></div>
+      <label>Company (optional) <input name="symbol" data-ticker maxlength="12" autocomplete="off" placeholder="Ticker or company, e.g. COST" /></label>
       <div id="noteQuoteBox"></div>
       <label>Note <textarea name="body" rows="7" maxlength="10000" placeholder="What did you notice? Use $TICKER to link a company."></textarea></label>
       <label>Tags (optional) <input name="tags" maxlength="120" placeholder="earnings, valuation" autocomplete="off" /></label>

@@ -1,4 +1,4 @@
-import { esc, api, safeUrl, can, toast, loading, renderMarkdown, lockedHint } from "../../shared.js";
+import { esc, api, safeUrl, can, toast, loading, renderMarkdown, lockedHint, skeleton, errorState, bindRetry } from "../../shared.js";
 
 const FORM_LABEL = { "10-K": "Annual report", "10-Q": "Quarterly report", "8-K": "Current report (material event)" };
 
@@ -10,7 +10,26 @@ function summaryBlock(s) {
     </div>`;
 }
 
-const FLAG_LABEL = { auditor_change: "Auditor change", restatement: "Restatement", departure: "Departure", late_filing: "Late filing", going_concern: "Going concern", material_weakness: "Material weakness" };
+const TIER = {
+  critical: { label: "Critical", icon: "⚠", cls: "flag-critical" },
+  high: { label: "Serious", icon: "⚠", cls: "flag-high" },
+  watch: { label: "Watch", icon: "◐", cls: "flag-watch" },
+  info: { label: "Routine", icon: "·", cls: "flag-info" },
+};
+
+function flagRow(f) {
+  const t = TIER[f.severity] || TIER.info;
+  return `
+    <li class="flag-row ${t.cls}">
+      <span class="flag-tier"><span aria-hidden="true">${t.icon}</span> ${t.label}</span>
+      <div class="flag-main">
+        <p class="flag-title"><strong>${esc(f.title || f.detail)}</strong> <span class="muted small">${esc(f.form || "")} · ${esc(f.date || "")}</span></p>
+        ${f.evidence ? `<blockquote class="flag-quote small">“${esc(f.evidence)}”</blockquote>` : ""}
+        ${f.severity !== "info" && f.why ? `<p class="small muted flag-why">${esc(f.why)}</p>` : ""}
+        ${f.url ? `<a class="small" href="${safeUrl(f.url)}" target="_blank" rel="noopener">Read the filing<span class="sr-only"> (opens SEC.gov in a new tab)</span></a>` : ""}
+      </div>
+    </li>`;
+}
 
 async function loadRedFlags(symbol) {
   const box = document.getElementById("flagsBody");
@@ -19,25 +38,42 @@ async function loadRedFlags(symbol) {
   try {
     r = await api(`/api/research/${encodeURIComponent(symbol)}/red-flags`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't scan for red flags: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't scan for red flags.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => { box.innerHTML = skeleton("text", { rows: 3, label: "Trying again" }); loadRedFlags(symbol); });
     return;
   }
   if (!document.getElementById("flagsBody")) return;
-  if (!r.flags.length) {
-    box.innerHTML = `<p class="small">No red flags in the last two years — no auditor changes, restatements, late filings, going-concern language or material-weakness disclosures found.</p>`;
-    return;
-  }
+  const flags = r.flags || [];
+  const main = flags.filter((f) => f.severity !== "info");
+  const routine = flags.filter((f) => f.severity === "info");
+  const st = r.status || { level: "clean", label: "No red flags", counts: {} };
+  const found = new Set(main.map((f) => f.type));
+  const head = st.level === "clean"
+    ? "No red flags in the last two years."
+    : `${esc(st.label)} in the last two years.`;
   box.innerHTML = `
-    <ul class="link-list">${r.flags.map((f) => `
-      <li><span class="badge ${f.severity === "high" ? "badge-danger" : "badge-watch"}">${esc(FLAG_LABEL[f.type] || f.type)}</span>
-        ${f.url ? `<a href="${safeUrl(f.url)}" target="_blank" rel="noopener">${esc(f.detail)}<span class="sr-only"> (opens SEC.gov in new tab)</span></a>` : esc(f.detail)}
-        <div class="muted small">${esc(f.date || "")}</div></li>`).join("")}</ul>`;
+    <div class="flag-status flag-status-${esc(st.level)}" role="status">
+      <span class="flag-status-icon" aria-hidden="true">${st.level === "clean" ? "✓" : st.level === "watch" ? "◐" : "⚠"}</span>
+      <div><p class="flag-status-head">${head}</p>
+        <p class="small muted">${r.read ? `Read ${r.read} filing${r.read === 1 ? "" : "s"} to separate real findings from boilerplate. ` : ""}${routine.length ? `${routine.length} routine item${routine.length === 1 ? "" : "s"} hidden.` : ""}</p></div>
+    </div>
+    ${r.error ? `<p class="notice small" role="note">Part of the scan failed: ${esc(r.error)}</p>` : ""}
+    <ul class="flag-checks small" aria-label="What the scan checked">
+      ${(r.checks || []).map((c) => `<li class="${found.has(c.key) ? "is-flagged" : "is-clear"}"><span aria-hidden="true">${found.has(c.key) ? "⚑" : "✓"}</span> ${esc(c.label)}<span class="sr-only">: ${found.has(c.key) ? "found" : "none found"}</span></li>`).join("")}
+    </ul>
+    ${main.length ? `<ul class="flag-list">${main.map(flagRow).join("")}</ul>` : ""}
+    ${routine.length ? `
+      <details class="flag-routine">
+        <summary>Show ${routine.length} routine item${routine.length === 1 ? "" : "s"}</summary>
+        <p class="small muted">Appointments, planned retirements, board seats and pay plans (8-K Item 5.02), plus mentions the scan couldn't confirm. Not red flags on their own.</p>
+        <ul class="flag-list">${routine.map(flagRow).join("")}</ul>
+      </details>` : ""}`;
 }
 
 function diffSectionBlock(s) {
   return `
     <details class="filing-diff-section">
-      <summary>${esc(s.label)} — ${s.hasPrior ? `${Math.round((s.similarity ?? 0) * 100)}% similar to the prior filing` : "no matching section in the prior filing"}</summary>
+      <summary>${esc(s.label)}: ${s.hasPrior ? `${Math.round((s.similarity ?? 0) * 100)}% similar to the prior filing` : "no matching section in the prior filing"}</summary>
       ${s.added.length ? `<p class="small"><strong>Added:</strong></p><ul class="small">${s.added.slice(0, 5).map((p) => `<li>${esc(p.slice(0, 400))}${p.length > 400 ? "…" : ""}</li>`).join("")}</ul>` : ""}
       ${s.removed.length ? `<p class="small"><strong>Removed:</strong></p><ul class="small">${s.removed.slice(0, 5).map((p) => `<li>${esc(p.slice(0, 400))}${p.length > 400 ? "…" : ""}</li>`).join("")}</ul>` : ""}
       ${!s.added.length && !s.removed.length ? `<p class="muted small">No paragraph-level changes detected.</p>` : ""}
@@ -51,7 +87,8 @@ async function loadFilingDiff(symbol) {
   try {
     d = await api(`/api/research/${encodeURIComponent(symbol)}/filing-diff`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't compare filings: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't compare filings.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => { box.innerHTML = skeleton("text", { rows: 3, label: "Trying again" }); loadFilingDiff(symbol); });
     return;
   }
   if (!document.getElementById("diffBody")) return;
@@ -81,12 +118,13 @@ async function loadFilingDiff(symbol) {
 }
 
 export async function render(c, { symbol }) {
-  c.innerHTML = loading("Loading SEC filings…");
+  c.innerHTML = skeleton("rows", { rows: 5, label: "Loading SEC filings" });
   let data;
   try {
     data = await api(`/api/research/${encodeURIComponent(symbol)}/filings`);
   } catch (err) {
-    c.innerHTML = `<p class="muted page-pad">Couldn't load filings: ${esc(err.message)}</p>`;
+    c.innerHTML = errorState({ title: "Couldn't load filings.", detail: err.message, retryId: "load" });
+    bindRetry(c, "load", () => render(c, { symbol }));
     return;
   }
   if (!data.filings.length) {
@@ -96,12 +134,12 @@ export async function render(c, { symbol }) {
   const unlocked = can("member");
   c.innerHTML = `
     <section class="panel page-pad-panel" aria-labelledby="flags-h">
-      <div class="panel-head"><h3 id="flags-h">Red-flag scan</h3><span class="muted small">Auditor changes, restatements, late filings, going-concern &amp; material-weakness language</span></div>
-      <div id="flagsBody">${loading("Scanning filings and EDGAR full-text search…")}</div>
+      <div class="panel-head"><h3 id="flags-h">Red-flag scan</h3><span class="muted small">SEC filings from the last two years, read and sorted by how serious they are</span></div>
+      <div id="flagsBody">${loading("Reading recent filings. The first scan of a company takes up to 20 seconds.")}</div>
     </section>
     <section class="panel page-pad-panel" aria-labelledby="diff-h">
       <div class="panel-head"><h3 id="diff-h">What changed in the latest 10-K</h3><span class="muted small">Risk Factors, MD&amp;A &amp; Legal Proceedings vs the prior year ("Lazy Prices")</span></div>
-      <div id="diffBody">${loading("Comparing this year's filing with last year's…")}</div>
+      <div id="diffBody">${skeleton("text", { rows: 3, label: "Comparing this year's filing with last year's" })}</div>
     </section>
     <section class="panel page-pad-panel" aria-labelledby="fil-h">
       <div class="panel-head"><h3 id="fil-h">Recent SEC filings</h3><span class="muted small">From EDGAR</span></div>

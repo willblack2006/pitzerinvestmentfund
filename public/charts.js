@@ -1,9 +1,11 @@
+import { timeChart, isTimeLabels, destroyAllTv } from "./tvchart.js";
+
 // Thin Chart.js wrappers that read colors from the CSS theme tokens, respect reduced motion,
 // and degrade to nothing if the CDN failed to load. Every canvas gets a text alternative
 // from its caller (role="img" + aria-label).
 //
 // Chart.js (~200KB) is only fetched here, on first actual use, instead of via a <script> tag
-// in index.html — most pages (holdings, transactions, screener, settings, …) never render a
+// in index.html: most pages (holdings, transactions, screener, settings, …) never render a
 // chart and shouldn't pay to download one.
 let chartReady = null;
 function ensureChart() {
@@ -35,6 +37,7 @@ function track(canvas, chart) {
 export function destroyAll() {
   registry.forEach((c) => c.destroy());
   registry.clear();
+  destroyAllTv();
 }
 
 function baseOptions({ yFormat, xTicks = 6, legend = false, stacked = false, horizontal = false } = {}) {
@@ -56,6 +59,15 @@ function baseOptions({ yFormat, xTicks = 6, legend = false, stacked = false, hor
 
 export async function lineChart(canvas, { labels, datasets, yFormat, legend, fill = false }) {
   if (!canvas) return null;
+  // Anything over time (daily, monthly) draws with lightweight-charts (tvchart.js); Chart.js
+  // keeps the category lines (e.g. calibration buckets).
+  if (isTimeLabels(labels)) {
+    return timeChart(canvas, {
+      series: datasets.map((d, i) => ({ label: d.label || "", times: labels, values: d.data, color: d.color, dash: !!d.dash, type: fill && i === 0 ? "area" : "line" })),
+      yFormat: yFormat ? (v) => yFormat(v) : undefined,
+      legend: legend ?? datasets.length > 1,
+    });
+  }
   await ensureChart();
   if (typeof Chart === "undefined" || !canvas.isConnected) return null;
   return track(canvas, new Chart(canvas, {

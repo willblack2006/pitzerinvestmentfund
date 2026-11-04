@@ -25,7 +25,7 @@ function annualTable(rows) {
           ${line("FCF margin", pct("fcfMargin"))}
           <tr class="group"><th colspan="${ys.length + 1}" scope="rowgroup">Returns on capital</th></tr>
           ${line("ROE", pct("roe"), { hint: "Net income / shareholders' equity. Inflated when buybacks shrink equity." })}
-          ${line("ROIC", pct("roic"), { hint: "After-tax operating income / (debt + equity − cash). Above ~10–12% usually beats the cost of capital." })}
+          ${line("ROIC", pct("roic"), { hint: "After-tax operating income / (debt + equity − cash). Above ~10 to 12% usually beats the cost of capital." })}
           <tr class="group"><th colspan="${ys.length + 1}" scope="rowgroup">Balance sheet</th></tr>
           ${line("Net debt", (r) => (r.netDebt === null ? "—" : r.netDebt < 0 ? `<span class="gain-pos">${fmtMoneyCompact(-r.netDebt)} net cash</span>` : fmtMoneyCompact(r.netDebt)))}
           ${line("Net debt / EBITDA", (r) => (r.netDebtToEbitda === null ? "—" : r.netDebtToEbitda < 0 ? "Net cash" : fmtX(r.netDebtToEbitda)))}
@@ -56,7 +56,7 @@ function piotroskiCard(p) {
   return scoreCard({
     id: "pio-h", title: "Piotroski F-score", value: `${p.score}<span class="score-of">/${p.outOf}</span>`, verdict: p.verdict, tone,
     children: `<ul class="checklist">${p.tests.map((t) => `<li class="${t.pass === null ? "na" : t.pass ? "pass" : "fail"}"><span aria-hidden="true">${t.pass === null ? "–" : t.pass ? "✓" : "✗"}</span> <span class="sr-only">${t.pass === null ? "No data:" : t.pass ? "Pass:" : "Fail:"}</span>${esc(t.name)}</li>`).join("")}</ul>`,
-    note: "Nine pass/fail tests of profitability, balance-sheet health and efficiency (Piotroski 2000). 7–9 = strong, 0–3 = weak.",
+    note: "Nine pass/fail tests of profitability, balance-sheet health and efficiency (Piotroski 2000). 7 to 9 = strong, 0 to 3 = weak.",
   });
 }
 
@@ -81,7 +81,7 @@ function beneishCard(b, isFinancial) {
   return scoreCard({
     id: "ben-h", title: "Beneish M-score", value: b.m.toFixed(2), verdict: b.verdict, tone,
     children: `<details class="small"><summary>Index detail</summary><dl class="facts">${Object.entries(b.indices).map(([k, v]) => `<dt>${names[k]}${b.missing.includes(k) ? " (no data)" : ""}</dt><dd>${v.toFixed(2)}</dd>`).join("")}</dl></details>`,
-    note: "Above −1.78 suggests earnings may be inflated (Beneish 1999). Big acquisitions or hyper-growth can trip it — read it as “dig into the accounting”, not proof.",
+    note: "Above −1.78 suggests earnings may be inflated (Beneish 1999). Big acquisitions or hyper-growth can trip it. Read it as “dig into the accounting”, not proof.",
   });
 }
 

@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, fmtRatio, fmtNum, loading } from "../../shared.js";
+import { el, esc, api, fmtUSD, fmtRatio, fmtNum, skeleton, errorState, bindRetry } from "../../shared.js";
 import { barChart } from "../../charts.js";
 import { term } from "../../glossary.js";
 
@@ -7,12 +7,13 @@ let state = { expiration: null };
 async function load(c, symbol) {
   const box = el("optBody");
   if (!box) return;
-  box.innerHTML = loading("Pulling the options chain…");
+  box.innerHTML = skeleton("rows", { rows: 6, label: "Pulling the options chain" });
   let r;
   try {
     r = await api(`/api/research/${encodeURIComponent(symbol)}/options${state.expiration ? `?date=${state.expiration}` : ""}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't load options data: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't load options data.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => load(c, symbol));
     return;
   }
   if (!el("optBody")) return;
@@ -41,7 +42,7 @@ async function load(c, symbol) {
         <div class="chart-box"><canvas id="oiChart" role="img" aria-label="Call and put open interest by strike price."></canvas></div>
       </section>
       <section class="panel span-full" aria-labelledby="gamma-h">
-        <div class="panel-head"><h3 id="gamma-h">${term("dealerGamma", "Estimated dealer gamma by strike")}</h3><span class="muted small">Assumes dealers are long calls, short puts — a stated convention, not a fact about any dealer's book</span></div>
+        <div class="panel-head"><h3 id="gamma-h">${term("dealerGamma", "Estimated dealer gamma by strike")}</h3><span class="muted small">Assumes dealers are long calls, short puts: a stated convention, not a fact about any dealer's book</span></div>
         <div class="chart-box"><canvas id="gammaChart" role="img" aria-label="Estimated dealer gamma exposure by strike, in dollars per 1% move of the underlying."></canvas></div>
       </section>
     </div>

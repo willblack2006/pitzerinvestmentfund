@@ -1,9 +1,10 @@
 // Personal notifications: the 🔔 for signed-in members opens this inbox (visitors keep the
 // bell as a link to the fund's Alerts page). New ones arrive live over /api/events.
-import { el, esc, api, toast, can } from "./shared.js";
+import { el, esc, api, toast, can, icon } from "./shared.js";
+import { togglePopover } from "./ui/popover.js";
 
 const state = { items: [], unread: 0, hasMore: false, loaded: false, fundAlerts: 0 };
-const ICON = { mention: "@", pitchVoting: "🗳", pitchResult: "✅", fundTrade: "💼", priceAlert: "📈", paperOrder: "🧪", memberJoined: "👋" };
+const ICON = { mention: "at", pitchVoting: "vote", pitchResult: "check-circle", fundTrade: "briefcase", priceAlert: "trending-up", paperOrder: "flask", memberJoined: "user-plus" };
 // Types that have no other live toast of their own (chat mentions and fund trades already do).
 const TOAST = new Set(["pitchVoting", "pitchResult", "priceAlert", "paperOrder", "memberJoined"]);
 
@@ -18,7 +19,7 @@ const ago = (utc) => {
 export function itemHtml(n) {
   return `<li class="inbox-item ${n.readAt ? "" : "unread"}" data-note-id="${n.id}">
     <a href="${esc(n.link || "#/inbox")}" data-open="${n.id}">
-      <span class="inbox-icon" aria-hidden="true">${ICON[n.type] || "•"}</span>
+      <span class="inbox-icon" aria-hidden="true">${icon(ICON[n.type] || "bell", { size: 16 })}</span>
       <span class="inbox-text"><strong>${esc(n.title)}</strong>${n.body ? `<span class="small muted">${esc(n.body)}</span>` : ""}<span class="small muted">${esc(ago(n.createdAt))}${n.readAt ? "" : '<span class="sr-only"> (unread)</span>'}</span></span>
     </a>
   </li>`;
@@ -31,15 +32,22 @@ function updateBadge() {
   el("inboxBtn").setAttribute("aria-label", state.unread ? `Notifications: ${state.unread} unread` : "Notifications");
 }
 
-function renderMenu() {
-  const menu = el("inboxMenu");
-  menu.innerHTML = `
+let pop = null; // the open notifications popover, if any
+
+function menuHtml() {
+  return `
     <div class="inbox-head"><strong>Notifications</strong>
       ${state.unread ? `<button type="button" class="btn-link small" data-read-all>Mark all read</button>` : ""}</div>
-    <a class="inbox-fund small" href="#/alerts">💡 Fund alerts${state.fundAlerts ? `: <strong>${state.fundAlerts} need action</strong>` : ""} →</a>
+    <a class="inbox-fund small" href="#/alerts">${icon("alert", { size: 14 })} Fund alerts${state.fundAlerts ? `: <strong>${state.fundAlerts} need action</strong>` : ""} →</a>
     ${state.items.length ? `<ul class="inbox-list">${state.items.slice(0, 12).map(itemHtml).join("")}</ul>`
       : `<p class="muted small inbox-empty">${state.loaded ? "Nothing yet. You'll hear about votes, results of your pitches, fund trades, your price alerts and mentions here." : "Loading…"}</p>`}
     <div class="inbox-foot"><a href="#/inbox" class="small">See all</a><a href="#/account/notify" class="small">Choose what you get</a></div>`;
+}
+
+// Redraw the list while the popover is open (new item arrived, load finished, marked read).
+function renderMenu() {
+  const body = pop?.el.querySelector(".ui-pop-body");
+  if (body) body.innerHTML = menuHtml();
 }
 
 async function load() {
@@ -47,7 +55,7 @@ async function load() {
     const r = await api("/api/notifications?limit=30");
     state.items = r.items; state.unread = r.unread; state.hasMore = r.hasMore; state.loaded = true;
     updateBadge();
-    if (el("inboxMenu").matches(":popover-open")) renderMenu();
+    renderMenu();
     window.dispatchEvent(new CustomEvent("pif:inbox-changed"));
   } catch { /* best effort */ }
 }
@@ -75,20 +83,26 @@ export function inboxState() { return state; }
 export function setFundAlertCount(n) { state.fundAlerts = n; }
 
 export function initInbox() {
-  const menu = el("inboxMenu");
-  menu.addEventListener("toggle", (e) => { if (e.newState === "open") { renderMenu(); if (!state.loaded) load(); } });
-  menu.addEventListener("click", async (e) => {
-    if (e.target.closest("[data-read-all]")) { await markAllRead(); renderMenu(); return; }
-    const a = e.target.closest("a");
-    if (!a) return;
-    const id = Number(a.dataset.open);
-    if (id) markRead(id);
-    menu.hidePopover();
+  const btn = el("inboxBtn");
+  btn.addEventListener("click", () => {
+    const handle = togglePopover({ anchor: btn, content: menuHtml(), label: "Notifications", placement: "bottom-end", width: 380, onClose: () => { pop = null; } });
+    if (!handle) return;
+    pop = handle;
+    if (!state.loaded) load();
+    handle.el.addEventListener("click", async (e) => {
+      if (e.target.closest("[data-read-all]")) { await markAllRead(); renderMenu(); return; }
+      const a = e.target.closest("a");
+      if (!a) return;
+      const id = Number(a.dataset.open);
+      if (id) markRead(id);
+      handle.close({ returnFocus: false });
+    });
   });
   const sync = () => {
     const on = can("member");
     el("inboxBtn").classList.toggle("hidden", !on);
     el("alertsLink").classList.toggle("hidden", on);
+    if (!on) pop?.close({ returnFocus: false });
     if (on) load(); else { state.items = []; state.unread = 0; state.loaded = false; }
   };
   window.addEventListener("pif:session-changed", sync);
@@ -100,7 +114,7 @@ export function initInbox() {
     state.items.unshift(data);
     state.unread += 1;
     updateBadge();
-    if (menu.matches(":popover-open")) renderMenu();
+    renderMenu();
     window.dispatchEvent(new CustomEvent("pif:inbox-changed"));
     if (TOAST.has(data.type)) toast(data.title, data.link ? { action: { label: "View", onClick: () => { markRead(data.id); location.hash = data.link; } } } : {});
   });

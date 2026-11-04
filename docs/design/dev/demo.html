@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DEV DEMO: popover + pick list</title>
+  <link rel="stylesheet" href="../../../public/style.css" />
+  <link rel="stylesheet" href="../../../public/ui/ui.css" />
+  <style>
+    .demo { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    .demo-note { border: 1px dashed var(--border-strong); padding: 8px 12px; border-radius: 8px; }
+    .demo-row { display: flex; justify-content: space-between; gap: 12px; margin: 16px 0; }
+  </style>
+</head>
+<body>
+  <main class="demo">
+    <p class="demo-note small">Dev demo for public/ui/popover.js and public/ui/pickList.js. Not linked from the app. Fake indicators only.</p>
+    <h1>Indicator picker</h1>
+    <div class="demo-row">
+      <button type="button" class="btn" id="indBtn">Indicators</button>
+      <button type="button" class="btn" id="indBtnEnd">Indicators (right edge)</button>
+    </div>
+    <p>Added: <span id="added">none</span></p>
+    <div style="height: 120vh"></div>
+    <button type="button" class="btn" id="indBtnLow">Indicators (near bottom, should flip up)</button>
+  </main>
+  <script type="module">
+    import { togglePopover } from "../../../public/ui/popover.js";
+    import { pickList } from "../../../public/ui/pickList.js";
+
+    const INDICATORS = [
+      { id: "sma", label: "Simple moving average", description: "Average close over N days. Smooths out noise.", group: "Trend", keywords: ["sma", "ma"] },
+      { id: "ema", label: "Exponential moving average", description: "Like SMA but weights recent days more.", group: "Trend", keywords: ["ema"] },
+      { id: "vwap", label: "VWAP", description: "Average price weighted by volume.", group: "Trend", keywords: ["volume"] },
+      { id: "rsi", label: "RSI", description: "0 to 100 gauge of recent gains vs losses.", group: "Momentum", keywords: ["relative strength"] },
+      { id: "macd", label: "MACD", description: "Gap between a fast and slow EMA, plus a signal line.", group: "Momentum" },
+      { id: "stoch", label: "Stochastic", description: "Where the close sits in the recent high/low range.", group: "Momentum" },
+      { id: "bb", label: "Bollinger Bands", description: "Moving average with bands two standard deviations out.", group: "Volatility", keywords: ["bands"] },
+      { id: "atr", label: "ATR", description: "Average true range: how far price moves per day.", group: "Volatility" },
+    ];
+    const added = new Set();
+
+    function open(anchor, placement) {
+      let list;
+      list = pickList({
+        items: INDICATORS,
+        groups: ["Trend", "Momentum", "Volatility"],
+        placeholder: "Search indicators",
+        recentKey: "pif.demo.recentIndicators",
+        emptyText: "No indicators match",
+        isSelected: (it) => added.has(it.id),
+        renderRight: (it) => `<button type="button" aria-label="What is ${it.label}?" onclick="alert('Glossary: ${it.label}')">?</button>`,
+        onPick: (it) => {
+          added.has(it.id) ? added.delete(it.id) : added.add(it.id);
+          document.getElementById("added").textContent = [...added].join(", ") || "none";
+          list.refresh();
+        },
+      });
+      togglePopover({ anchor, content: list.el, label: "Indicators", placement, width: 360 });
+    }
+    document.getElementById("indBtn").addEventListener("click", (e) => open(e.currentTarget));
+    document.getElementById("indBtnEnd").addEventListener("click", (e) => open(e.currentTarget, "bottom-end"));
+    document.getElementById("indBtnLow").addEventListener("click", (e) => open(e.currentTarget));
+  </script>
+</body>
+</html>

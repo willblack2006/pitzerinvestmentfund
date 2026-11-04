@@ -1,0 +1,64 @@
+/* portfolio page styles (product experience pass). Uses the tokens from style.css. */
+
+/* Holdings summary: 4 main stats, then one slim line for the rest */
+.summary-main .stat .sub { overflow-wrap: anywhere; }
+.summary-more {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-5);
+  margin: 0; padding: var(--sp-3) var(--gutter) 0;
+  color: var(--text-2);
+}
+.summary-more .muted { color: var(--text-2); }
+@media (max-width: 600px) {
+  .summary.summary-main .stat-lg { grid-column: auto; }
+}
+@media (max-width: 560px) { .summary-main { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary-main .stat { min-width: 0; overflow-wrap: anywhere; } }
+
+/* Columns button and menu */
+#columnsBtn { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.cols-count {
+  font-size: var(--fs-xs); padding: 1px var(--sp-2); border-radius: var(--r-full, 999px);
+  background: var(--caution-soft); color: var(--caution); font-weight: 600;
+}
+.cols-menu { display: grid; gap: var(--sp-2); min-width: 200px; }
+.cols-menu p { margin: 0 0 var(--sp-1); }
+.cols-row { min-height: 32px; }
+
+/* Signal chips: icon + visible tooltip on hover and keyboard focus */
+.sig-chip { position: relative; }
+.sig-chip .icon { display: block; }
+.sig-chip[data-tip]:hover::after, .sig-chip[data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 5;
+  width: max-content; max-width: 240px; white-space: normal;
+  padding: var(--sp-1) var(--sp-2); border-radius: var(--r-sm);
+  background: var(--surface-3); border: 1px solid var(--border); color: var(--text);
+  font-size: var(--fs-xs); font-weight: 500; box-shadow: var(--shadow);
+}
+#table th, #table td { white-space: nowrap; }
+
+/* Needs attention: grouped feed */
+.att-group { border-top: 1px solid var(--border); padding: var(--sp-2) 0; }
+.att-group:first-child { border-top: 0; padding-top: 0; }
+.att-group > summary { cursor: pointer; font-weight: 600; font-size: var(--fs-md); list-style-position: inside; }
+.att-head { color: var(--text); }
+.att-action { margin: var(--sp-1) 0 var(--sp-2); }
+.att-list { list-style: none; margin: var(--sp-1) 0 0; padding: 0; display: grid; gap: var(--sp-1); }
+.att-item { display: grid; grid-template-columns: 20px 1fr; gap: var(--sp-2); align-items: start; padding-left: var(--sp-2); border-left: 3px solid var(--border); }
+.att-item.att-action { border-left-color: var(--negative); }
+.att-item.att-watch { border-left-color: var(--caution); }
+.att-icon { color: var(--text-2); padding-top: 2px; }
+.att-text { min-width: 0; overflow-wrap: anywhere; }
+.att-more { margin: var(--sp-1) 0 0; }
+
+/* Alerts page */
+.signals-stale {
+  display: flex; gap: var(--sp-3); align-items: flex-start;
+  margin: var(--sp-3) var(--gutter) 0; padding: var(--sp-3) var(--sp-4);
+  background: var(--caution-soft); color: var(--text);
+  border: 1px solid var(--caution); border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.signals-stale-icon { color: var(--caution); flex: none; padding-top: 1px; }
+.signals-stale .btn { margin-left: var(--sp-2); }
+.brief-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); }
+.brief-controls .seg-btn[disabled] { opacity: 0.5; cursor: not-allowed; }

@@ -17,7 +17,7 @@ export async function mountMyAlerts(box, { symbol = null } = {}) {
           <button type="button" class="btn-link small danger-link" data-del="${a.id}" aria-label="Delete alert: ${esc(a.symbol)} ${esc(describe(a))}">Delete</button></span>
       </li>`).join("")}</ul>` : `<p class="muted small">No price alerts${symbol ? ` on ${esc(symbol)}` : ""} yet.</p>`}
       <form class="inline-form my-alert-form" novalidate>
-        ${symbol ? "" : `<label class="sr-only" for="maSym">Ticker</label><input id="maSym" name="symbol" placeholder="Ticker" maxlength="12" autocomplete="off" required style="width:90px" />`}
+        ${symbol ? "" : `<label class="sr-only" for="maSym">Ticker</label><input id="maSym" name="symbol" data-ticker placeholder="Ticker" maxlength="12" autocomplete="off" required style="width:90px" />`}
         <label class="sr-only" for="maKind${symbol || ""}">When it</label>
         <select id="maKind${symbol || ""}" name="kind">${KINDS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
         <label class="sr-only" for="maVal${symbol || ""}">Value</label>

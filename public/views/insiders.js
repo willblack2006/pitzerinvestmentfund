@@ -1,4 +1,4 @@
-import { esc, fmtUSD, fmtNum, api, signed, pageHead, loading, errorBox, subTabs } from "../shared.js";
+import { esc, fmtUSD, fmtNum, api, signed, pageHead, loading, subTabs, errorState, bindRetry } from "../shared.js";
 import { scoreMeter, signalBadge } from "./insiderSignal.js";
 
 let signalScope = "all";
@@ -12,7 +12,8 @@ async function loadSignals() {
   try {
     r = await api(`/api/insider-signals?scope=${signalScope}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't load insider signals: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't load insider signals.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => loadSignals());
     return;
   }
   if (!document.getElementById("sigBody")) return;
@@ -37,12 +38,12 @@ async function loadSignals() {
           <td class="small muted">${esc(x.topReason || "")}</td>
         </tr>`).join("")}</tbody>
     </table></div>
-    <p class="muted small">Score: −100 (heavy informed selling) to +100 (strong informed buying). Routine traders — insiders who trade in the same month every year — are ignored. Click a ticker for the full breakdown.</p>`;
+    <p class="muted small">Score: −100 (heavy informed selling) to +100 (strong informed buying). Routine traders (insiders who trade in the same month every year) are ignored. Click a ticker for the full breakdown.</p>`;
 }
 
 export const title = "Insider activity";
 
-// SEC Form 4 transaction codes — plain-language labels so members don't need to look them up.
+// SEC Form 4 transaction codes: plain-language labels so members don't need to look them up.
 const CODES = {
   P: "Open-market buy",
   S: "Open-market sale",
@@ -105,7 +106,8 @@ export async function mount(container) {
   try {
     state.data = await api("/api/insiders");
   } catch (err) {
-    container.innerHTML = subTabs(MARKET_TABS, "#/insiders") + pageHead("Insider activity") + errorBox(`Could not load insider activity: ${err.message}`);
+    container.innerHTML = subTabs(MARKET_TABS, "#/insiders") + pageHead("Insider activity") + errorState({ title: "Couldn't load insider activity.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const data = state.data;
@@ -129,15 +131,15 @@ export async function mount(container) {
 
     <h3 class="section-title page-pad">Recent filings across holdings</h3>
     <section class="summary" aria-label="Insider summary">
-      <div class="stat"><div class="label">Open-market buys</div><div class="value">${data.buys}</div><div class="sub">code P — the strongest signal</div></div>
-      <div class="stat"><div class="label">Open-market sales</div><div class="value">${data.sells}</div><div class="sub">code S — often routine (diversification, taxes)</div></div>
+      <div class="stat"><div class="label">Open-market buys</div><div class="value">${data.buys}</div><div class="sub">code P: the strongest signal</div></div>
+      <div class="stat"><div class="label">Open-market sales</div><div class="value">${data.sells}</div><div class="sub">code S: often routine (diversification, taxes)</div></div>
       <div class="stat"><div class="label">Net buy/sell value</div><div class="value">${signed(data.netValue, fmtUSD(data.netValue))}</div><div class="sub">buys minus sales only</div></div>
     </section>
 
     <details class="explainer page-pad">
       <summary>How to read this page</summary>
       <p class="small">Insiders <strong>buying</strong> on the open market (P) is rare and usually meaningful. Sales (S) are common and often pre-scheduled.
-      Grants (A), option exercises (M) and tax withholding (F) are compensation mechanics, not opinions — they're hidden by default.</p>
+      Grants (A), option exercises (M) and tax withholding (F) are compensation mechanics, not opinions. They're hidden by default.</p>
     </details>
 
     <section class="toolbar">

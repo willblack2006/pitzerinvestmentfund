@@ -1,9 +1,8 @@
-import {
-  el, esc, safeUrl, fmtUSD, fmtPct, fmtCompact, fmtNum, fmtRatio, api, can, toast, lockedHint, getPref, setPref, signed,
-  loading, errorBox, fundContext, invalidateContext, pushRecent, statusBadge, tabNav,
-} from "../shared.js";
-import { lineChart, destroyAll } from "../charts.js";
+import { el, esc, safeUrl, fmtUSD, fmtPct, fmtCompact, fmtNum, fmtRatio, api, can, toast, lockedHint, getPref, setPref, signed, fundContext, invalidateContext, pushRecent, statusBadge, tabNav, icon, skeleton, errorState, bindRetry } from "../shared.js";
+import { destroyAll } from "../charts.js";
+import { priceTerminalHtml, mountPriceTerminal } from "../priceTerminal.js";
 import { mountMyAlerts } from "../myAlerts.js";
+import { openPopover } from "../ui/popover.js";
 import { govContractsPanelHtml, loadGovContracts } from "./govContractsPanel.js";
 import { signalsGlanceHtml, loadSignalsGlance } from "./signalsGlance.js";
 
@@ -19,7 +18,7 @@ const TABS = [
   ["thesis", "Thesis"],
   ["notes", "Notes"],
 ];
-// Loaded on demand — most visits only ever look at Overview, so the other tabs (each with
+// Loaded on demand. Most visits only ever look at Overview, so the other tabs (each with
 // its own charts/tables) shouldn't cost anything until a reader actually clicks one.
 const TAB_LOADERS = {
   financials: () => import("./research/financials.js"),
@@ -54,14 +53,16 @@ window.addEventListener("pif:context-changed", () => { cache = null; });
 // missing; only finite numbers get through.
 const num = (v) => { const x = v && typeof v === "object" ? v.raw : v; return typeof x === "number" && Number.isFinite(x) ? x : null; };
 
-function stat(label, value, sub = "") {
-  return `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+// One cell of the key-stats strip. href makes the whole cell a link to the tab that explains it.
+function ks(label, value, sub = "", href = "") {
+  const inner = `<span class="ks-label">${label}</span><span class="ks-value">${value}</span>${sub ? `<span class="ks-sub">${sub}</span>` : ""}`;
+  return href ? `<a class="ks" href="${href}">${inner}</a>` : `<div class="ks">${inner}</div>`;
 }
 
 function rangeStat(lo, hi, price) {
-  if (!lo || !hi) return stat("52-week range", "—");
+  if (!lo || !hi) return ks("52-week range", "—");
   const pos = price ? Math.min(100, Math.max(0, ((price - lo) / (hi - lo)) * 100)) : null;
-  return stat("52-week range", `<span class="range-val">${fmtUSD(lo)} – ${fmtUSD(hi)}</span>`,
+  return ks("52-week range", `<span class="ks-range">${fmtUSD(lo)} to ${fmtUSD(hi)}</span>`,
     pos === null ? "" : `${pos.toFixed(0)}% of range<span class="range-track" aria-hidden="true"><span class="range-dot" style="left:${pos}%"></span></span>`);
 }
 
@@ -89,44 +90,35 @@ const isFinancialSector = (data) => /financial/i.test(data.profile?.sector || ""
 
 function renderOverview(c, { symbol, data, fund, price }) {
   const sd = data.stats.summaryDetail || {};
-  const ks = data.stats.defaultKeyStatistics || {};
+  const keyStats = data.stats.defaultKeyStatistics || {};
   const st = data.street;
-  const an = data.analysis;
-  const cs = chartSummary(data.chart);
   const consensus = analystConsensus(st?.trend);
+  const an = data.analysis;
   const lastFy = an?.annual?.at(-1);
+  const fin = isFinancialSector(data);
   const profile = data.profile || {};
   const next = st?.nextEarnings?.dates?.[0];
   const daysToEarnings = next ? Math.ceil((new Date(next) - new Date()) / 864e5) : null;
 
-  // Snapshot: the handful of numbers an analyst checks first, each linking to its tab.
-  const snap = [
-    ["Upside to target", st?.targets?.upside != null ? signed(st.targets.upside * 100, fmtPct(st.targets.upside * 100), { neutral: true }) : "—", "street", st?.targets?.mean ? `Mean target ${fmtUSD(st.targets.mean)} · ${st.targets.analysts} analysts` : ""],
-    ["Piotroski F-score", an?.piotroski && !isFinancialSector(data) ? `${an.piotroski.score}/${an.piotroski.outOf}` : "—", "financials", an?.piotroski && !isFinancialSector(data) ? an.piotroski.verdict : isFinancialSector(data) ? "Not meaningful for financials" : ""],
-    isFinancialSector(data)
-      ? ["ROE (last FY)", fmtRatio(lastFy?.roe), "financials", "Key return metric for financials"]
-      : ["ROIC (last FY)", fmtRatio(lastFy?.roic), "financials", lastFy ? `FCF margin ${fmtRatio(lastFy.fcfMargin)}` : ""],
-    ["Beta", st?.keyStats?.beta != null ? st.keyStats.beta.toFixed(2) : "—", "risk", st?.shortInterest?.pctFloat != null ? `Short interest ${fmtRatio(st.shortInterest.pctFloat)} of float` : ""],
-    ["Next earnings", next ? esc(next) : "—", "street", daysToEarnings !== null ? `${daysToEarnings >= 0 ? `in ${daysToEarnings} days` : "date passed"}${st.nextEarnings.estimated ? " (estimated)" : ""}` : ""],
-  ];
+  const base = `#/research/${encodeURIComponent(symbol)}`;
 
   c.innerHTML = `
-    <section class="summary" aria-label="Key statistics">
-      ${stat("Market cap", fmtCompact(num(sd.marketCap)))}
-      ${stat("P/E", num(sd.trailingPE)?.toFixed(1) ?? "—", num(ks.forwardPE) ? `Forward ${num(ks.forwardPE).toFixed(1)}` : "")}
-      ${rangeStat(num(sd.fiftyTwoWeekLow), num(sd.fiftyTwoWeekHigh), price)}
-      ${stat("Dividend yield", num(sd.dividendYield) ? `${(num(sd.dividendYield) * 100).toFixed(2)}%` : "—", st?.exDividendDate ? `Ex-div ${esc(st.exDividendDate)}` : "")}
-      ${stat("Analyst consensus", consensus ? consensus.label : "—",
-        consensus ? `${consensus.buy} buy · ${consensus.hold} hold · ${consensus.sell} sell<span class="consensus-bar" aria-hidden="true"><span style="flex:${consensus.buy}" class="c-buy"></span><span style="flex:${consensus.hold}" class="c-hold"></span><span style="flex:${consensus.sell}" class="c-sell"></span></span>` : "")}
-    </section>
+    <div class="research-top">${priceTerminalHtml(symbol)}</div>
 
-    <section class="snapshot" aria-label="Analyst snapshot">
-      ${snap.map(([label, value, tab, sub]) => `
-        <a class="snap" href="#/research/${encodeURIComponent(symbol)}/${tab}">
-          <span class="snap-label">${label}</span>
-          <span class="snap-value">${value}</span>
-          ${sub ? `<span class="snap-sub">${sub}</span>` : ""}
-        </a>`).join("")}
+    <section class="keystats" aria-label="Key statistics">
+      ${ks("Market cap", fmtCompact(num(sd.marketCap)))}
+      ${ks("P/E", num(sd.trailingPE)?.toFixed(1) ?? "—", num(keyStats.forwardPE) ? `Forward ${num(keyStats.forwardPE).toFixed(1)}` : "", `${base}/valuation`)}
+      ${rangeStat(num(sd.fiftyTwoWeekLow), num(sd.fiftyTwoWeekHigh), price)}
+      ${ks("Dividend yield", num(sd.dividendYield) ? `${(num(sd.dividendYield) * 100).toFixed(2)}%` : "—", st?.exDividendDate ? `Ex-div ${esc(st.exDividendDate)}` : "")}
+      ${ks("Analyst consensus", consensus ? consensus.label : "—",
+        consensus ? `${consensus.buy} buy · ${consensus.hold} hold · ${consensus.sell} sell<span class="consensus-bar" aria-hidden="true"><span style="flex:${consensus.buy}" class="c-buy"></span><span style="flex:${consensus.hold}" class="c-hold"></span><span style="flex:${consensus.sell}" class="c-sell"></span></span>` : "", `${base}/street`)}
+      ${ks("Upside to target", st?.targets?.upside != null ? signed(st.targets.upside * 100, fmtPct(st.targets.upside * 100), { neutral: true }) : "—", st?.targets?.mean ? `Mean ${fmtUSD(st.targets.mean)} · ${st.targets.analysts} analysts` : "", `${base}/street`)}
+      ${ks("Next earnings", next ? esc(next) : "—", daysToEarnings !== null ? `${daysToEarnings >= 0 ? `in ${daysToEarnings} days` : "date passed"}${st.nextEarnings.estimated ? " (estimated)" : ""}` : "", `${base}/street`)}
+      ${fin
+        ? ks("ROE (last FY)", fmtRatio(lastFy?.roe), "Key return metric for financials", `${base}/financials`)
+        : ks("ROIC (last FY)", fmtRatio(lastFy?.roic), lastFy ? `FCF margin ${fmtRatio(lastFy.fcfMargin)}` : "", `${base}/financials`)}
+      ${ks("Piotroski F-score", an?.piotroski && !fin ? `${an.piotroski.score}/${an.piotroski.outOf}` : "—", an?.piotroski && !fin ? an.piotroski.verdict : fin ? "Not meaningful for financials" : "", `${base}/financials`)}
+      ${ks("Beta", st?.keyStats?.beta != null ? st.keyStats.beta.toFixed(2) : "—", "vs the market, from Yahoo", `${base}/risk`)}
     </section>
     ${signalsGlanceHtml()}
 
@@ -134,14 +126,6 @@ function renderOverview(c, { symbol, data, fund, price }) {
       <div class="research-main">
         ${data.position ? renderPosition(data.position, price) : ""}
 
-        <section class="panel" aria-labelledby="chart-h">
-          <div class="panel-head"><h3 id="chart-h">Price, past year</h3>
-            <a class="small" href="#/research/${encodeURIComponent(symbol)}/risk">Compare with the market →</a></div>
-          <div class="chart-box">
-            <canvas id="priceChart" role="img" aria-label="${cs ? esc(`${symbol} closing price over the past year: from ${fmtUSD(cs.first.close)} on ${cs.first.date} to ${fmtUSD(cs.last.close)} on ${cs.last.date}, ${fmtPct(cs.chg)}. High ${fmtUSD(cs.hi)}, low ${fmtUSD(cs.lo)}.`) : "No price data"}"></canvas>
-          </div>
-          ${data.technicals?.sma50 ? `<p class="muted small chart-note">50-day avg ${fmtUSD(data.technicals.sma50)}${data.technicals.sma200 ? ` · 200-day avg ${fmtUSD(data.technicals.sma200)}` : ""}</p>` : ""}
-        </section>
         <section class="panel" aria-labelledby="news-h">
           <div class="panel-head"><h3 id="news-h">News</h3><div id="newsTriageActions"></div></div>
           <div id="newsBody">${renderNews(data.news, !!data.errors?.news)}</div>
@@ -154,7 +138,7 @@ function renderOverview(c, { symbol, data, fund, price }) {
             </label>
             <label class="field-inline">Order size (shares) <input id="execShares" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 100" /></label>
           </div>
-          <div id="execBody" class="small">${loading("Loading live bid/ask…")}</div>
+          <div id="execBody" class="small">${skeleton("text", { rows: 3, label: "Loading live bid/ask" })}</div>
         </details>
       </div>
       <aside class="research-side" aria-label="Company context">
@@ -177,23 +161,17 @@ function renderOverview(c, { symbol, data, fund, price }) {
         </section>
         <section class="panel" aria-labelledby="supply-h">
           <h3 id="supply-h">Supply chain</h3>
-          <div id="supplyBody">${loading("Checking the latest 10-K for major customers…")}</div>
+          <div id="supplyBody">${skeleton("text", { rows: 3, label: "Checking the latest 10-K for major customers" })}</div>
         </section>
         ${govContractsPanelHtml()}
         <section class="panel" aria-labelledby="factor-h">
           <div class="panel-head"><h3 id="factor-h">Factor profile</h3><a class="small" href="#/factors">Fund scorecard →</a></div>
-          <div id="factorBody">${loading("Scoring factors…")}</div>
+          <div id="factorBody">${skeleton("cards", { rows: 3, label: "Scoring factors" })}</div>
         </section>
       </aside>
     </div>`;
 
-  lineChart(el("priceChart"), {
-    labels: data.chart.map((p) => p.date),
-    datasets: [{ label: symbol, data: data.chart.map((p) => p.close), color: "--chart-line" }],
-    yFormat: (v) => `$${Number(v).toFixed(0)}`,
-    legend: false,
-    fill: true,
-  });
+  mountPriceTerminal({ symbol, position: data.position, thesis: data.thesis, priceAlerts: data.priceAlerts, trades: data.trades, peers: data.peers });
   loadFactorProfile(symbol);
   loadGovContracts(symbol);
   loadSignalsGlance(symbol, data);
@@ -216,7 +194,10 @@ async function loadExecution(symbol) {
     try {
       r = await api(`/api/execution/${encodeURIComponent(symbol)}?direction=${dir}${shares ? `&shares=${encodeURIComponent(shares)}` : ""}`);
     } catch (err) {
-      if (el("execBody")) box.innerHTML = `<p class="muted">Couldn't load execution data: ${esc(err.message)}</p>`;
+      if (el("execBody")) {
+        box.innerHTML = errorState({ title: "Couldn't load execution data.", detail: err.message, retryId: "load" });
+        bindRetry(box, "load", () => loadExecution(symbol));
+      }
       return;
     }
     if (!el("execBody")) return;
@@ -231,7 +212,7 @@ async function loadExecution(symbol) {
         ${r.suggestedLimitPrice != null ? `<dt>Suggested limit</dt><dd>${fmtUSD(r.suggestedLimitPrice)}</dd>` : ""}
       </dl>
       ${r.warnings?.length ? `<ul class="link-list small">${r.warnings.map((w) => `<li class="tone-bad">${esc(w)}</li>`).join("")}</ul>` : `<p class="muted small">No execution warnings right now.</p>`}
-      <p class="muted small">A rough estimate from the current bid/ask and 3-month average volume — not a guaranteed fill price.</p>`;
+      <p class="muted small">A rough estimate from the current bid/ask and 3-month average volume: not a guaranteed fill price.</p>`;
   }, 300);
 }
 
@@ -242,16 +223,19 @@ async function loadSupplyChain(symbol) {
   try {
     r = await api(`/api/research/${encodeURIComponent(symbol)}/supply-chain`);
   } catch (err) {
-    if (el("supplyBody")) box.innerHTML = `<p class="muted">Couldn't check the supply chain: ${esc(err.message)}</p>`;
+    if (el("supplyBody")) {
+      box.innerHTML = errorState({ title: "Couldn't check the supply chain.", detail: err.message, retryId: "load" });
+      bindRetry(box, "load", () => { box.innerHTML = skeleton("text", { rows: 3, label: "Trying again" }); loadSupplyChain(symbol); });
+    }
     return;
   }
   if (!el("supplyBody")) return;
   if (!r.customers?.length) { box.innerHTML = `<p class="muted small">No major-customer disclosure (≥10% of revenue) found in the latest 10-K.</p>`; return; }
   box.innerHTML = `
     <ul class="link-list small">${r.customers.map((c) => `
-      <li>${c.ticker ? `<a class="symbol-cell" href="#/research/${encodeURIComponent(c.ticker)}">${esc(c.ticker)}</a>` : esc(c.customer)} — ${c.pct}% of revenue
+      <li>${c.ticker ? `<a class="symbol-cell" href="#/research/${encodeURIComponent(c.ticker)}">${esc(c.ticker)}</a>` : esc(c.customer)}: ${c.pct}% of revenue
         ${c.gap != null ? `<div class="muted">Customer's 3-month return ${signed(c.customerReturn * 100, fmtPct(c.customerReturn * 100))} vs ${esc(symbol)}'s ${signed(c.supplierReturn * 100, fmtPct(c.supplierReturn * 100))}</div>` : ""}</li>`).join("")}</ul>
-    <p class="muted small">From the ${esc(r.filing?.filingDate || "")} 10-K. A big customer's recent return can lead a supplier's (Cohen &amp; Frazzini, 2008) — not a signal by itself.</p>`;
+    <p class="muted small">From the ${esc(r.filing?.filingDate || "")} 10-K. A big customer's recent return can lead a supplier's (Cohen &amp; Frazzini, 2008). Not a signal by itself.</p>`;
 }
 
 const FACTOR_LABEL = [["value", "Value"], ["momentum", "Momentum"], ["quality", "Quality"], ["lowVol", "Low volatility"], ["size", "Size"]];
@@ -262,7 +246,10 @@ async function loadFactorProfile(symbol) {
   try {
     f = await api(`/api/factors/${encodeURIComponent(symbol)}`);
   } catch (err) {
-    if (el("factorBody")) box.innerHTML = `<p class="muted">Couldn't score factors: ${esc(err.message)}</p>`;
+    if (el("factorBody")) {
+      box.innerHTML = errorState({ title: "Couldn't score factors.", detail: err.message, retryId: "load" });
+      bindRetry(box, "load", () => { box.innerHTML = skeleton("text", { rows: 3, label: "Trying again" }); loadFactorProfile(symbol); });
+    }
     return;
   }
   if (!el("factorBody")) return;
@@ -300,7 +287,7 @@ function renderNews(news, errored, triageBySymbolUrl = {}) {
     <li>
       <a href="${safeUrl(n.url)}" target="_blank" rel="noopener">${esc(n.headline)}<span class="sr-only"> (opens in new tab)</span></a>
       ${t?.materiality != null ? `<span class="badge ${t.materiality >= 7 ? "badge-danger" : t.materiality >= 4 ? "badge-warn" : ""}" title="${esc(t.reason || "")}">Materiality ${t.materiality}/10 <span class="${TRIAGE_TONE[t.direction] || ""}">${esc(t.direction || "")}</span></span>` : ""}
-      <div class="muted small">${esc(n.source || "")}${n.datetime ? ` · ${new Date(n.datetime).toLocaleDateString()}` : ""}${t?.reason ? ` — ${esc(t.reason)}` : ""}</div>
+      <div class="muted small">${esc(n.source || "")}${n.datetime ? ` · ${new Date(n.datetime).toLocaleDateString()}` : ""}${t?.reason ? `: ${esc(t.reason)}` : ""}</div>
     </li>`;
   }).join("")}</ul>`;
 }
@@ -399,7 +386,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
           <h3 id="alerts-h">Price alerts</h3>
           ${unlocked ? `<p class="pf-sub">Just for me</p><div id="myAlertsBox"></div><p class="pf-sub">For the club <span class="muted small">(everyone sees these on the Alerts page)</span></p>` : ""}
           <ul class="link-list" id="alertList">
-            ${data.priceAlerts.map((a) => `<li>${a.direction === "above" ? "Rises above" : "Falls below"} <strong>${fmtUSD(a.price)}</strong>${a.note ? ` <span class="muted small">— ${esc(a.note)}</span>` : ""}
+            ${data.priceAlerts.map((a) => `<li>${a.direction === "above" ? "Rises above" : "Falls below"} <strong>${fmtUSD(a.price)}</strong>${a.note ? ` <span class="muted small">(${esc(a.note)})</span>` : ""}
               ${unlocked ? `<button class="btn-link small" data-del-alert="${a.id}" aria-label="Delete alert at ${fmtUSD(a.price)}">Remove</button>` : ""}</li>`).join("") || `<li class="muted">No alerts set.</li>`}
           </ul>
           ${unlocked ? `
@@ -492,12 +479,13 @@ export async function mount(container, params) {
   dirty = false;
   destroyAll();
 
-  if (!cache || cache.symbol !== symbol) container.innerHTML = loading(`Loading research on ${symbol}…`);
+  if (!cache || cache.symbol !== symbol) container.innerHTML = skeleton("cards", { label: `Loading research on ${symbol}` });
   let ctx;
   try {
     ctx = await loadData(symbol);
   } catch (err) {
-    container.innerHTML = `<div class="page-head"><h2>${esc(symbol)}</h2></div>${errorBox(`Could not load research for ${symbol}: ${err.message}`)}`;
+    container.innerHTML = `<div class="page-head"><h2>${esc(symbol)}</h2></div>${errorState({ title: `Couldn't load research on ${symbol}.`, detail: err.message, retryId: "page" })}`;
+    bindRetry(container, "page", () => mount(container, params));
     return;
   }
   const { data, fund } = ctx;
@@ -521,25 +509,19 @@ export async function mount(container, params) {
   const owned = !!data.position, watched = !!data.watch;
   const base = `#/research/${encodeURIComponent(symbol)}`;
 
-  const actions = [];
-  if (data.redFlags?.length) actions.push(`<a class="badge badge-danger" href="#/research/${encodeURIComponent(symbol)}/filings" title="${esc(data.redFlags.map((f) => f.detail).join(" · "))}">${data.redFlags.length} red flag${data.redFlags.length > 1 ? "s" : ""}</a>`);
-  if (owned) actions.push(`<span class="badge badge-owned">Owned</span>`);
-  else if (watched) actions.push(`<span class="badge badge-watch">Watching</span>`);
-  else if (unlocked) actions.push(`<button id="watchBtn" class="btn btn-ghost">+ Watch</button>`);
-  if (!owned && unlocked) actions.push(`<button id="addPosBtn" class="btn btn-ghost">+ Add to holdings</button>`);
-  actions.push(`<a class="btn btn-ghost" href="#/pitches/new/${encodeURIComponent(symbol)}">Pitch it</a>`);
-  actions.push(`<button id="copyLinkBtn" class="btn btn-ghost" aria-label="Copy link to this page">Copy link</button>`);
-  // Personal follow list ("My tickers"): shows up in your Today "For you" section.
-  const following = getPref("myTickers", []).includes(symbol);
-  actions.push(`<button id="followBtn" class="btn btn-ghost" aria-pressed="${following}">${following ? "★ Following" : "☆ Follow"}</button>`);
-  if (unlocked) actions.push(`<button id="listsBtn" type="button" class="btn btn-ghost" aria-haspopup="dialog">☰ Lists</button>`);
+  // Status pills sit beside the name; everything secondary lives in the "More" menu.
+  const rf = data.redFlags;
+  const pills = [];
+  if (rf && rf.level !== "clean") pills.push(`<a class="badge ${rf.level === "concern" ? "badge-danger" : "badge-warn"}" href="${base}/filings">${icon("flag", { size: 12 })} ${esc(rf.label)}</a>`);
+  if (owned) pills.push(`<span class="badge badge-owned">Owned</span>`);
+  else if (watched) pills.push(`<span class="badge badge-watch">Watching</span>`);
 
   const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => k);
 
   container.innerHTML = `
     <div class="page-head research-head">
       <div>
-        <h2>${esc(symbol)}${data.name ? ` <span class="company-name">${esc(data.name)}</span>` : ""}</h2>
+        <h2>${esc(symbol)}${data.name ? ` <span class="company-name">${esc(data.name)}</span>` : ""}<span class="head-pills" id="headPills">${pills.join("")}</span></h2>
         <p class="muted page-desc">${[profile.sector, profile.industry].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</p>
       </div>
       <div class="research-price">
@@ -548,9 +530,12 @@ export async function mount(container, params) {
           ${data.quote?.changePct != null ? `${signed(data.quote.changePct, fmtPct(data.quote.changePct))} <span class="muted">${["REGULAR", "POST"].includes(data.quote.marketState) ? "today" : "last session"}</span>` : ""}
           ${cs ? `${data.quote?.changePct != null ? " · " : ""}${signed(cs.chg, fmtPct(cs.chg))} <span class="muted">1Y</span>` : ""}
         </div>
-        ${data.quote?.time ? `<div class="muted small">${{ REGULAR: "Live", PRE: "Pre-market", POST: "After hours" }[data.quote.marketState] || "At close"} · ${esc(new Date(data.quote.time).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }))} ET</div>` : ""}
+        ${data.quote?.time ? `<div class="muted small price-time">${{ REGULAR: "Live", PRE: "Pre-market", POST: "After hours" }[data.quote.marketState] || "At close"} · ${esc(new Date(data.quote.time).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }))} ET</div>` : ""}
       </div>
-      <div class="page-actions">${actions.join("")}</div>
+      <div class="page-actions">
+        <a class="btn btn-primary" href="#/pitches/new/${encodeURIComponent(symbol)}">Pitch it</a>
+        <button id="moreBtn" type="button" class="btn btn-ghost" aria-haspopup="dialog" aria-expanded="false" aria-label="More actions">${icon("more-horizontal", { size: 18 })}<span class="more-label">More</span></button>
+      </div>
     </div>
     ${tabNav(TABS.map(([k, label]) => [k, k === "overview" ? base : `${base}/${k}`, label]), tab, `${symbol} research sections`)}
     ${partial.length && tab === "overview" ? `<p class="notice" role="note">Some data couldn't be loaded (${partial.map(esc).join(", ")}). The rest of the page is still accurate.</p>` : ""}
@@ -564,53 +549,71 @@ export async function mount(container, params) {
     if (can("member")) {
       const box = document.createElement("div");
       box.className = "overview-notes";
-      body.prepend(box);
+      body.querySelector(".research-layout")?.before(box);
       TAB_LOADERS.notes().then((m) => box.isConnected && m.render(box, { symbol, compact: true }));
     }
   }
   else if (tab === "thesis") renderThesisTab(body, tctx);
   else {
-    body.innerHTML = loading(`Loading ${tab}…`);
+    body.innerHTML = skeleton("rows", { label: `Loading ${tab}` });
     const mod = await TAB_LOADERS[tab]();
     if (el("tabBody") !== body) return; // navigated away while the tab's code was loading
     await mod.render(body, tctx);
   }
 
-  el("followBtn").addEventListener("click", async (e) => {
+  el("moreBtn").addEventListener("click", (e) => openMoreMenu(e.currentTarget, { symbol, price, owned, watched, unlocked }));
+}
+
+// The header's overflow menu: one vertical list of buttons. Built on open so Follow shows its current state.
+function openMoreMenu(anchor, { symbol, price, owned, watched, unlocked }) {
+  const following = getPref("myTickers", []).includes(symbol);
+  const item = (id, ic, label, attrs = "") => `<button type="button" class="menu-item" id="${id}" ${attrs}>${icon(ic, { size: 16 })}<span>${label}</span></button>`;
+  const html = `<div class="menu-list">
+    ${!owned && !watched && unlocked ? item("watchBtn", "eye", "Add to watchlist") : ""}
+    ${!owned && unlocked ? item("addPosBtn", "plus", "Add to holdings") : ""}
+    ${item("followBtn", following ? "star-filled" : "star", following ? "Following" : "Follow", `aria-pressed="${following}"`)}
+    ${unlocked ? item("listsBtn", "briefcase", "Lists…", 'aria-haspopup="dialog"') : ""}
+    ${item("copyLinkBtn", "external-link", "Copy link")}
+  </div>`;
+  const pop = openPopover({ anchor, content: html, label: "More actions", placement: "bottom-end", width: 220 });
+  const q = (id) => pop.el.querySelector(`#${id}`);
+
+  q("followBtn").addEventListener("click", async () => {
     const list = getPref("myTickers", []);
     const on = !list.includes(symbol);
+    pop.close();
     await setPref("myTickers", on ? [...list, symbol] : list.filter((s) => s !== symbol));
-    e.currentTarget.setAttribute("aria-pressed", String(on));
-    e.currentTarget.textContent = on ? "★ Following" : "☆ Follow";
     toast(on ? `Following ${symbol}. It'll show in "For you" on Today.` : `Stopped following ${symbol}.`);
   });
-  el("copyLinkBtn").addEventListener("click", async () => {
+  q("copyLinkBtn").addEventListener("click", async () => {
+    pop.close();
     try {
       await navigator.clipboard.writeText(location.href);
       toast("Link copied.");
     } catch {
-      toast("Couldn't copy — use the address bar.", { type: "error" });
+      toast("Couldn't copy. Use the address bar.", { type: "error" });
     }
   });
   // Pulls in holdings.js (the biggest view file) only on the rare click that needs its
   // dialog, instead of every Research page visit paying for it.
-  el("addPosBtn")?.addEventListener("click", async () => {
+  q("addPosBtn")?.addEventListener("click", async () => {
+    pop.close({ returnFocus: false });
     const { openPositionDialog } = await import("./holdings.js");
     openPositionDialog(null, { symbol, lastPrice: price ?? "" });
   });
-  el("listsBtn")?.addEventListener("click", async (e) => {
-    const btn = e.currentTarget; // currentTarget is cleared once the import below yields
+  q("listsBtn")?.addEventListener("click", async () => {
+    pop.close({ returnFocus: false });
     const { openListMenu } = await import("../listMenu.js");
-    openListMenu(btn, symbol);
+    openListMenu(anchor, symbol);
   });
-  el("watchBtn")?.addEventListener("click", async (e) => {
+  q("watchBtn")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
     try {
       await api("/api/watchlist", { method: "POST", body: JSON.stringify({ symbol, sourcedFrom: "research page" }) });
       invalidateContext(); // also clears this page's cache, so the next visit shows "Watching"
-      btn.outerHTML = `<span class="badge badge-watch" tabindex="-1" id="watchBadge">Watching</span>`;
-      el("watchBadge").focus();
+      pop.close();
+      el("headPills")?.insertAdjacentHTML("beforeend", `<span class="badge badge-watch">Watching</span>`);
       toast(`${symbol} added to the watchlist.`, { type: "success" });
     } catch (err) {
       btn.disabled = false;

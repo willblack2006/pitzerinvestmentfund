@@ -1,10 +1,10 @@
-import { el, esc, api, toast, setSession, loading, currentMember } from "../shared.js";
+import { el, esc, api, toast, setSession, currentMember, skeleton } from "../shared.js";
 
 export const title = "Join the fund";
 
 // Opened from the club's shared sign-up link: anyone with it makes their own account.
 export async function mount(container, params) {
-  container.innerHTML = loading("Checking the link…");
+  container.innerHTML = skeleton("text", { rows: 2, label: "Checking the link" });
   try {
     await api(`/api/auth/join/${encodeURIComponent(params.token)}`);
   } catch (err) {

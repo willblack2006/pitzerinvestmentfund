@@ -1,13 +1,11 @@
-import {
-  el, esc, api, fmtUSD, fmtPct, signed, loading, errorBox, toast, confirmAction, currentMember, requestSignIn,
-} from "../shared.js";
+import { el, esc, api, fmtUSD, fmtPct, signed, toast, confirmAction, currentMember, requestSignIn, icon, skeleton, errorState } from "../shared.js";
 import { statusPill } from "./pitches.js";
 
 export const title = (p) => (p.id ? `Pitch #${p.id}` : "New pitch");
 
 const SECTIONS = [
   ["thesis", "Investment thesis", "What does the market misunderstand? Why now?", 6],
-  ["catalysts", "Catalysts", "Specific events in the next 6–18 months that should close the gap (earnings, launches, buybacks…)", 3],
+  ["catalysts", "Catalysts", "Specific events in the next 6 to 18 months that should close the gap (earnings, launches, buybacks…)", 3],
   ["risks", "Key risks", "What would make this thesis wrong? What would make us sell?", 3],
   ["valuation", "Valuation", "Multiples vs peers, DCF assumptions, how the target was derived", 3],
 ];
@@ -42,7 +40,7 @@ function scenarioBar(p, current) {
 }
 
 function priceInfoHtml(current, basePrice) {
-  if (!current) return `<span class="muted small">Current price unknown — type a ticker or check it on the research page.</span>`;
+  if (!current) return `<span class="muted small">Current price unknown: type a ticker or check it on the research page.</span>`;
   const upside = basePrice ? basePrice / current - 1 : null;
   return `<span class="small">Current price: <strong>${fmtUSD(current)}</strong>${upside !== null ? ` · Upside to base case: ${signed(upside * 100, fmtPct(upside * 100), { neutral: true })}` : ""}</span>`;
 }
@@ -55,7 +53,7 @@ function editor(p, isNew, current) {
   return `
     <form id="pitchForm" class="pitch-form" novalidate>
       <div class="form-row">
-        <label>Ticker <input name="symbol" value="${esc(p.symbol || "")}" required maxlength="10" autocapitalize="characters" ${isNew ? "" : "readonly"} /></label>
+        <label>Ticker <input name="symbol" data-ticker value="${esc(p.symbol || "")}" required maxlength="10" autocapitalize="characters" ${isNew ? "" : "readonly"} /></label>
         <label>Recommendation
           <select name="direction">${["buy", "add", "trim", "sell"].map((d) => `<option value="${d}" ${p.direction === d ? "selected" : ""}>${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select>
         </label>
@@ -65,7 +63,7 @@ function editor(p, isNew, current) {
         <label>Confidence (%) <input name="confidencePct" type="number" step="1" min="0" max="100" value="${p.confidencePct ?? ""}" inputmode="decimal" placeholder="e.g. 65" /></label>
         <label>Time horizon (months) <input name="horizonMonths" type="number" step="1" min="1" value="${p.horizonMonths ?? ""}" inputmode="numeric" placeholder="e.g. 12" /></label>
       </div>
-      <p class="muted small">Confidence and horizon feed the fund's <a href="#/track-record">track record</a> — how often calls at a given confidence level actually play out.</p>
+      <p class="muted small">Confidence and horizon feed the fund's <a href="#/track-record">track record</a>: how often calls at a given confidence level actually play out.</p>
       <label class="field-block">One-line pitch <input name="title" value="${esc(p.title || "")}" maxlength="140" placeholder="e.g. Margin expansion the market isn't pricing in" /></label>
       ${SECTIONS.map(field).join("")}
       <fieldset class="scenarios">
@@ -133,7 +131,7 @@ function votePanel(p) {
           <label class="field-block small">Comment (optional) <input name="comment" value="${esc(mine?.comment || "")}" maxlength="1000" placeholder="Why you voted this way" /></label>
           <button class="btn btn-primary btn-sm">${mine ? "Change vote" : "Cast vote"}</button>
         </form>` : `<p><button type="button" class="btn btn-primary btn-sm" data-signin>Sign in to vote</button></p>`) : ""}
-      ${t.votes.length ? `<ul class="vote-list">${t.votes.map((v) => `<li><span class="vote-chip v-${esc(v.vote)}">${esc(v.vote)}</span> <strong>${esc(v.name)}</strong>${v.comment ? ` <span class="muted small">— ${esc(v.comment)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+      ${t.votes.length ? `<ul class="vote-list">${t.votes.map((v) => `<li><span class="vote-chip v-${esc(v.vote)}">${esc(v.vote)}</span> <strong>${esc(v.name)}</strong>${v.comment ? ` <span class="muted small">(${esc(v.comment)})</span>` : ""}</li>`).join("")}</ul>` : ""}
     </section>`;
 }
 
@@ -163,11 +161,11 @@ export async function mount(container, params) {
     if (prefill.symbol && params.symbol && prefill.symbol !== params.symbol.toUpperCase()) prefill = {};
     p = { symbol: (params.symbol || "").toUpperCase(), direction: "buy", ...prefill };
   } else {
-    container.innerHTML = loading("Loading pitch…");
+    container.innerHTML = skeleton("text", { rows: 5, label: "Loading pitch" });
     try {
       p = await api(`/api/pitches/${encodeURIComponent(params.id)}`);
     } catch (err) {
-      container.innerHTML = `<div class="page-head"><h2>Pitch not found</h2></div>${errorBox(err.message, false)}<p class="page-pad"><a href="#/pitches">← All pitches</a></p>`;
+      container.innerHTML = `<div class="page-head"><h2>Pitch not found</h2></div>${errorState({ title: "Couldn't load this pitch.", detail: err.message })}<p class="page-pad"><a href="#/pitches">← All pitches</a></p>`;
       return;
     }
   }
@@ -177,11 +175,26 @@ export async function mount(container, params) {
   const editing = isNew || (container.dataset.editing === String(p.id) && ["draft", "voting"].includes(p.status));
 
   if (isNew && !canEdit) {
+    const parts = [
+      ["doc", "Thesis", "What the market misunderstands, and why now."],
+      ["calendar", "Catalysts", "Events in the next 6 to 18 months that should close the gap."],
+      ["alert", "Risks", "What would make the thesis wrong, and what would make us sell."],
+      ["percent", "Valuation", "Multiples against peers and how the target was set."],
+      ["target", "Bear, base and bull targets", "A price and a short story for each case."],
+      ["briefcase", "Proposed size", "Buy, add, trim or sell, and what share of the fund."],
+      ["vote", "Committee vote", "Members vote yes or no once the pitch is ready."],
+    ];
     container.innerHTML = `
-      <div class="page-head"><h2>New pitch</h2></div>
-      <div class="page-pad"><p>Pitches are written under a member's name.</p>
-        <p><button type="button" class="btn btn-primary" data-signin>Sign in</button></p>
-        <p><a href="#/pitches">← All pitches</a></p></div>`;
+      <div class="page-head"><h2>New pitch${p.symbol ? ` <span class="company-name">${esc(p.symbol)}</span>` : ""}</h2></div>
+      <section class="pitch-intro" aria-labelledby="pitchIntroH">
+        <h3 id="pitchIntroH">${p.symbol ? `Pitch ${esc(p.symbol)} to the committee` : "Pitch an idea to the committee"}</h3>
+        <p class="muted">Pitches are written under a member's name. Here is what one contains.</p>
+        <ol class="pitch-parts">${parts.map(([ic, h, d]) => `<li><span class="pitch-part-icon">${icon(ic, { size: 18 })}</span><span><strong>${h}</strong><span class="muted small"> ${d}</span></span></li>`).join("")}</ol>
+        <div class="pitch-intro-actions">
+          <button type="button" class="btn btn-primary" data-signin>Sign in to write a pitch</button>
+          <a href="#/pitches">See existing pitches</a>
+        </div>
+      </section>`;
     return;
   }
 

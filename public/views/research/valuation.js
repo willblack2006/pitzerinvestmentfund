@@ -1,9 +1,9 @@
-import { el, esc, api, fmtUSD, fmtMoneyCompact, fmtRatio, loading, signed, fmtPct } from "../../shared.js";
+import { el, esc, api, fmtUSD, fmtMoneyCompact, fmtRatio, signed, fmtPct, icon, skeleton, errorState, bindRetry } from "../../shared.js";
 import { term } from "../../glossary.js";
 
 // ---- Peer comparison ----
 
-// [key, label, format, higherIsCheaper?] — for valuation multiples, lower = cheaper.
+// [key, label, format, higherIsCheaper?]: for valuation multiples, lower = cheaper.
 const COLS = [
   ["marketCap", "Mkt cap", (v) => fmtMoneyCompact(v)],
   ["peTTM", "P/E", (v) => mult(v), true],
@@ -24,14 +24,15 @@ const pctPts = (v) => (v === null || v === undefined || !Number.isFinite(v) ? "�
 
 let extraPeers = [];
 
-async function loadComps(symbol) {
+async function loadComps(symbol, peers) {
   const box = el("compsBody");
-  box.innerHTML = loading("Pulling peer metrics…");
+  box.innerHTML = skeleton("rows", { rows: 5, label: "Pulling peer metrics" });
   let data;
   try {
     data = await api(`/api/research/${encodeURIComponent(symbol)}/comps${extraPeers.length ? `?add=${extraPeers.join(",")}` : ""}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't load comparisons: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't load comparisons.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => loadComps(symbol, peers));
     return;
   }
   if (data.keyMissing) {
@@ -46,43 +47,51 @@ async function loadComps(symbol) {
     if (cheap) return `<span>${d > 0 ? "+" : ""}${d.toFixed(0)}% ${d > 0 ? "premium" : "discount"}</span>`;
     return `${(a - m) >= 0 ? "+" : ""}${(a - m).toFixed(1)} pts`;
   };
+  // One-click suggestions: the company's own peers that aren't in the table yet.
+  const inTable = new Set(data.rows.map((r) => r.symbol));
+  const suggestions = (peers || []).filter((p) => !inTable.has(p) && !extraPeers.includes(p)).slice(0, 5);
   box.innerHTML = `
     <div class="table-scroll">
-      <table class="comps-table">
+      <table class="comps-table table-sticky-first">
         <caption class="sr-only">${esc(symbol)} compared with peers (trailing twelve months)</caption>
-        <thead><tr><th scope="col" class="left sticky-col">Company</th>${COLS.map(([k, l]) => `<th scope="col" class="num">${COL_TERM[k] ? term(COL_TERM[k], l) : l}</th>`).join("")}</tr></thead>
+        <thead><tr><th scope="col" class="left">Company</th>${COLS.map(([k, l]) => `<th scope="col" class="num">${COL_TERM[k] ? term(COL_TERM[k], l) : l}</th>`).join("")}</tr></thead>
         <tbody>
           ${data.rows.map((r) => `
             <tr class="${r.symbol === symbol ? "row-self" : ""}">
-              <th scope="row" class="left sticky-col"><a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}/valuation">${esc(r.symbol)}</a></th>
+              <th scope="row" class="left"><a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}/valuation">${esc(r.symbol)}</a></th>
               ${COLS.map(([k, , f]) => `<td class="num">${r.error ? "—" : f(r[k])}</td>`).join("")}
             </tr>`).join("")}
-          <tr class="row-median"><th scope="row" class="left sticky-col">Peer median</th>${COLS.map(([k, , f]) => `<td class="num">${f(data.peerMedian[k])}</td>`).join("")}</tr>
-          <tr class="row-vs"><th scope="row" class="left sticky-col">${esc(symbol)} vs median</th>${COLS.map(([k, , , cheap]) => `<td class="num small">${k === "marketCap" ? "" : vsMedian(k, cheap)}</td>`).join("")}</tr>
+          <tr class="row-median"><th scope="row" class="left">Peer median</th>${COLS.map(([k, , f]) => `<td class="num">${f(data.peerMedian[k])}</td>`).join("")}</tr>
+          <tr class="row-vs"><th scope="row" class="left">${esc(symbol)} vs median</th>${COLS.map(([k, , , cheap]) => `<td class="num small">${k === "marketCap" ? "" : vsMedian(k, cheap)}</td>`).join("")}</tr>
         </tbody>
       </table>
     </div>
     <form class="inline-form" id="addPeerForm">
       <label for="addPeer">Add a company to compare</label>
-      <input id="addPeer" placeholder="Ticker" maxlength="10" autocomplete="off" />
+      <input id="addPeer" data-ticker data-ticker-go placeholder="Ticker" maxlength="10" autocomplete="off" />
       <button class="btn btn-ghost btn-sm">Add</button>
       ${extraPeers.length ? `<button type="button" class="btn-link small" id="resetPeers">Reset to default peers</button>` : ""}
     </form>
-    <p class="muted small">A premium can be justified by faster growth or higher margins — compare the right-hand columns before calling it expensive.</p>`;
+    ${suggestions.length ? `<div class="peer-suggest" role="group" aria-label="Suggested peers to add"><span class="muted small">Suggestions</span>${suggestions.map((p) => `<button type="button" class="chip" data-add-peer="${esc(p)}">${icon("plus", { size: 12 })} ${esc(p)}</button>`).join("")}</div>` : ""}
+    <p class="muted small">A premium can be justified by faster growth or higher margins. Compare the right-hand columns before calling it expensive.</p>`;
   el("addPeerForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const s = el("addPeer").value.trim().toUpperCase();
     if (/^[A-Z0-9.\-]{1,10}$/.test(s) && !extraPeers.includes(s)) {
       extraPeers.push(s);
-      loadComps(symbol);
+      loadComps(symbol, peers);
     }
   });
-  el("resetPeers")?.addEventListener("click", () => { extraPeers = []; loadComps(symbol); });
+  box.querySelectorAll("[data-add-peer]").forEach((b) => b.addEventListener("click", () => {
+    extraPeers.push(b.dataset.addPeer);
+    loadComps(symbol, peers);
+  }));
+  el("resetPeers")?.addEventListener("click", () => { extraPeers = []; loadComps(symbol, peers); });
 }
 
 // ---- DCF workbench ----
 
-// Two-stage DCF: `g` for years 1–5, linear fade to terminal growth over years 6–10.
+// Two-stage DCF: `g` for years 1 to 5, linear fade to terminal growth over years 6 to 10.
 function dcfValue({ fcf, g, gT, r, shares, netCash }) {
   if (!(r > gT) || !fcf || !shares) return null;
   let pv = 0, cf = fcf;
@@ -96,7 +105,7 @@ function dcfValue({ fcf, g, gT, r, shares, netCash }) {
   return { perShare: (pv + netCash) / shares, terminalShare: tv / Math.pow(1 + r, 10) / pv };
 }
 
-// Reverse DCF: what years-1–5 growth does today's price imply?
+// Reverse DCF: what years 1 to 5 growth does today's price imply?
 function impliedGrowth(params, price) {
   let lo = -0.5, hi = 1.5;
   const f = (g) => dcfValue({ ...params, g })?.perShare ?? NaN;
@@ -124,17 +133,17 @@ function dcfPanel(symbol, data, price) {
             ${d.fcfAvg3 ? `<option value="${d.fcfAvg3}">3-year average: ${fmtMoneyCompact(d.fcfAvg3)}</option>` : ""}
           </select>
         </label>
-        <label>Growth, years 1–5 (%)
+        <label>Growth, years 1 to 5 (%)
           <input id="dcfG" type="number" step="0.5" value="${(defaultG * 100).toFixed(1)}" inputmode="decimal" />
           <span class="field-hint">${analystGrowth != null ? `Analysts expect ${(analystGrowth * 100).toFixed(1)}% EPS growth next year. ` : ""}${d.revenueCagr != null ? `Revenue grew ${(d.revenueCagr * 100).toFixed(1)}%/yr historically.` : ""}</span>
         </label>
         <label for="dcfGT"><span>${term("terminalGrowth", "Terminal growth (%)")}</span>
           <input id="dcfGT" type="number" step="0.25" value="2.5" inputmode="decimal" />
-          <span class="field-hint">Long-run growth after year 10; usually 2–3% (≈ GDP).</span>
+          <span class="field-hint">Long-run growth after year 10; usually 2 to 3% (≈ GDP).</span>
         </label>
         <label for="dcfR"><span>${term("wacc", "Discount rate / WACC (%)")}</span>
           <input id="dcfR" type="number" step="0.25" value="9" inputmode="decimal" />
-          <span class="field-hint">Your required return. ~8–10% for large caps, higher for small or risky firms.</span>
+          <span class="field-hint">Your required return. ~8 to 10% for large caps, higher for small or risky firms.</span>
         </label>
         <p class="muted small">Net cash ${fmtMoneyCompact(netCash)} · ${fmtMoneyCompact(d.shares).replace("$", "")} shares · FY ending ${esc(d.fiscalYearEnd)}</p>
       </fieldset>
@@ -177,7 +186,7 @@ function wireDcf(symbol, data, price) {
     last = v?.perShare ?? null;
     el("dcfValue").textContent = v ? fmtUSD(v.perShare) : "Check inputs (discount rate must exceed terminal growth)";
     el("dcfUpside").innerHTML = v && price ? `${signed((v.perShare / price - 1) * 100, fmtPct((v.perShare / price - 1) * 100), { neutral: true })} vs ${fmtUSD(price)} today` : "";
-    el("dcfTerminal").textContent = v ? `Terminal value is ${(v.terminalShare * 100).toFixed(0)}% of the total — ${v.terminalShare > 0.75 ? "the valuation rests heavily on the far future; be skeptical of precision." : "a reasonable share."}` : "";
+    el("dcfTerminal").textContent = v ? `Terminal value is ${(v.terminalShare * 100).toFixed(0)}% of the total. ${v.terminalShare > 0.75 ? "The valuation rests heavily on the far future; be skeptical of precision." : "A reasonable share."}` : "";
     const ig = price ? impliedGrowth(p, price) : null;
     el("dcfImplied").textContent = ig === null ? "—" : `${(ig * 100).toFixed(1)}%`;
     const rs = [p.r - 0.02, p.r - 0.01, p.r, p.r + 0.01, p.r + 0.02];
@@ -195,7 +204,7 @@ function wireDcf(symbol, data, price) {
   el("dcfForm").addEventListener("input", update);
   update();
   el("dcfToPitch").addEventListener("click", () => {
-    try { sessionStorage.setItem("pif_pitch_prefill", JSON.stringify({ symbol, basePrice: last ? Number(last.toFixed(2)) : null, valuation: `DCF: ${el("dcfG").value}% growth yrs 1–5, ${el("dcfGT").value}% terminal, ${el("dcfR").value}% WACC → ${last ? fmtUSD(last) : "n/a"}/share.` })); } catch { /* ignore */ }
+    try { sessionStorage.setItem("pif_pitch_prefill", JSON.stringify({ symbol, basePrice: last ? Number(last.toFixed(2)) : null, valuation: `DCF: ${el("dcfG").value}% growth yrs 1 to 5, ${el("dcfGT").value}% terminal, ${el("dcfR").value}% WACC → ${last ? fmtUSD(last) : "n/a"}/share.` })); } catch { /* ignore */ }
     location.hash = `#/pitches/new/${encodeURIComponent(symbol)}`;
   });
 }
@@ -217,10 +226,10 @@ export async function render(c, { symbol, data, price, isFinancial }) {
         <div id="compsBody"></div>
       </section>
       <section class="panel span-full" aria-labelledby="dcf-h">
-        <div class="panel-head"><h3 id="dcf-h">Discounted cash flow</h3><span class="muted small">Prefilled from SEC filings — change any assumption</span></div>
+        <div class="panel-head"><h3 id="dcf-h">Discounted cash flow</h3><span class="muted small">Prefilled from SEC filings. Change any assumption</span></div>
         ${isFinancial ? `<p class="notice small">DCFs on free cash flow don't work for banks and insurers (deposits and float distort cash flow). Use P/B and ROE from the peer table instead.</p>` : dcfPanel(symbol, data, price)}
       </section>
     </div>`;
   if (!isFinancial) wireDcf(symbol, data, price);
-  await loadComps(symbol);
+  await loadComps(symbol, data.peers);
 }

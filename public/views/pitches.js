@@ -1,22 +1,23 @@
-import { esc, api, fmtUSD, fmtPct, signed, pageHead, loading, errorBox, subTabs, currentMember } from "../shared.js";
+import { esc, api, fmtUSD, fmtPct, signed, pageHead, subTabs, currentMember, errorState, bindRetry, skeleton, emptyState } from "../shared.js";
 import { IDEAS_TABS } from "./screener.js";
 
 export const title = "Pitches";
 
 const STATUS_ORDER = ["voting", "draft", "approved", "executed", "rejected", "withdrawn"];
-const STATUS_LABEL = { voting: "Voting open", draft: "Drafts", approved: "Approved — awaiting trade", executed: "Executed", rejected: "Rejected", withdrawn: "Withdrawn" };
+const STATUS_LABEL = { voting: "Voting open", draft: "Drafts", approved: "Approved: awaiting trade", executed: "Executed", rejected: "Rejected", withdrawn: "Withdrawn" };
 
 export function statusPill(s) {
   return `<span class="status-pill status-${esc(s)}">${esc(s)}</span>`;
 }
 
 export async function mount(container) {
-  container.innerHTML = subTabs(IDEAS_TABS, "#/pitches") + loading("Loading pitches…");
+  container.innerHTML = subTabs(IDEAS_TABS, "#/pitches") + skeleton("rows", { label: "Loading pitches" });
   let rows;
   try {
     rows = await api("/api/pitches");
   } catch (err) {
-    container.innerHTML = subTabs(IDEAS_TABS, "#/pitches") + pageHead("Pitches") + errorBox(`Could not load pitches: ${err.message}`);
+    container.innerHTML = subTabs(IDEAS_TABS, "#/pitches") + pageHead("Pitches") + errorState({ title: "Couldn't load pitches.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const member = currentMember();
@@ -36,17 +37,12 @@ export async function mount(container) {
             return `<li class="pitch-card">
               <a href="#/pitches/${p.id}" class="pitch-link">
                 <span class="pitch-dir dir-${esc(p.direction)}">${esc(p.direction)}</span>
-                <strong>${esc(p.symbol)}</strong> ${p.title ? `<span class="muted">— ${esc(p.title)}</span>` : ""}
+                <strong>${esc(p.symbol)}</strong> ${p.title ? `<span class="muted">(${esc(p.title)})</span>` : ""}
               </a>
               <div class="muted small">${esc(p.author)} · ${esc(p.createdAt.slice(0, 10))}${p.priceAtPitch ? ` · pitched at ${fmtUSD(p.priceAtPitch)}` : ""}${upside !== null ? ` · base case ${fmtPct(upside * 100)}` : ""}</div>
               ${p.status === "voting" ? `<div class="small">${p.voteCounts.yes} yes · ${p.voteCounts.no} no · ${p.voteCounts.abstain} abstain ${p.passing ? `<span class="tone-good">(passing)</span>` : ""}</div>` : ""}
             </li>`;
           }).join("")}
         </ul>
-      </section>`).join("") : `
-      <div class="empty-state page-pad-panel">
-        <p class="empty-title">No pitches yet</p>
-        <p class="muted">Start one from any research page (“Pitch it”), or from the DCF on the Valuation tab to carry your target over.</p>
-        <p><a class="btn btn-primary" href="#/pitches/new">Write the first pitch</a></p>
-      </div>`}`;
+      </section>`).join("") : `<div class="page-pad-panel">${emptyState({ icon: "megaphone", title: "No pitches yet", body: "Start one from any research page (“Pitch it”), or from the DCF on the Valuation tab to carry your target over.", action: currentMember() ? { label: "Write the first pitch", href: "#/pitches/new" } : null })}</div>`}`;
 }

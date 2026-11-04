@@ -1,29 +1,21 @@
 // "Lists" menu on a company's research page: tick the lists this ticker should be on.
-import { esc, api, toast, invalidateContext, loadSession } from "./shared.js";
-
-let menu = null;
+import { esc, api, toast, invalidateContext, loadSession, icon } from "./shared.js";
+import { openPopover } from "./ui/popover.js";
 
 export async function openListMenu(button, symbol) {
-  if (!menu) {
-    menu = document.createElement("div");
-    menu.id = "listMenu";
-    menu.className = "account-menu list-menu";
-    menu.setAttribute("popover", "");
-    menu.setAttribute("role", "dialog");
-    menu.setAttribute("aria-label", "Add to lists");
-    document.body.append(menu);
-  }
+  const menu = document.createElement("div");
+  menu.id = "listMenu";
+  menu.className = "list-menu";
   menu.innerHTML = `<p class="muted small list-menu-pad">Loading lists…</p>`;
-  const r = button.getBoundingClientRect();
-  Object.assign(menu.style, { top: `${Math.min(r.bottom + 6, innerHeight - 100)}px`, left: `${Math.max(8, Math.min(r.left, innerWidth - 300))}px`, right: "auto" });
-  menu.showPopover();
+  const pop = openPopover({ anchor: button, content: menu, label: "Add to lists", placement: "bottom-end", width: 300 });
   let lists;
-  try { lists = (await api(`/api/watchlists?symbol=${encodeURIComponent(symbol)}`)).filter((l) => l.canEdit); } catch (err) { menu.innerHTML = `<p class="list-menu-pad small">${esc(err.message)}</p>`; return; }
+  try { lists = (await api(`/api/watchlists?symbol=${encodeURIComponent(symbol)}`)).filter((l) => l.canEdit); } catch (err) { menu.innerHTML = `<p class="list-menu-pad small">${esc(err.message)}</p>`; pop.reposition(); return; }
   menu.innerHTML = `
     <p class="list-menu-pad"><strong>Lists with ${esc(symbol)}</strong></p>
     <div class="list-menu-items">${lists.map((l) => `<label class="check list-menu-item"><input type="checkbox" data-key="${esc(l.key)}" data-kind="${esc(l.kind)}" ${l.has ? "checked" : ""} />
       <span>${esc(l.name)} <span class="muted small">${l.kind === "custom" ? (l.visibility === "club" ? "shared" : "private") : l.kind === "fund" ? "fund" : "private"}</span></span></label>`).join("")}</div>
-    <a class="account-item small" href="#/watchlist">Manage lists / make a new one →</a>`;
+    <a class="list-menu-link small" href="#/watchlist">Manage lists / make a new one</a>`;
+  pop.reposition();
   menu.querySelectorAll("[data-key]").forEach((box) => box.addEventListener("change", async () => {
     const key = box.dataset.key, kind = box.dataset.kind;
     box.disabled = true;
@@ -34,7 +26,7 @@ export async function openListMenu(button, symbol) {
       if (kind === "following") {
         loadSession();
         const fb = document.getElementById("followBtn"); // the Follow button beside the menu
-        if (fb) { fb.setAttribute("aria-pressed", String(box.checked)); fb.textContent = box.checked ? "★ Following" : "☆ Follow"; }
+        if (fb) { fb.setAttribute("aria-pressed", String(box.checked)); fb.innerHTML = `${icon(box.checked ? "star-filled" : "star", { size: 16 })}<span>${box.checked ? "Following" : "Follow"}</span>`; }
       }
       toast(`${symbol} ${box.checked ? "added to" : "removed from"} ${box.closest("label").querySelector("span").firstChild.textContent.trim()}.`);
     } catch (err) {
@@ -42,5 +34,5 @@ export async function openListMenu(button, symbol) {
       toast(err.message, { type: "error" });
     } finally { box.disabled = false; }
   }));
-  menu.querySelector("a").addEventListener("click", () => menu.hidePopover());
+  menu.querySelector("a").addEventListener("click", () => pop.close({ returnFocus: false }));
 }

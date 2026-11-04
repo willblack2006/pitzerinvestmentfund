@@ -1,4 +1,4 @@
-import { el, esc, api, can, pageHead, loading, lockedHint } from "../shared.js";
+import { el, esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, bindRetry } from "../shared.js";
 import { noteCard, wireNoteCards, openNoteDrawer } from "../notes.js";
 
 export const title = "Notes";
@@ -17,7 +17,7 @@ export async function mount(container) {
         <label for="noteSearch" class="sr-only">Search notes</label>
         <input id="noteSearch" type="search" placeholder="Search notes…" value="${esc(state.q)}" autocomplete="off" />
         <label for="noteSymbol" class="sr-only">Filter by ticker</label>
-        <input id="noteSymbol" placeholder="Ticker" maxlength="12" value="${esc(state.symbol)}" autocomplete="off" style="width:110px" />
+        <input id="noteSymbol" data-ticker placeholder="Ticker" maxlength="12" value="${esc(state.symbol)}" autocomplete="off" style="width:110px" />
       </div>
       <div class="seg seg-sm" role="group" aria-label="Whose notes">
         ${[["all", "All"], ["mine", "Mine"], ["club", "Shared with club"]].map(([v, l]) => `<button type="button" class="seg-btn" data-scope="${v}" aria-pressed="${state.scope === v}">${l}</button>`).join("")}
@@ -27,14 +27,21 @@ export async function mount(container) {
   const body = el("notesBody");
   let notes = [];
   const load = async () => {
-    body.innerHTML = loading("Loading notes…");
+    body.innerHTML = skeleton("rows", { rows: 4, label: "Loading notes" });
     const q = new URLSearchParams({ scope: state.scope });
     if (state.q) q.set("q", state.q);
     if (state.symbol) q.set("symbol", state.symbol);
-    try { notes = await api(`/api/notes?${q}`); } catch (err) { body.innerHTML = `<p class="muted">${esc(err.message)}</p>`; return; }
+    try { notes = await api(`/api/notes?${q}`); } catch (err) {
+      body.innerHTML = errorState({ title: "Couldn't load notes.", detail: err.message, retryId: "load" });
+      bindRetry(body, "load", load);
+      return;
+    }
     if (!el("notesBody")) return;
     body.innerHTML = notes.length ? `<p class="muted small">${notes.length} note${notes.length === 1 ? "" : "s"}</p><div class="note-list">${notes.map((n) => noteCard(n)).join("")}</div>`
-      : `<div class="empty-state"><p class="empty-title">${state.q || state.symbol ? "No notes match" : "No notes yet"}</p><p class="muted">Press <kbd>N</kbd> on any page, use “Write a note” on a company's research page, or highlight text and choose “Add to note”.</p></div>`;
+      : state.q || state.symbol
+        ? emptyState({ icon: "search", title: "No notes match", body: "Try a different search or clear the filter." })
+        : emptyState({ icon: "doc", title: "No notes yet", body: "Press N on any page, use “Write a note” on a company's research page, or highlight text and choose “Add to note”.", action: { label: "Write a note", id: "emptyNewNote" } });
+    el("emptyNewNote")?.addEventListener("click", () => openNoteDrawer());
   };
   wireNoteCards(body, () => notes, load);
   el("newNote").addEventListener("click", () => openNoteDrawer());

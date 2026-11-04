@@ -1,0 +1,28 @@
+/* Widget styles for the popover-based glossary, chat reactions and Lists menu (A2/A5). */
+
+/* Glossary "?" definition body, shown inside a .ui-pop */
+.term-def {
+  padding: var(--sp-3, 12px) var(--sp-4, 14px); font-size: var(--fs-md); font-weight: 400; line-height: 1.45;
+  text-transform: none; letter-spacing: 0; white-space: normal; text-align: left; color: var(--text);
+}
+.term-def a { margin-left: 4px; white-space: nowrap; color: var(--accent); }
+
+/* Chat reaction picker */
+.ui-pop .react-menu { display: flex; flex-wrap: wrap; gap: 2px; padding: var(--sp-1, 4px); }
+.ui-pop .react-menu button {
+  border: 0; background: none; color: var(--text); font: inherit; font-size: var(--fs-lg, 18px);
+  min-width: 40px; min-height: 40px; border-radius: var(--r-md); cursor: pointer;
+}
+.ui-pop .react-menu button:hover, .ui-pop .react-menu button:focus-visible { background: var(--surface-2); }
+.chat-tools button { display: inline-grid; place-items: center; }
+
+/* Lists menu */
+.list-menu { padding: var(--sp-1, 4px); }
+.list-menu-pad { margin: var(--sp-2, 8px); }
+.list-menu-items { display: grid; gap: 2px; max-height: 50vh; overflow: auto; }
+.list-menu-item { padding: var(--sp-2, 8px); border-radius: var(--r-md); align-items: flex-start !important; }
+.list-menu-item:hover { background: var(--surface-2); }
+.list-menu-link { display: block; padding: var(--sp-2, 8px); border-top: 1px solid var(--border); margin-top: var(--sp-1, 4px); color: var(--accent); }
+
+/* Highlight toolbar icons */
+.sel-bar button { display: inline-flex; align-items: center; gap: 6px; }

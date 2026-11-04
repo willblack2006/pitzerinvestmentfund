@@ -1,4 +1,4 @@
-import { el, esc, api, fmtPct, fmtRatio, fmtUSD, signed, pageHead, loading, errorBox, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, benchParam } from "../shared.js";
+import { el, esc, api, fmtPct, fmtRatio, fmtUSD, signed, pageHead, loading, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, benchParam, errorState, bindRetry } from "../shared.js";
 import { lineChart, barChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { term } from "../glossary.js";
@@ -39,7 +39,8 @@ export async function mount(container) {
       benchmarkPresets(),
     ]);
   } catch (err) {
-    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/performance") + pageHead("Performance") + errorBox(`Could not load performance: ${err.message}`);
+    container.innerHTML = subTabs(PORTFOLIO_TABS, "#/performance") + pageHead("Performance") + errorState({ title: "Couldn't load performance.", detail: err.message, retryId: "page" });
+    bindRetry(container, "page", () => mount(container));
     return;
   }
   const b = d.backtest;
@@ -66,7 +67,7 @@ export async function mount(container) {
       <section class="panel span-full" aria-labelledby="bt-h">
         <div class="panel-head"><h3 id="bt-h">Current holdings vs ${esc(d.benchmark)}</h3><span class="muted small">Today's share counts priced over the past year, rebased to 100</span></div>
         ${b ? `<div class="chart-box"><canvas id="btChart" role="img" aria-label="${esc(`Current holdings returned ${(b.totalReturn * 100).toFixed(1)}% vs ${d.benchmark} ${(b.benchReturn * 100).toFixed(1)}% from ${b.start} to ${b.end}.`)}"></canvas></div>
-          <p class="muted small">This shows how what we own <em>now</em> has behaved — not the fund's actual historical return, which depends on when trades happened. ${d.holdingsCovered < d.holdingsTotal ? `${d.holdingsTotal - d.holdingsCovered} holdings without price history are excluded.` : ""}</p>`
+          <p class="muted small">This shows how what we own <em>now</em> has behaved: not the fund's actual historical return, which depends on when trades happened. ${d.holdingsCovered < d.holdingsTotal ? `${d.holdingsTotal - d.holdingsCovered} holdings without price history are excluded.` : ""}</p>`
           : `<p class="muted">Not enough price history.</p>`}
       </section>
 
@@ -89,7 +90,7 @@ export async function mount(container) {
       </section>
       <section class="panel" aria-labelledby="corr-sum-h">
         <h3 id="corr-sum-h">Diversification check</h3>
-        ${highCorr.length ? `<p class="small">These pairs among the largest holdings move almost in lockstep (correlation &gt; 0.7):</p><ul class="link-list small">${highCorr.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : `<p class="small">No pair among the 12 largest holdings has a correlation above 0.7 — reasonably diversified.</p>`}
+        ${highCorr.length ? `<p class="small">These pairs among the largest holdings move almost in lockstep (correlation &gt; 0.7):</p><ul class="link-list small">${highCorr.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : `<p class="small">No pair among the 12 largest holdings has a correlation above 0.7. Reasonably diversified.</p>`}
         <p class="muted small">Beta ${b ? f2(b.beta, 2) : "—"} means a 10% market drop would typically move the portfolio about ${b ? f2(b.beta * 10, 0) : "—"}%.</p>
       </section>
 

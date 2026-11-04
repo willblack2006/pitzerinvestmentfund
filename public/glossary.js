@@ -3,6 +3,7 @@
 // tooltip). Definitions state what a number is and how it's computed here; they don't
 // promise thresholds the app has no source for.
 import { esc } from "./shared.js";
+import { togglePopover } from "./ui/popover.js";
 
 export const GLOSSARY = {
   // Risk & performance
@@ -13,6 +14,8 @@ export const GLOSSARY = {
   informationRatio: ["Information ratio", "Return above the benchmark divided by tracking error: how consistently the stock or fund beat its benchmark, not just by how much."],
   trackingError: ["Tracking error", "How far returns wander from the benchmark's (the volatility of the difference). Low means it behaves like the index."],
   correlation: ["Correlation", "From −1 to 1, how closely two return series move together. Lower correlation with what the fund already owns means more diversification."],
+  rollingBeta: ["Rolling beta", "Beta measured over a moving window (the last 3 or 6 months of daily returns) instead of all two years, so you can see whether the stock has started to swing more or less with the market."],
+  rollingCorrelation: ["Rolling correlation", "Correlation with the benchmark over a moving window (the last 3 or 6 months of daily returns). A rising line means the stock moves more in step with the market, so it diversifies the fund less."],
   contribution: ["Contribution", "A holding's return times its starting weight, in percentage points: how much it added to or took away from the portfolio's return."],
   twr: ["Time-weighted return", "Return with deposits and withdrawals stripped out, so adding cash doesn't look like performance. The standard way funds report returns."],
   // Markets (Today page)
@@ -76,14 +79,42 @@ export const GLOSSARY = {
   tercile: ["Tercile", "One third of a group after ranking. \"Top tercile by momentum\" is the third of names with the strongest momentum."],
   bps: ["Basis points (bps)", "Hundredths of a percent. 20 bps = 0.20%."],
   survivorship: ["Survivorship bias", "Testing only on companies that are still around (or still in the fund) leaves out the ones that failed, which flatters past results."],
+  // Chart indicators (Research price chart)
+  sma: ["Simple moving average (SMA)", "The average closing price over the last N bars, recalculated each bar. A 50-day SMA averages the last 50 daily closes. It smooths out day-to-day noise and lags the price."],
+  ema: ["Exponential moving average (EMA)", "A moving average that gives recent closes more weight, so it reacts to new moves faster than a simple average of the same length. Here it starts from the simple average of the first N closes."],
+  bollinger: ["Bollinger Bands", "A moving average (20 bars by default) with bands a set number of standard deviations (2 by default) above and below it. The bands widen when prices swing more and narrow when they calm down. Developed by John Bollinger."],
+  vwap: ["VWAP", "Volume-weighted average price: the average price of the day's trading, with each bar weighted by its volume. Here it restarts each trading day, so it only shows on intraday charts (1D and 5D)."],
+  rsi: ["Relative Strength Index (RSI)", "Compares the size of recent gains with recent losses on a 0 to 100 scale, using Wilder's smoothing over 14 bars by default. Readings above 70 are often called overbought and below 30 oversold, but a strong trend can stay there for a long time."],
+  macd: ["MACD", "Moving average convergence divergence: the 12-bar EMA minus the 26-bar EMA. The signal line is a 9-bar EMA of that gap, and the histogram is the difference between the two. Crossings are often read as shifts in momentum."],
+  atr: ["Average true range (ATR)", "The average size of each bar's true range: high to low, stretched to include any gap from the previous close. Wilder's smoothing over 14 bars by default. It measures how much the price moves, not which way."],
+  volume: ["Volume", "The number of shares traded in each bar. On this chart a bar is green when the close was at or above the previous close and red when it was below."],
 };
 
-let n = 0;
 // `label` defaults to the glossary's own name for the term.
 export function term(key, label) {
   const entry = GLOSSARY[key];
   if (!entry) return esc(label ?? key);
-  const [name, def] = entry;
-  const id = `term-${key}-${++n}`;
-  return `${esc(label ?? name)}<button type="button" class="term-btn" popovertarget="${id}" aria-label="What is ${esc(name)}?">?</button><span popover id="${id}" class="term-pop"><strong>${esc(name)}.</strong> ${esc(def)} <a href="#/glossary">All terms</a></span>`;
+  const [name] = entry;
+  return `${esc(label ?? name)}<button type="button" class="term-btn" data-term="${esc(key)}" aria-haspopup="dialog" aria-expanded="false" aria-label="What is ${esc(name)}?">?</button>`;
+}
+
+// One delegated listener opens the definition, so term() output works anywhere (table headers,
+// labels, re-rendered views). Capture phase + stopPropagation keeps a "?" inside a sortable
+// header or a <label> from also sorting or toggling its control.
+if (typeof document !== "undefined" && !globalThis.__pifTermBound) {
+  globalThis.__pifTermBound = true;
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest?.(".term-btn[data-term]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const entry = GLOSSARY[btn.dataset.term];
+    if (!entry) return;
+    togglePopover({
+      anchor: btn,
+      label: entry[0],
+      width: 340,
+      content: `<div class="term-def"><strong>${esc(entry[0])}.</strong> ${esc(entry[1])} <a href="#/glossary">All terms</a></div>`,
+    });
+  }, true);
 }

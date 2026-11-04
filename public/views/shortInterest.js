@@ -1,4 +1,4 @@
-import { esc, fmtRatio, fmtX, api, signed, fmtPct, pageHead, loading, errorBox, subTabs } from "../shared.js";
+import { esc, fmtRatio, fmtX, api, signed, fmtPct, pageHead, loading, subTabs, errorState, bindRetry } from "../shared.js";
 import { shortBadge, shortMeter } from "./shortSignal.js";
 import { MARKET_TABS } from "./insiders.js";
 
@@ -9,12 +9,13 @@ let scope = "all";
 async function loadRanking() {
   const box = document.getElementById("spBody");
   if (!box) return;
-  box.innerHTML = loading("Scoring short pressure for each stock — the FINRA trend lookup can take a while on first load.");
+  box.innerHTML = loading("Scoring short pressure for each stock: the FINRA trend lookup can take a while on first load.");
   let r;
   try {
     r = await api(`/api/short-pressure?scope=${scope}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't load short-pressure data: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't load short-pressure data.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => loadRanking());
     return;
   }
   if (!document.getElementById("spBody")) return;
@@ -39,7 +40,7 @@ async function loadRanking() {
 }
 
 export async function mount(container) {
-  container.innerHTML = subTabs(MARKET_TABS, "#/short-interest") + pageHead("Short interest", "Which holdings and watchlist names look like crowded shorts — high days-to-cover and rising short interest, which research links to underperformance.");
+  container.innerHTML = subTabs(MARKET_TABS, "#/short-interest") + pageHead("Short interest", "Which holdings and watchlist names look like crowded shorts: high days-to-cover and rising short interest, which research links to underperformance.");
   container.innerHTML += `
     <section class="panel page-pad-panel" aria-labelledby="sp-h">
       <div class="panel-head">
@@ -52,7 +53,7 @@ export async function mount(container) {
     </section>
     <details class="explainer page-pad">
       <summary>How to read this page</summary>
-      <p class="small">Days-to-cover (short interest ÷ average daily volume) and short interest as a share of the float, from Yahoo's short-interest data (updated roughly twice a month). A FINRA daily short-volume trend is shown on each stock's Risk tab — that figure is mostly market-maker order flow, not bearish bets, so it's only a secondary signal here. Not a buy/sell recommendation.</p>
+      <p class="small">Days-to-cover (short interest ÷ average daily volume) and short interest as a share of the float, from Yahoo's short-interest data (updated roughly twice a month). A FINRA daily short-volume trend is shown on each stock's Risk tab. That figure is mostly market-maker order flow, not bearish bets, so it's only a secondary signal here. Not a buy/sell recommendation.</p>
     </details>`;
   loadRanking();
   container.querySelectorAll("[data-scope]").forEach((b) => b.addEventListener("click", () => {

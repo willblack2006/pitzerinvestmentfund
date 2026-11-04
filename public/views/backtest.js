@@ -1,4 +1,4 @@
-import { esc, api, fmtPct, signed, pageHead, loading, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam } from "../shared.js";
+import { esc, api, fmtPct, signed, pageHead, subTabs, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam, skeleton, errorState, bindRetry } from "../shared.js";
 import { lineChart } from "../charts.js";
 import { MARKET_TABS } from "./insiders.js";
 
@@ -14,12 +14,13 @@ const state = { signal: "momentum", years: 7, costBps: 20 };
 async function run(container) {
   const box = document.getElementById("btBody");
   if (!box) return;
-  box.innerHTML = loading("Running the monthly-rebalance backtest over cached price history…");
+  box.innerHTML = skeleton("chart", { label: "Running the monthly-rebalance backtest over cached price history" });
   let r;
   try {
     r = await api(`/api/backtest?signal=${state.signal}&years=${state.years}&costBps=${state.costBps}${benchParam("&")}`);
   } catch (err) {
-    box.innerHTML = `<p class="muted">Couldn't run the backtest: ${esc(err.message)}</p>`;
+    box.innerHTML = errorState({ title: "Couldn't run the backtest.", detail: err.message, retryId: "load" });
+    bindRetry(box, "load", () => run(container));
     return;
   }
   if (!document.getElementById("btBody")) return;
@@ -38,7 +39,7 @@ async function run(container) {
       <div class="chart-box"><canvas id="btChart" role="img" aria-label="Backtest growth of $100: top tercile vs bottom tercile vs benchmark over ${r.rows.length} months."></canvas></div>
     </section>
     <div class="notice page-pad" role="note">
-      <strong>Past ≠ future, small sample.</strong> This universe is today's holdings + watchlist (not a historical universe — names that would have been in it years ago but aren't today, or vice versa, are missing), so it carries <strong>survivorship bias</strong>: the result likely overstates how a real, point-in-time momentum strategy would have done. Treat this as a sanity check on the signal's direction, not a return estimate.
+      <strong>Past ≠ future, small sample.</strong> This universe is today's holdings + watchlist (not a historical universe: names that would have been in it years ago but aren't today, or vice versa, are missing), so it carries <strong>survivorship bias</strong>: the result likely overstates how a real, point-in-time momentum strategy would have done. Treat this as a sanity check on the signal's direction, not a return estimate.
       ${r.excludedForHistory ? ` ${r.excludedForHistory} name(s) were excluded for too little price history.` : ""}
     </div>`;
   lineChart(document.getElementById("btChart"), {
@@ -63,7 +64,7 @@ export async function mount(container) {
       <div class="panel-head"><h3 id="bt-h">Run a backtest</h3></div>
       <form id="btForm" class="toolbar">
         <label class="field-inline">Signal
-          <select id="btSignal">${SIGNALS.filter(([, , enabled]) => enabled).map(([v, l]) => `<option value="${v}" ${v === state.signal ? "selected" : ""}>${l}</option>`).join("")}</select>
+          <select id="btSignal">${SIGNALS.filter(([, enabled]) => enabled).map(([v, l]) => `<option value="${v}" ${v === state.signal ? "selected" : ""}>${l}</option>`).join("")}</select>
         </label>
         <label class="field-inline">Years <input id="btYears" type="number" min="1" max="10" value="${state.years}" inputmode="numeric" /></label>
         <label class="field-inline">Cost (bps/rebalance) <input id="btCost" type="number" min="0" max="200" value="${state.costBps}" inputmode="numeric" /></label>

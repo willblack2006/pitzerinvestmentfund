@@ -1,9 +1,11 @@
-import { el, esc, api, toast, fundContext, currentMember, sessionInfo, setSession, sessionReady, invalidateContext } from "./shared.js";
+import { el, esc, api, toast, icon, currentMember, sessionInfo, setSession, sessionReady, invalidateContext } from "./shared.js";
 import { initRouter } from "./router.js";
 import { initNotes } from "./notes.js";
 import { initSelection } from "./selection.js";
 import { initChat } from "./chat.js";
 import { initInbox, setFundAlertCount } from "./inbox.js";
+import { initTickerPicker } from "./tickerPicker.js";
+import { togglePopover } from "./ui/popover.js";
 
 // Each page's code only downloads when the user actually navigates there, instead of every
 // view in the app loading up front (the old eager imports were the biggest contributor to
@@ -54,18 +56,54 @@ const router = initRouter({
 
 const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 
+const GUEST_ICON = icon("user", { size: 20 });
+let accountPop = null;
+
 function updateAuthUI() {
   const m = currentMember();
+  // Signed in: a Sign in button on wide screens (the menu has one too). The menu button is always there.
   el("signInBtn").classList.toggle("hidden", !!m);
-  el("accountBtn").classList.toggle("hidden", !m);
-  if (m) {
-    el("accountInitials").textContent = initials(m.name);
-    el("accountLabel").textContent = `Account menu for ${m.name}`;
-    el("accountName").textContent = m.name;
-    el("accountTitle").textContent = [m.title, m.isAdmin ? "Admin" : "", m.canTrade ? "Can trade" : ""].filter(Boolean).join(" · ");
-    el("accountAdminLink").classList.toggle("hidden", !m.isAdmin);
-  }
+  const btn = el("accountBtn");
+  btn.classList.toggle("is-guest", !m);
+  el("accountInitials").innerHTML = m ? esc(initials(m.name)) : GUEST_ICON;
+  el("accountLabel").textContent = m ? `Menu for ${m.name}` : "Menu";
+  accountPop?.close({ returnFocus: false });
 }
+
+// Account menu: opens through the shared popover (a bottom sheet on phones). Chat, glossary and
+// settings live here so the phone header stays on one row.
+function accountMenuHtml() {
+  const m = currentMember();
+  const link = (name, label, href) => `<a class="account-item" href="${href}">${icon(name)}<span>${label}</span></a>`;
+  const act = (name, label, key) => `<button type="button" class="account-item" data-act="${key}">${icon(name)}<span>${label}</span></button>`;
+  const who = m ? `<p class="account-who"><strong>${esc(m.name)}</strong><span class="muted small">${esc([m.title, m.isAdmin ? "Admin" : "", m.canTrade ? "Can trade" : ""].filter(Boolean).join(" · "))}</span></p>` : "";
+  return `<div class="account-menu-body" data-account-menu>
+    ${who}
+    ${m ? link("user", "My profile", "#/members/me") + link("doc", "My notes", "#/notes") + link("inbox", "Notifications", "#/inbox") : ""}
+    ${act("chat", "Club chat", "chat")}
+    ${link("help", "Glossary", "#/glossary")}
+    ${link("gear", "Settings", "#/settings")}
+    ${m ? link("sliders", "Account &amp; preferences", "#/account") + `<hr class="account-sep" />` + act("x", "Sign out", "signout") : `<hr class="account-sep" />` + act("user", "Sign in", "signin")}
+  </div>`;
+}
+
+el("accountBtn").addEventListener("click", () => {
+  accountPop = togglePopover({ anchor: el("accountBtn"), content: accountMenuHtml(), label: "Menu", placement: "bottom-end", width: 260, onClose: () => { accountPop = null; } });
+  accountPop?.el.addEventListener("click", async (e) => {
+    const target = e.target.closest("a, [data-act]");
+    if (!target) return;
+    const act = target.dataset.act;
+    accountPop.close({ returnFocus: !!act });
+    if (act === "chat") el("chatBtn").click();
+    else if (act === "signin") openSignIn();
+    else if (act === "signout") {
+      try { await api("/api/auth/logout", { method: "POST" }); } catch { /* signed out anyway */ }
+      setSession({ member: null });
+      el("accountBtn").focus();
+      toast("Signed out.");
+    }
+  });
+});
 
 let signInReturnFocus = null;
 function openDialog(id) {
@@ -118,15 +156,6 @@ el("setupForm").addEventListener("submit", async (e) => {
     showFormError("setupError", err);
   }
 });
-
-el("signOutBtn").addEventListener("click", async () => {
-  el("accountMenu").hidePopover();
-  try { await api("/api/auth/logout", { method: "POST" }); } catch { /* signed out anyway */ }
-  setSession({ member: null });
-  el("signInBtn").focus();
-  toast("Signed out.");
-});
-el("accountMenu").addEventListener("click", (e) => { if (e.target.closest("a")) el("accountMenu").hidePopover(); });
 
 window.addEventListener("pif:request-signin", openSignIn);
 window.addEventListener("pif:session-changed", () => { updateAuthUI(); connectLive(); router.rerender(); });
@@ -189,16 +218,36 @@ async function refreshAlertBadge() {
 }
 
 // ---- Global ticker search ----
+// Wide screens show the box in the header. At 900px and under it is an icon that opens the box
+// over the whole header row (back button, Esc or a pick closes it).
 
-async function refreshTickerOptions() {
-  const ctx = await fundContext();
-  const opts = [
-    ...ctx.positions.map((p) => [p.symbol, "Owned"]),
-    ...ctx.watchlist.filter((w) => !ctx.owned.has(w.symbol)).map((w) => [w.symbol, "Watching"]),
-  ];
-  el("tickerOptions").innerHTML = opts.map(([s, label]) => `<option value="${esc(s)}">${label}</option>`).join("");
+const topbar = document.querySelector(".topbar");
+const compactHeader = window.matchMedia("(max-width: 900px)");
+function setSearchOpen(open) {
+  topbar.classList.toggle("searching", open);
+  el("searchToggle").setAttribute("aria-expanded", String(open));
 }
-window.addEventListener("pif:context-changed", refreshTickerOptions);
+function openSearch() {
+  if (compactHeader.matches) setSearchOpen(true);
+  el("jumpInput").focus();
+}
+function closeSearch({ restoreFocus = false } = {}) {
+  if (!topbar.classList.contains("searching")) return;
+  setSearchOpen(false);
+  if (restoreFocus) el("searchToggle").focus();
+}
+el("searchToggle").addEventListener("click", openSearch);
+el("searchBack").addEventListener("click", () => closeSearch({ restoreFocus: true }));
+el("jumpInput").addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return; // the picker handles the first Esc when its list is open
+  if (compactHeader.matches) closeSearch({ restoreFocus: true });
+  else el("jumpInput").blur();
+});
+el("jumpForm").addEventListener("focusout", () => {
+  setTimeout(() => { if (!el("jumpForm").contains(document.activeElement)) closeSearch(); }, 150);
+});
+compactHeader.addEventListener("change", () => setSearchOpen(false));
+window.addEventListener("hashchange", () => closeSearch());
 
 el("jumpForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -210,6 +259,7 @@ el("jumpForm").addEventListener("submit", (e) => {
   location.hash = `#/research/${encodeURIComponent(symbol)}`;
   el("jumpInput").value = "";
   el("jumpInput").blur();
+  closeSearch();
 });
 
 // "/" focuses search from anywhere (unless already typing in a field).
@@ -218,14 +268,57 @@ document.addEventListener("keydown", (e) => {
   const t = e.target;
   if (t.closest("input, textarea, select, [contenteditable]") || document.querySelector("dialog[open]")) return;
   e.preventDefault();
-  el("jumpInput").focus();
+  openSearch();
 });
+
+// ---- Header height and scrolling tab bars ----
+
+// Sticky bars under the header (.tabnav, .jump-nav) read --topbar-h so they stick right below it.
+const setTopbarHeight = () => document.documentElement.style.setProperty("--topbar-h", `${topbar.offsetHeight}px`);
+setTopbarHeight();
+if (window.ResizeObserver) new ResizeObserver(setTopbarHeight).observe(topbar);
+else window.addEventListener("resize", setTopbarHeight);
+
+// Horizontal tab bars (.nav, .subtabs, .tabnav) fade at an edge when more is hidden past it, and
+// the current tab is scrolled into view the first time a bar appears.
+const TAB_BARS = ".nav, .subtabs, .tabnav";
+const seenBars = new WeakSet();
+function updateFades(bar) {
+  const max = bar.scrollWidth - bar.clientWidth;
+  bar.classList.toggle("fade-start", max > 1 && bar.scrollLeft > 1);
+  bar.classList.toggle("fade-end", max > 1 && bar.scrollLeft < max - 1);
+}
+function syncTabBars() {
+  for (const bar of document.querySelectorAll(TAB_BARS)) {
+    bar.classList.add("scroll-fade");
+    if (!seenBars.has(bar) && bar.clientWidth) {
+      seenBars.add(bar);
+      const active = bar.querySelector('[aria-current="page"], .active');
+      if (active && bar.scrollWidth > bar.clientWidth) {
+        bar.scrollLeft += active.getBoundingClientRect().left - bar.getBoundingClientRect().left - (bar.clientWidth - active.offsetWidth) / 2;
+      }
+    }
+    updateFades(bar);
+  }
+}
+let tabBarFrame = 0;
+const scheduleTabBars = () => { cancelAnimationFrame(tabBarFrame); tabBarFrame = requestAnimationFrame(syncTabBars); };
+document.addEventListener("scroll", (e) => { if (e.target.matches?.(TAB_BARS)) updateFades(e.target); }, true);
+new MutationObserver(scheduleTabBars).observe(el("view"), { childList: true, subtree: true });
+window.addEventListener("hashchange", () => {
+  // A bar that is reused for the next page (the header nav) should re-center on its new current item.
+  document.querySelectorAll(".nav").forEach((b) => seenBars.delete(b));
+  scheduleTabBars();
+});
+window.addEventListener("resize", scheduleTabBars);
+window.addEventListener("pif:route-rendered", scheduleTabBars);
+scheduleTabBars();
 
 sessionReady().then(() => { updateAuthUI(); connectLive(); });
 initNotes();
 initSelection();
 initChat();
 initInbox();
-refreshTickerOptions();
+initTickerPicker();
 refreshAlertBadge();
 setInterval(refreshAlertBadge, 10 * 60 * 1000);
