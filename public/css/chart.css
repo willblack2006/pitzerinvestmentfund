@@ -112,3 +112,10 @@ body.ct-max-open .ui-pop { z-index: 1000; }
   .ct-ind-pop .ui-pick-list, .ct-cmp-pop .ui-pick-list { max-height: none; }
   .ct-seg-btn { height: 34px; }
 }
+
+/* Phones: the legend wraps to 3 lines, so push the chart below it instead of drawing under it. */
+@media (max-width: 600px) {
+  .ct-stage { height: 400px; }
+  .ct-chart { top: 56px; }
+  .ct-legend { right: 8px; font-size: 11px; }
+}

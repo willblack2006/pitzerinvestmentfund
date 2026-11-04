@@ -21,7 +21,17 @@ export function ensureLW() {
   return lwReady;
 }
 
-export const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// Theme tokens use light-dark() and color-mix(), which canvas libraries can't parse from the raw
+// custom property. Resolve through a probe element so the chart gets a plain rgb() color.
+let probe = null;
+export const css = (name) => {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!raw) return raw;
+  if (!probe) { probe = document.createElement("span"); probe.style.display = "none"; document.body.appendChild(probe); }
+  probe.style.color = "";
+  probe.style.color = raw;
+  return probe.style.color ? getComputedStyle(probe).color : raw;
+};
 export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 export const SERIES = ["--s1", "--s2", "--s3", "--s4", "--s5"];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
