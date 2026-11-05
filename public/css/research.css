@@ -24,11 +24,12 @@
   display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin: var(--sp-3) var(--gutter) 0; overflow: hidden;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg);
-  gap: 1px; background-color: var(--border); /* the gap shows the border color as dividers */
+  gap: 0; /* dividers are drawn per cell, so an unfilled last row stays the panel color */
 }
 .ks {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
   padding: var(--sp-3) var(--sp-4); background: var(--surface-1); color: var(--text); text-decoration: none;
+  box-shadow: 0 0 0 0.5px var(--border);
 }
 a.ks:hover { background: var(--surface-2); }
 a.ks:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
@@ -41,19 +42,19 @@ a.ks:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* ---- Signal chips ---- */
 .sig-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) var(--gutter) 0; }
 .sig-row[hidden] { display: none; }
-.sig-chip {
+.sg-chip {
   display: inline-flex; align-items: baseline; gap: var(--sp-2); padding: 5px 12px; min-height: 32px;
   border: 1px solid var(--border); border-radius: var(--r-full); background: var(--surface-1);
   color: var(--text); text-decoration: none; font-size: var(--fs-sm);
 }
-.sig-chip:hover { background: var(--surface-2); }
-.sig-chip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.sg-chip:hover { background: var(--surface-2); }
+.sg-chip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .sig-label { color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; }
 .sig-value { font-weight: 650; font-variant-numeric: tabular-nums; }
-.sig-chip.tone-good { background: var(--positive-soft); border-color: transparent; color: var(--positive); }
-.sig-chip.tone-bad { background: var(--negative-soft); border-color: transparent; color: var(--negative); }
-.sig-chip.tone-warn { background: var(--caution-soft); border-color: transparent; color: var(--caution); }
-.sig-chip.tone-good .sig-label, .sig-chip.tone-bad .sig-label, .sig-chip.tone-warn .sig-label { color: inherit; }
+.sg-chip.tone-good { background: var(--positive-soft); border-color: transparent; color: var(--positive); }
+.sg-chip.tone-bad { background: var(--negative-soft); border-color: transparent; color: var(--negative); }
+.sg-chip.tone-warn { background: var(--caution-soft); border-color: transparent; color: var(--caution); }
+.sg-chip.tone-good .sig-label, .sg-chip.tone-bad .sig-label, .sg-chip.tone-warn .sig-label { color: inherit; }
 
 /* ---- Valuation: peer table ---- */
 .comps-table.table-sticky-first th:first-child,

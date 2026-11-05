@@ -4,7 +4,7 @@ import { esc, api } from "../shared.js";
 
 // One compact chip: label, value, tone color. The scale goes in the tooltip, not on the page.
 const chip = (href, name, value, scale, tone) => `
-  <a class="sig-chip ${tone ? `tone-${tone}` : ""}" href="${href}" title="${esc(scale)}">
+  <a class="sg-chip ${tone ? `tone-${tone}` : ""}" href="${href}" title="${esc(scale)}">
     <span class="sig-label">${esc(name)}</span>
     <span class="sig-value">${value}</span>
   </a>`;
