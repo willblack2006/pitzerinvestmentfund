@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-09 — Claude (Schwab 11/09 holdings sync, one-time migration)
+- Did: `lib/migrations/schwab20261109.js` sets positions and cash to Will's Schwab Positions page as of 11/09 (transcribed from a screenshot). Added NVDA, MU, IEFA, XLP, XOM; HSY 4.9981 sh, TTWO 6.2208 sh, CELH cost $636.71 ($42.45/sh); cash $33,239.81; all lastPrice/marketValue set to Schwab's. LumiraDx left out again (Will's choice). Runs once from `server.js` on start (marker row in `migrations_done`, backup copied to `<db dir>/backups/pif-before-schwab-2026-11-09.db` first). Test: `test/schwabMigration.test.js`. No transactions recorded for the new buys (dates/prices unknown), so the two 10/29 TTWO/HSY buys still show old share counts.
+- Checks: cost basis sums to $82,495.23 (= Schwab $82,687.72 minus LumiraDx $192.49). Per-row shares x price = market value and gain = value - cost match. Sum of row market values is $127,055.23 vs Schwab's header $127,091.77 ($36.54 apart); rows are self-consistent, likely quote timing, and prices refresh anyway.
+- Gotchas: local `data/pif.db` is NOT migrated until the server is started locally; live Render DB migrates on the deploy. Local benchmark setting is QQQ, live is SPY (left alone).
+
 ## 2026-11-04 — Claude (product experience pass: new design system, shared UI parts, every page)
 - Did: the plan in `~/.claude/plans/task-from-the-session-prancy-flurry.md` (Phase A to F), built by subagents in waves with no shared files, then checked and fixed by the main session.
   - **Design system:** `style.css` now has the approved mockup tokens (Inter, 7 type sizes, 4px spacing, radii, surfaces, positive/negative/caution). Each palette is written once with `light-dark()` (needs Chrome 123+, Safari 17.5+, Firefox 120+). Old variable names are aliases. Dead rules removed (style.css -65 lines). Per-area CSS lives in `public/css/` (chart, research, portfolio, ideas, widgets, shell), loaded after style.css.

@@ -109,6 +109,10 @@ app.use((err, req, res, next) => {
 
 // Run as a normal server (`npm start`).
 if (require.main === module) {
+  // One-time Schwab 11/09 sync (guarded by a marker row, so it only ever runs once per database).
+  const syncDb = require("./db");
+  const sync = require("./lib/migrations/schwab20261109").apply(syncDb, process.env.DB_PATH || path.join(__dirname, "data", "pif.db"));
+  if (sync.ran) console.log(`[migration] Schwab 11/09 applied: ${sync.positions} positions, backup ${sync.backup}`);
   app.listen(PORT, () => {
     console.log(`PIF tracker running on http://localhost:${PORT}`);
     if (process.env.DISABLE_SCHEDULER !== "true") scheduler.start();
