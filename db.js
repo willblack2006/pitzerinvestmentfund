@@ -240,6 +240,46 @@ db.exec(`
   );
 `);
 
+// Every 13F-HR filed on EDGAR, found by the background ingest (lib/thirteenFLive.js) from the
+// live feed and daily indexes. status: pending | done | skipped (older period, notice-only) |
+// error (retried up to 3 times). Only the fund's holdings and watchlist rows are kept
+// (thirteenf_positions), one row per filer per quarter per CUSIP; thirteenf_filers holds every
+// filer that reported a quarter, so "sold out" can be told apart from "hasn't filed yet".
+db.exec(`
+  CREATE TABLE IF NOT EXISTS thirteenf_filings (
+    accession TEXT PRIMARY KEY,
+    cik TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    filedAt TEXT NOT NULL,
+    period TEXT,
+    totalValue REAL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    seenAt TEXT NOT NULL DEFAULT (datetime('now')),
+    doneAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_thirteenf_filings_status ON thirteenf_filings(status);
+  CREATE TABLE IF NOT EXISTS thirteenf_filers (
+    cik TEXT NOT NULL,
+    period TEXT NOT NULL,
+    accession TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    totalValue REAL NOT NULL DEFAULT 0,
+    filedAt TEXT,
+    PRIMARY KEY (cik, period)
+  );
+  CREATE TABLE IF NOT EXISTS thirteenf_positions (
+    cik TEXT NOT NULL,
+    period TEXT NOT NULL,
+    cusip TEXT NOT NULL,
+    shares REAL NOT NULL,
+    value REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (cik, period, cusip)
+  );
+  CREATE INDEX IF NOT EXISTS idx_thirteenf_positions_period ON thirteenf_positions(period, cusip);
+`);
+
 // Dividends the fund is owed or has received, one row per holding per ex-dividend date,
 // logged automatically from the date holdings were last reconciled with Schwab (lib/dividends.js).
 // status: expected (ex-date passed, not yet confirmed) | received (recorded as a dividend

@@ -2,6 +2,7 @@ const express = require("express");
 const db = require("../db");
 const { requireSignedIn } = require("../middleware/auth");
 const thirteenF = require("../lib/sources/thirteenF");
+const thirteenFLive = require("../lib/thirteenFLive");
 const yahoo = require("../lib/sources/yahoo");
 const { computeWeights, topConviction, matchOverlaps, qoqChanges } = require("../lib/thirteenF");
 
@@ -46,6 +47,19 @@ async function universeWithNames() {
   const results = await Promise.allSettled(symbols.map(async (s) => ({ symbol: s, name: (await yahoo.getQuoteSummary(s)).price?.longName || null })));
   return { universe: results.map((r, i) => (r.status === "fulfilled" ? r.value : { symbol: symbols[i], name: null })), owned, watched };
 }
+
+// Live filing season and 13F breadth (lib/thirteenFLive.js; filled by the scheduler).
+router.get("/13f/season", (req, res) => {
+  res.json(thirteenFLive.seasonStatus());
+});
+
+router.get("/13f/breadth", (req, res) => {
+  res.json(thirteenFLive.breadthTable());
+});
+
+router.get("/13f/breadth/:symbol", (req, res) => {
+  res.json(thirteenFLive.breadthHistory(String(req.params.symbol).toUpperCase()));
+});
 
 router.get("/13f/:cik", async (req, res) => {
   const cik = req.params.cik.replace(/\D/g, "").padStart(10, "0");

@@ -1054,6 +1054,7 @@ select { max-width: 100%; }
 .kind-routine { color: var(--muted); }
 .kind-new { color: var(--warn); border-color: var(--warn); }
 .row-dim td, .row-dim th { opacity: 0.6; }
+.thin-sample { opacity: 0.5; }
 .seg-sm { display: inline-flex; margin: 0; }
 .seg-btn { background: transparent; border: 0; color: var(--muted); font: inherit; font-size: var(--fs-sm); font-weight: 600; padding: 6px 10px; cursor: pointer; min-height: 32px; }
 .seg-btn + .seg-btn { border-left: 1px solid var(--border-strong); }

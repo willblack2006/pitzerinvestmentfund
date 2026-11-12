@@ -2,6 +2,7 @@ import { el, esc, api, safeUrl, fmtMoneyCompact, fmtRatio, fmtNum, signed, fmtPc
 import { insiderCodeLabel, insiderShares } from "../insiders.js";
 import { scoreMeter, signalBadge, kindTag } from "../insiderSignal.js";
 import { tradeRows, EVIDENCE_NOTE } from "../congressTrades.js";
+import { breadthPanelHtml, renderBreadthPanel } from "./breadthPanel.js";
 
 async function renderCongress(symbol) {
   const box = el("congressBody");
@@ -106,6 +107,7 @@ export async function render(c, { symbol, data }) {
           </table></div>
           <p class="muted small">Big index funds (Vanguard, BlackRock, State Street) hold nearly everything; changes by active managers are more telling.</p>` : `<p class="muted">No institutional ownership data.</p>`}
       </section>
+      ${breadthPanelHtml(loading)}
       <section class="panel span-full" aria-labelledby="congress-h">
         <div class="panel-head"><h3 id="congress-h">Congressional trades</h3><span class="muted small">House members, last 60 days of filings · <a href="#/congress">all holdings →</a></span></div>
         <div id="congressBody">${loading("Reading House transaction reports…")}</div>
@@ -121,6 +123,7 @@ export async function render(c, { symbol, data }) {
     </div>`;
 
   renderSignal(symbol);
+  renderBreadthPanel(symbol);
   renderActivist(symbol);
   renderCongress(symbol);
   try {
