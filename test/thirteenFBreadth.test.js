@@ -97,6 +97,7 @@ test("13F parses: Atom feed, daily form index, cover page", () => {
     <formData><coverPage><filingManager><name>GEODE CAPITAL MANAGEMENT, LLC</name></filingManager><reportType>13F HOLDINGS REPORT</reportType></coverPage>
     <signatureBlock><name>Laura Doherty</name></signatureBlock><summaryPage><tableEntryTotal>8379</tableEntryTotal><tableValueTotal>1924364235538</tableValueTotal></summaryPage></formData></edgarSubmission>`);
   assert.deepEqual(cover, { period: "2026-09-30", name: "GEODE CAPITAL MANAGEMENT, LLC", reportType: "13F HOLDINGS REPORT", isAmendment: false, tableEntryTotal: 8379, tableValueTotal: 1924364235538 });
+  assert.equal(B.parsePrimaryDoc("<filingManager><name>JPMORGAN CHASE &amp; CO</name></filingManager>").name, "JPMORGAN CHASE & CO");
 });
 
 test("13F holdings table streams correctly when entries straddle chunk boundaries", async () => {
