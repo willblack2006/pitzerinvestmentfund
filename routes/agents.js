@@ -12,7 +12,7 @@ const sec = require("../lib/sources/sec");
 const openai = require("../lib/sources/openai");
 
 const router = express.Router();
-const BRIEF_WORKFLOWS = ["filing_flash", "earnings_flash"];
+const BRIEF_WORKFLOWS = ["filing_flash", "earnings_flash", "earnings_preview", "weekly_memo", "macro_brief", "ownership_watch", "policy_watch", "data_qa"];
 
 const runSummary = (r) => ({
   id: r.id, workflow: r.workflow, eventId: r.eventId, memberId: r.memberId, symbol: r.symbol, status: r.status,

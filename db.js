@@ -225,6 +225,11 @@ db.exec(`
 `);
 addColumn("research_notes", "targetPrice", "REAL");
 addColumn("research_notes", "priceAtThesis", "REAL");
+// Thesis status, set only when a member approves an agent's thesis check (lib/agents).
+addColumn("research_notes", "thesisStatus", "TEXT");
+addColumn("research_notes", "thesisStatusNote", "TEXT");
+addColumn("research_notes", "thesisStatusAt", "TEXT");
+addColumn("research_notes", "thesisStatusBy", "TEXT");
 addColumn("positions", "sector", "TEXT NOT NULL DEFAULT ''");
 // Calibration & decision journal (feature 6): a confidence level and time horizon on each
 // pitch, so outcomes can be graded later.
