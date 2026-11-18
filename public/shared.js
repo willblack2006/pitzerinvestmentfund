@@ -43,7 +43,7 @@ export function sessionInfo() { return session; }
 export function can(cap = "member") {
   const m = session.member;
   if (!m) return false;
-  return cap === "member" || (cap === "trade" && m.canTrade) || (cap === "admin" && m.isAdmin);
+  return cap === "member" || (cap === "trade" && m.canTrade) || (cap === "ai" && (m.canUseAi || m.isAdmin)) || (cap === "admin" && m.isAdmin);
 }
 export function setSession(next) {
   const before = session.member?.id ?? null;
@@ -180,7 +180,7 @@ export function requestSignIn() {
   window.dispatchEvent(new CustomEvent("pif:request-signin"));
 }
 
-const CAP_REASON = { trade: "Only portfolio managers can do this.", admin: "Only admins can do this." };
+const CAP_REASON = { trade: "Only portfolio managers can do this.", ai: "AI features are turned on per member by an admin. Ask an admin for access.", admin: "Only admins can do this." };
 
 // Shown in place of controls someone can't use, so they know the feature exists and why
 // it's off: a Sign in button for visitors, a plain reason for members without the right.

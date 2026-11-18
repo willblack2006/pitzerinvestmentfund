@@ -3,6 +3,7 @@
 // update stream). What someone may do comes from their account:
 //   signed in  → personal notes, chat, pitches, theses, watchlist, votes, paper trading, AI tools
 //   canTrade   → the real fund: positions, transactions, cash, dividends
+//   canUseAi   → AI features and research agents (granted by an admin; admins always have it)
 //   isAdmin    → members, fund settings, paper seasons
 // EDIT_PASSWORD only unlocks creating the very first admin account (see routes/auth.js).
 const crypto = require("crypto");
@@ -65,7 +66,7 @@ function endSession(req) {
   if (token) require("../db").prepare("DELETE FROM member_sessions WHERE token = ?").run(sha256(token));
 }
 
-const publicMember = (m) => (m ? { id: m.id, name: m.name, email: m.email || null, title: m.role || "", isAdmin: !!m.isAdmin, canTrade: !!m.canTrade } : null);
+const publicMember = (m) => (m ? { id: m.id, name: m.name, email: m.email || null, title: m.role || "", isAdmin: !!m.isAdmin, canTrade: !!m.canTrade, canUseAi: !!(m.canUseAi || m.isAdmin) } : null);
 
 // The signed-in member for this request (or null). Sessions slide: each use (at most once a
 // minute) pushes expiry out another 30 days.
@@ -105,6 +106,12 @@ function requireTrader(req, res, next) {
   next();
 }
 
+function requireAi(req, res, next) {
+  if (!attach(req)) return res.status(401).json({ error: "Sign in to do this.", code: "signin_required" });
+  if (!(req.member.canUseAi || req.member.isAdmin)) return res.status(403).json({ error: "AI features are turned on per member by an admin. Ask an admin for access in Settings.", code: "ai_required" });
+  next();
+}
+
 function requireAdmin(req, res, next) {
   if (!attach(req)) return res.status(401).json({ error: "Sign in to do this.", code: "signin_required" });
   if (!req.member.isAdmin) return res.status(403).json({ error: "Only admins can do this.", code: "admin_required" });
@@ -128,5 +135,5 @@ function logActivity(req, action, detail = {}) {
 module.exports = {
   EDIT_PASSWORD, SESSION_COOKIE, safeEqual, sha256, hashSecret, verifySecret, readCookie,
   setSessionCookie, clearSessionCookie, createSession, endSession, publicMember,
-  memberFromRequest, optionalMember, requireSignedIn, requireTrader, requireAdmin, requireAppHeader, logActivity,
+  memberFromRequest, optionalMember, requireSignedIn, requireTrader, requireAi, requireAdmin, requireAppHeader, logActivity,
 };

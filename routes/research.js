@@ -1,6 +1,6 @@
 const express = require("express");
 const db = require("../db");
-const { requireSignedIn } = require("../middleware/auth");
+const { requireSignedIn, requireAi } = require("../middleware/auth");
 const yahoo = require("../lib/sources/yahoo");
 const sec = require("../lib/sources/sec");
 const { cached } = require("../lib/cache");
@@ -308,7 +308,7 @@ router.get("/research/:symbol/filing-diff", async (req, res) => {
 });
 
 // AI summary of what changed between the two filings (costs API credit, so edit-unlocked only).
-router.post("/research/:symbol/filing-diff/summary", requireSignedIn, async (req, res) => {
+router.post("/research/:symbol/filing-diff/summary", requireAi, async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   const form = req.query.form === "10-Q" ? "10-Q" : "10-K";
   if (!ai.configured()) return res.status(503).json({ error: "AI summaries need OPENAI_API_KEY set on the server." });
@@ -480,7 +480,7 @@ router.get("/research/:symbol/filings", async (req, res) => {
 });
 
 // Generating a summary costs API credits, so it's limited to people who can edit.
-router.post("/research/:symbol/filings/:accession/summary", requireSignedIn, async (req, res) => {
+router.post("/research/:symbol/filings/:accession/summary", requireAi, async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   if (!ai.configured()) return res.status(503).json({ error: "AI summaries need OPENAI_API_KEY set on the server." });
   const filings = await sec.getRecentFilings(symbol);

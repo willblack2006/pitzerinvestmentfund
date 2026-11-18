@@ -1,6 +1,6 @@
 const express = require("express");
 const db = require("../db");
-const { requireSignedIn } = require("../middleware/auth");
+const { requireSignedIn, requireAi } = require("../middleware/auth");
 const { getCached, setCached } = require("../lib/cache");
 const finnhub = require("../lib/sources/finnhub");
 const ai = require("../lib/sources/openai");
@@ -35,7 +35,7 @@ router.get("/research/:symbol/news-triage", async (req, res) => {
 });
 
 // Triggers scoring for this symbol (costs API credit; edit-unlocked only).
-router.post("/research/:symbol/news-triage", requireSignedIn, async (req, res) => {
+router.post("/research/:symbol/news-triage", requireAi, async (req, res) => {
   const symbol = req.params.symbol.toUpperCase().trim();
   if (!ai.configured()) return res.status(503).json({ error: "News triage needs OPENAI_API_KEY set on the server." });
   try {
@@ -49,7 +49,7 @@ router.post("/research/:symbol/news-triage", requireSignedIn, async (req, res) =
 });
 
 // Daily bulk trigger across every holding (edit-unlocked only; one batched call per symbol).
-router.post("/news-triage/run", requireSignedIn, async (req, res) => {
+router.post("/news-triage/run", requireAi, async (req, res) => {
   if (!ai.configured()) return res.status(503).json({ error: "News triage needs OPENAI_API_KEY set on the server." });
   if (!finnhub.apiKey()) return res.status(503).json({ error: "News triage needs FINNHUB_API_KEY set on the server." });
   const positions = db.prepare("SELECT symbol FROM positions").all().map((r) => r.symbol);

@@ -101,7 +101,7 @@ async function loadFilingDiff(symbol) {
   const aiBox = document.getElementById("diffAiBody");
   if (d.aiEnabled === false) {
     aiBox.innerHTML = `<p class="muted small">AI summary of these changes: coming soon.</p>`;
-  } else if (can("member")) {
+  } else if (can("ai")) {
     aiBox.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="diffSummarizeBtn">Summarize the change with AI</button>`;
     document.getElementById("diffSummarizeBtn").addEventListener("click", async (e) => {
       e.target.disabled = true;
@@ -131,7 +131,7 @@ export async function render(c, { symbol }) {
     c.innerHTML = `<p class="muted page-pad">No 10-K, 10-Q or 8-K filings found for ${esc(symbol)} on SEC EDGAR${data.error ? ` (${esc(data.error)})` : ""}.</p>`;
     return;
   }
-  const unlocked = can("member");
+  const unlocked = can("ai");
   c.innerHTML = `
     <section class="panel page-pad-panel" aria-labelledby="flags-h">
       <div class="panel-head"><h3 id="flags-h">Red-flag scan</h3><span class="muted small">SEC filings from the last two years, read and sorted by how serious they are</span></div>
@@ -144,7 +144,7 @@ export async function render(c, { symbol }) {
     <section class="panel page-pad-panel" aria-labelledby="fil-h">
       <div class="panel-head"><h3 id="fil-h">Recent SEC filings</h3><span class="muted small">From EDGAR</span></div>
       ${!data.aiEnabled ? `<p class="notice small">AI filing briefs aren't available yet (coming soon). Filings are still linked below.</p>`
-        : !unlocked ? lockedHint("Sign in to generate AI briefs (each costs a few cents of API credit; existing briefs are free to read).") : ""}
+        : !unlocked ? lockedHint("Sign in to generate AI briefs (each costs a few cents of API credit; existing briefs are free to read).", "ai") : ""}
       <ol class="filing-list">
         ${data.filings.map((f) => `
           <li class="filing" data-acc="${esc(f.accession)}">

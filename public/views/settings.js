@@ -112,13 +112,14 @@ export async function mount(container) {
           <div id="inviteOut"></div>
           <div class="table-scroll"><table class="mini-table members-table">
             <caption class="sr-only">Fund members and what they can do</caption>
-            <thead><tr><th scope="col" class="left">Name</th><th scope="col" class="left">Email</th><th scope="col" class="left">Title</th><th scope="col">Admin</th><th scope="col">Can trade</th><th scope="col" class="left">Status</th><th scope="col" class="left">Last seen</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th scope="col" class="left">Name</th><th scope="col" class="left">Email</th><th scope="col" class="left">Title</th><th scope="col">Admin</th><th scope="col">Can trade</th><th scope="col">Can use AI</th><th scope="col" class="left">Status</th><th scope="col" class="left">Last seen</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
             <tbody>${members.map((m) => `<tr class="${m.active ? "" : "muted"}">
               <th scope="row" class="left"><a href="#/members/${m.id}">${esc(m.name)}</a></th>
               <td class="left small">${esc(m.email || "—")}</td>
               <td class="left"><label class="sr-only" for="title-${m.id}">Title for ${esc(m.name)}</label><input id="title-${m.id}" class="title-input" data-title="${m.id}" value="${esc(m.title || "")}" maxlength="60" /></td>
               <td><input type="checkbox" data-flag="isAdmin" data-id="${m.id}" ${m.isAdmin ? "checked" : ""} aria-label="${esc(m.name)} is an admin" /></td>
               <td><input type="checkbox" data-flag="canTrade" data-id="${m.id}" ${m.canTrade ? "checked" : ""} aria-label="${esc(m.name)} can trade" /></td>
+              <td><input type="checkbox" data-flag="canUseAi" data-id="${m.id}" ${m.isAdmin || m.aiGranted ? "checked" : ""} ${m.isAdmin ? `disabled title="Admins always have AI access"` : ""} aria-label="${esc(m.name)} can use AI" /></td>
               <td class="left small">${!m.active ? "Alumni" : m.hasPassword ? "Active" : "Invited (no password yet)"}</td>
               <td class="left small">${esc(m.lastSeenAt ? m.lastSeenAt.slice(0, 10) : "—")}</td>
               <td><div class="row-actions">
@@ -133,10 +134,11 @@ export async function mount(container) {
             <label>Email <input name="email" type="email" required autocomplete="off" /></label>
             <label>Title <input name="title" maxlength="60" placeholder="Analyst" /></label>
             <label class="check"><input type="checkbox" name="canTrade" /> Can trade</label>
+            <label class="check"><input type="checkbox" name="canUseAi" /> Can use AI</label>
             <label class="check"><input type="checkbox" name="isAdmin" /> Admin</label>
             <button class="btn btn-primary btn-sm">Add member</button>
           </form>
-          <p class="muted small">"Can trade" lets someone change the real fund: holdings, trades, cash and dividends. Admins manage members and fund policy. Marking someone alumni signs them out everywhere and keeps their votes, notes and messages on record.</p>`
+          <p class="muted small">"Can trade" lets someone change the real fund: holdings, trades, cash and dividends. "Can use AI" turns on AI briefs, Ask PIF and the research agents for that person; admins always have it, and every use counts toward the AI budget below. Admins manage members and fund policy. Marking someone alumni signs them out everywhere and keeps their votes, notes and messages on record.</p>`
         : `<ul class="member-list">${members.filter((m) => m.active).map((m) => `<li><a href="#/members/${m.id}"><strong>${esc(m.name)}</strong></a> <span class="muted small">${esc(m.title || "")}</span></li>`).join("")}</ul>`}
       </section>
       ${admin ? `<section class="panel span-full" aria-labelledby="act-h">
@@ -262,7 +264,7 @@ function wireMembers(container) {
   el("addMember").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    const body = { name: f.get("name"), email: f.get("email"), title: f.get("title") || "Analyst", canTrade: f.get("canTrade") === "on", isAdmin: f.get("isAdmin") === "on" };
+    const body = { name: f.get("name"), email: f.get("email"), title: f.get("title") || "Analyst", canTrade: f.get("canTrade") === "on", canUseAi: f.get("canUseAi") === "on", isAdmin: f.get("isAdmin") === "on" };
     try {
       const r = await api("/api/members", { method: "POST", body: JSON.stringify(body) });
       await mount(container);

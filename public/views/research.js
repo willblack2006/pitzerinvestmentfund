@@ -303,7 +303,7 @@ async function loadNewsTriage(symbol, newsList, errored) {
   if (body) body.innerHTML = renderNews(newsList, errored, byUrl);
   if (r.aiEnabled === false) {
     actions.innerHTML = `<span class="muted small">AI news scoring: coming soon</span>`;
-  } else if (can("member") && r.aiEnabled) {
+  } else if (can("ai") && r.aiEnabled) {
     actions.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="triageBtn">Score with AI</button>`;
     el("triageBtn").addEventListener("click", async (e) => {
       e.target.disabled = true;

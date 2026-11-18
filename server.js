@@ -33,6 +33,8 @@ const authRouter = require("./routes/auth");
 const eventsRouter = require("./routes/events");
 const { requireAppHeader } = require("./middleware/auth");
 const scheduler = require("./lib/scheduler");
+// AI spending cap: every OpenAI call is checked against it and logged (lib/agents/budget.js).
+require("./lib/agents/budget").install();
 const path = require("path");
 
 const PORT = process.env.PORT || 3000;
@@ -98,6 +100,7 @@ app.use("/api", todayRouter);
 app.use("/api", dividendsRouter);
 app.use("/api", pitchesRouter);
 app.use("/api", membersRouter);
+app.use("/api", require("./routes/agents"));
 
 app.use("/api", (req, res) => res.status(404).json({ error: "No such API endpoint." }));
 
@@ -113,7 +116,11 @@ if (require.main === module) {
   const syncDb = require("./db");
   const sync = require("./lib/migrations/schwab20261109").apply(syncDb, process.env.DB_PATH || path.join(__dirname, "data", "pif.db"));
   if (sync.ran) console.log(`[migration] Schwab 11/09 applied: ${sync.positions} positions, backup ${sync.backup}`);
+  const interrupted = require("./lib/agents/runs").markInterrupted();
+  if (interrupted) console.log(`[agents] ${interrupted} run(s) interrupted by the last restart marked failed`);
   app.listen(PORT, () => {
+    // Agent tools call the app's own read-only endpoints in-process.
+    require("./lib/agents/tools").setBaseUrl(`http://127.0.0.1:${PORT}`);
     console.log(`PIF tracker running on http://localhost:${PORT}`);
     if (process.env.DISABLE_SCHEDULER !== "true") scheduler.start();
   });

@@ -43,7 +43,7 @@ router.put("/settings", requireSignedIn, (req, res) => {
 // ---- Members (admin) ----
 
 const memberRow = (id) => db.prepare("SELECT * FROM members WHERE id = ?").get(id);
-const adminView = (m) => ({ ...publicMember(m), active: !!m.active, createdAt: m.createdAt, lastSeenAt: m.lastSeenAt || null, hasPassword: !!m.passwordHash });
+const adminView = (m) => ({ ...publicMember(m), aiGranted: !!m.canUseAi, active: !!m.active, createdAt: m.createdAt, lastSeenAt: m.lastSeenAt || null, hasPassword: !!m.passwordHash });
 const normEmail = (e) => String(e || "").trim().toLowerCase();
 
 // Signed-in members see who's in the club (names, titles); admins also see emails and access.
@@ -78,15 +78,15 @@ router.delete("/members/:id", requireAdmin, (req, res) => {
 
 // Add a member and get their one-time invite link (the admin sends it to them).
 router.post("/members", requireAdmin, (req, res) => {
-  const { name, email, title = "Analyst", isAdmin = false, canTrade = false } = req.body || {};
+  const { name, email, title = "Analyst", isAdmin = false, canTrade = false, canUseAi = false } = req.body || {};
   const e = normEmail(email);
   if (!String(name || "").trim()) return res.status(400).json({ error: "Name is required." });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return res.status(400).json({ error: "Enter a valid email." });
   try {
-    const info = db.prepare("INSERT INTO members (name, role, pinHash, email, isAdmin, canTrade) VALUES (?, ?, '', ?, ?, ?)")
-      .run(String(name).trim().slice(0, 80), String(title).trim().slice(0, 60), e, isAdmin ? 1 : 0, canTrade ? 1 : 0);
+    const info = db.prepare("INSERT INTO members (name, role, pinHash, email, isAdmin, canTrade, canUseAi) VALUES (?, ?, '', ?, ?, ?, ?)")
+      .run(String(name).trim().slice(0, 80), String(title).trim().slice(0, 60), e, isAdmin ? 1 : 0, canTrade ? 1 : 0, canUseAi ? 1 : 0);
     const id = info.lastInsertRowid;
-    logActivity(req, "member.add", { id, name: String(name).trim(), isAdmin: !!isAdmin, canTrade: !!canTrade });
+    logActivity(req, "member.add", { id, name: String(name).trim(), isAdmin: !!isAdmin, canTrade: !!canTrade, canUseAi: !!canUseAi });
     res.status(201).json({ member: adminView(memberRow(id)), inviteToken: createInvite(id, req.member.id) });
   } catch (err) {
     if (String(err).includes("UNIQUE")) return res.status(409).json({ error: "A member with that name or email already exists." });
@@ -104,6 +104,7 @@ router.put("/members/:id", requireAdmin, (req, res) => {
     email: b.email !== undefined ? normEmail(b.email) : m.email,
     isAdmin: b.isAdmin !== undefined ? (b.isAdmin ? 1 : 0) : m.isAdmin,
     canTrade: b.canTrade !== undefined ? (b.canTrade ? 1 : 0) : m.canTrade,
+    canUseAi: b.canUseAi !== undefined ? (b.canUseAi ? 1 : 0) : m.canUseAi,
     active: b.active !== undefined ? (b.active ? 1 : 0) : m.active,
   };
   if (!next.name) return res.status(400).json({ error: "Name is required." });
@@ -113,8 +114,8 @@ router.put("/members/:id", requireAdmin, (req, res) => {
   if ((!next.isAdmin || !next.active) && m.isAdmin && m.active && otherAdmins === 0) return res.status(400).json({ error: "The club needs at least one active admin. Make someone else an admin first." });
   if (m.id === req.member.id && !next.active) return res.status(400).json({ error: "You can't deactivate your own account." });
   try {
-    db.prepare("UPDATE members SET name = ?, role = ?, email = ?, isAdmin = ?, canTrade = ?, active = ? WHERE id = ?")
-      .run(next.name, next.title, next.email, next.isAdmin, next.canTrade, next.active, m.id);
+    db.prepare("UPDATE members SET name = ?, role = ?, email = ?, isAdmin = ?, canTrade = ?, canUseAi = ?, active = ? WHERE id = ?")
+      .run(next.name, next.title, next.email, next.isAdmin, next.canTrade, next.canUseAi, next.active, m.id);
   } catch (err) {
     if (String(err).includes("UNIQUE")) return res.status(409).json({ error: "A member with that name or email already exists." });
     throw err;
