@@ -148,6 +148,10 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
   }
   const link = `#/pitches/${p.id}`;
   if (status === "voting") {
+    // Research agents: the red team reads the pitch when it opens for a vote.
+    const agents = require("../lib/agents");
+    agents.recordEvent({ dedupeKey: `pitch:${p.id}:voting:${new Date().toISOString().slice(0, 16)}`, symbol: p.symbol, type: "PITCH_SUBMITTED", title: `Pitch #${p.id} ${p.symbol} opened for a vote`, payload: { pitchId: p.id } });
+    agents.kick();
     notify("all", { type: "pitchVoting", title: `Vote open: ${pitchLabel(p)}`, body: `Pitched by ${p.author}.`, link }, { except: authorIdOf(p) });
   } else if (["approved", "rejected", "executed"].includes(status)) {
     const voters = db.prepare("SELECT memberId FROM votes WHERE pitchId = ?").all(p.id).map((v) => v.memberId);

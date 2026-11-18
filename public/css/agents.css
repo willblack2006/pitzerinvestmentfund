@@ -35,3 +35,7 @@
 .agent-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 var(--sp-4); font-size: var(--fs-sm); }
 .agent-facts dt { color: var(--text-2); }
 .agent-facts dd { margin: 0; }
+.agent-primer { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--border-strong); border-radius: var(--r-md); }
+.agent-objections { margin: 0 0 var(--sp-3); padding-left: 1.2em; display: grid; gap: var(--sp-3); }
+.agent-objections p { margin: 0 0 2px; }
+.agent-objections .badge { margin-left: 0; }

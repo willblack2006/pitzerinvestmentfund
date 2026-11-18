@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, fmtPct, signed, toast, confirmAction, currentMember, requestSignIn, icon, skeleton, errorState } from "../shared.js";
+import { el, esc, api, fmtUSD, fmtPct, signed, toast, confirmAction, currentMember, requestSignIn, icon, skeleton, errorState, can, safeUrl } from "../shared.js";
 import { statusPill } from "./pitches.js";
 
 export const title = (p) => (p.id ? `Pitch #${p.id}` : "New pitch");
@@ -52,6 +52,7 @@ function editor(p, isNew, current) {
     </label>`;
   return `
     <form id="pitchForm" class="pitch-form" novalidate>
+      ${can("ai") ? `<div class="agent-primer"><button type="button" class="btn btn-ghost btn-sm" id="primerBtn">Draft empty sections with AI</button><span class="muted small" id="primerNote">Fills only empty sections from the app's data, marked as an AI draft for you to rewrite.</span></div>` : ""}
       <div class="form-row">
         <label>Ticker <input name="symbol" data-ticker value="${esc(p.symbol || "")}" required maxlength="10" autocapitalize="characters" ${isNew ? "" : "readonly"} /></label>
         <label>Recommendation
@@ -231,10 +232,13 @@ export async function mount(container, params) {
         <section class="panel">${editing ? editor(p, isNew, current) : `${scenarioBar(p, current)}${readView(p)}`}</section>
       </div>
       ${!isNew ? `<aside class="research-side">${votePanel(p)}
+        ${can("ai") ? `<section class="panel" aria-labelledby="rt-h"><div class="panel-head"><h3 id="rt-h">Red team</h3></div><div id="redTeamBody">${skeleton("text", { rows: 3, label: "Loading the red team report" })}</div></section>` : ""}
         ${p.status === "approved" ? `<section class="panel"><h3>Next step</h3><p class="small">Place the trade, then record it under <a href="#/transactions">Transactions</a> and mark this pitch executed.</p></section>` : ""}
       </aside>` : ""}
     </div>`;
 
+  if (!isNew && can("ai")) loadRedTeam(p);
+  el("primerBtn")?.addEventListener("click", () => draftWithAi(el("pitchForm")));
   el("editBtn")?.addEventListener("click", () => { container.dataset.editing = String(p.id); mount(container, params); });
   el("cancelEdit")?.addEventListener("click", () => { delete container.dataset.editing; mount(container, params); });
 
@@ -327,4 +331,54 @@ export async function mount(container, params) {
       toast(err.message, { type: "error" });
     }
   });
+}
+
+// ---- Research agents: red team and pitch primer (members with AI access) ----
+
+const SEV = { high: "badge-danger", medium: "badge-warn", low: "" };
+
+function redTeamHtml(r) {
+  return `<p class="small">${esc(r.summary)}</p>
+    <ol class="agent-objections">${r.objections.map((o) => `<li><p><span class="badge ${SEV[o.severity] || ""}">${esc(o.severity)}</span> <strong>${esc(o.title)}</strong></p>
+      <p class="small">${esc(o.detail)}</p>
+      <p class="muted small">Evidence: ${esc(o.evidence)} ${o.source_url ? `· <a href="${o.source_url.startsWith("#") ? esc(o.source_url) : safeUrl(o.source_url)}">${o.sourced ? "source" : "source (not checked)"}</a>` : ""}</p></li>`).join("")}</ol>
+    ${r.bearCase ? `<p class="pf-sub">Strongest bear case</p><p class="small">${esc(r.bearCase)}</p>` : ""}
+    ${r.questions?.length ? `<p class="pf-sub">Answer before the vote</p><ul class="small">${r.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}
+    ${r.unbackedNumbers?.length ? `<p class="notice small">Check these numbers, no source backs them: ${r.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
+    <p class="muted small">AI-written, ${esc((r.createdAt || "").slice(0, 10))}. <a href="#/agents/runs/${r.runId}">How it was made</a></p>`;
+}
+
+async function loadRedTeam(p) {
+  const box = el("redTeamBody");
+  if (!box) return;
+  let r;
+  try { r = await api(`/api/pitches/${p.id}/red-team`); } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; return; }
+  const runBtn = (label) => `<button type="button" class="btn btn-ghost btn-sm" id="redTeamRun">${label}</button>`;
+  box.innerHTML = r.report ? redTeamHtml(r.report) + runBtn("Run again")
+    : r.running ? `<p class="muted small">The red team is reading this pitch now. Refresh in a minute.</p>`
+    : `<p class="muted small">An AI red team checks the pitch against the app's data and lists the strongest objections, each with evidence. It runs on its own when the vote opens.</p>${runBtn("Run the red team now")}`;
+  el("redTeamRun")?.addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    box.innerHTML = `<p class="muted small" role="status">Checking valuation, filings, insiders and risk… up to two minutes.</p>`;
+    try { const out = await api(`/api/pitches/${p.id}/red-team`, { method: "POST" }); box.innerHTML = redTeamHtml({ ...out.output, runId: out.runId, createdAt: new Date().toISOString() }); }
+    catch (err) { box.innerHTML = `<p class="error small">${esc(err.message)}</p>`; }
+  });
+}
+
+async function draftWithAi(form) {
+  const sym = form.symbol.value.trim().toUpperCase();
+  const note = el("primerNote"), btn = el("primerBtn");
+  if (!sym) { form.symbol.focus(); note.textContent = "Type a ticker first."; return; }
+  btn.disabled = true;
+  note.textContent = `Reading ${sym}'s valuation, filings and ownership… up to a minute.`;
+  try {
+    const { output: d, runId } = await api("/api/agents/primer", { method: "POST", body: JSON.stringify({ symbol: sym }) });
+    let filled = 0;
+    for (const k of ["thesis", "catalysts", "risks", "valuation", "bullCase", "baseCase", "bearCase"]) {
+      const f = form.elements[k];
+      if (f && !f.value.trim() && d[k]) { f.value = `[AI draft: rewrite in your own words]\n${d[k]}`; filled++; }
+    }
+    note.innerHTML = `${filled} section${filled === 1 ? "" : "s"} drafted. <a href="#/agents/runs/${runId}">See the data it used</a>${d.openQuestions?.length ? `. Still to find out: ${d.openQuestions.map(esc).join("; ")}` : ""}`;
+  } catch (err) { note.textContent = err.message; }
+  finally { btn.disabled = false; }
 }

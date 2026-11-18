@@ -232,6 +232,73 @@ test("flash: an earnings 8-K gets a brief from the press-release exhibit, with q
   assert.ok(Number(plain));
 });
 
+// ---- Ask PIF, red team, pitch primer ----
+
+function mockAppAndOpenAI(appData) {
+  tools.setBaseUrl("http://app.test");
+  global.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.startsWith("https://api.openai.com/")) { requests.push(JSON.parse(opts.body)); return new Response(JSON.stringify(replies.shift()), { status: 200 }); }
+    if (u.startsWith("http://app.test/api/")) {
+      const path = u.slice("http://app.test/api".length);
+      const hit = Object.entries(appData).find(([k]) => path === k);
+      return hit ? new Response(JSON.stringify(hit[1]), { status: 200 }) : new Response(JSON.stringify({ error: "nope" }), { status: 404 });
+    }
+    return new Response("not mocked", { status: 404 });
+  };
+}
+
+test("Ask PIF: answers from tool data, marks sources it actually read, flags unbacked numbers", async () => {
+  const { ask } = require("../lib/agents/workflows/ask");
+  mockAppAndOpenAI({ "/positions": [{ symbol: "NVDA", shares: 100, marketValue: 18000 }, { symbol: "MU", shares: 50, marketValue: 6000 }] });
+  replies.push(call("get_holdings", {}), msg(JSON.stringify({
+    answer: "NVDA is the largest holding at $18,000, about 3x MU.",
+    claims: [{ text: "NVDA market value is $18,000", source_url: "#/holdings", quote: "" }, { text: "MU is cheap", source_url: "#/research/MU", quote: "" }],
+    followUps: ["How has NVDA performed since purchase?"],
+  })));
+  const m = Number(db.prepare("INSERT INTO members (name, role, pinHash) VALUES ('Asker', 'Analyst', '')").run().lastInsertRowid);
+  const r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "What's our biggest holding?" }, ctx));
+  assert.equal(r.output.claims[0].sourced, true);
+  assert.equal(r.output.claims[1].sourced, false, "a source the agent never read is marked");
+  assert.deepEqual(r.output.toolsUsed.map((t) => t.name), ["get_holdings"]);
+  assert.deepEqual(r.output.unbackedNumbers, ["3x"], "a computed ratio is flagged for checking");
+  assert.equal(requests[0].tools.length > 10, true, "Ask PIF gets the whole read-only catalog");
+  assert.equal(db.prepare("SELECT memberId FROM agent_runs WHERE id = ?").get(r.runId).memberId, m, "billed to the member's daily budget");
+});
+
+test("red team: runs when a pitch opens for a vote, cites tool evidence, notifies the author", async () => {
+  require("../lib/agents/workflows");
+  const author = Number(db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash) VALUES ('Pitcher', 'Analyst', '', 'pitcher@test.edu', 'x')").run().lastInsertRowid);
+  const pitchId = Number(db.prepare("INSERT INTO pitches (symbol, title, author, authorId, status, thesis) VALUES ('MU', 'Memory upcycle', 'Pitcher', ?, 'voting', 'HBM demand')").run(author).lastInsertRowid);
+  mockAppAndOpenAI({ "/research/MU/risk": { beta: 1.6, piotroski: 4 } });
+  replies.push(call("get_risk", { symbol: "MU" }), msg(JSON.stringify({
+    summary: "The pitch ignores cyclicality.", bearCase: "Memory prices roll over.", questions: ["What if HBM pricing falls?"],
+    objections: [{ title: "High beta", detail: "Beta is 1.6, so the position swings more than the market.", severity: "medium", evidence: "beta 1.6", source_url: "#/research/MU/risk" }],
+  })));
+  agents.recordEvent({ dedupeKey: `pitch:${pitchId}:voting:x`, symbol: "MU", type: "PITCH_SUBMITTED", title: "Pitch opened", payload: { pitchId } });
+  agents.routeNew();
+  assert.deepEqual(await agents.dispatch(), { ran: 1, failed: 0 });
+  const out = JSON.parse(db.prepare("SELECT output FROM agent_runs WHERE workflow = 'red_team'").get().output);
+  assert.equal(out.pitchId, pitchId);
+  assert.equal(out.objections[0].sourced, true);
+  assert.deepEqual(out.unbackedNumbers, []);
+  assert.ok(db.prepare("SELECT 1 FROM notifications WHERE memberId = ? AND type = 'agentBrief' AND link = ?").get(author, `#/pitches/${pitchId}`), "the author is told");
+});
+
+test("pitch primer: calls a fixed set of tools, then drafts every section in one model call", async () => {
+  const { pitchPrimer, PRIMER_TOOLS } = require("../lib/agents/workflows/pitch");
+  const data = Object.fromEntries(PRIMER_TOOLS.map((t) => [t, { ok: t }]));
+  mockAppAndOpenAI({ "/research/DUOL": { name: "Duolingo", price: 300 }, "/research/DUOL/comps": { peers: [] }, "/research/DUOL/risk": {}, "/estimate-revisions/DUOL": {}, "/research/DUOL/base-rate": {}, "/insiders/DUOL": {}, "/13f/breadth/DUOL": {}, "/research/DUOL/red-flags": {} });
+  const draft = { thesis: "t", catalysts: "c", risks: "r", valuation: "v", bullCase: "b", baseCase: "b", bearCase: "b", facts: [{ fact: "price 300", tool: "get_research_overview" }], openQuestions: ["q"] };
+  replies.push(msg(JSON.stringify(draft)));
+  const r = await runs.run({ workflow: "pitch_primer" }, (ctx) => pitchPrimer({ symbol: "DUOL" }, ctx));
+  assert.equal(r.output.thesis, "t");
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].input[1].content, /<untrusted_tool_data tool="get_research_overview">/);
+  assert.equal(runs.getRun(r.runId).steps.filter((s) => s.kind === "tool").length, PRIMER_TOOLS.length);
+  assert.ok(data);
+});
+
 // ---- API ----
 
 test("API: agents overview is members-only and reports budget, events and runs; admins set the caps", async () => {

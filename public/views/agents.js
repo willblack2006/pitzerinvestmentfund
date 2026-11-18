@@ -4,7 +4,7 @@ import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, 
 
 export const title = "Research agents";
 
-const TABS = [["briefs", "#/agents", "Briefs"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
+const TABS = [["briefs", "#/agents", "Briefs"], ["ask", "#/agents/ask", "Ask PIF"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
 const WORKFLOW_LABEL = {
   filing_flash: "Filing flash", earnings_flash: "Earnings flash", ask_pif: "Ask PIF", red_team: "Red team", pitch_primer: "Pitch primer",
   earnings_preview: "Earnings preview", thesis_check: "Thesis check", weekly_memo: "Weekly memo", data_qa: "Data check", macro_brief: "Macro brief",
@@ -72,6 +72,20 @@ export function bindFeedback(container) {
   });
 }
 
+const srcLink = (u) => (!u ? "" : u.startsWith("#") ? `<a href="${esc(u)}">${esc(u.replace(/^#\//, ""))}</a>` : `<a href="${safeUrl(u)}" target="_blank" rel="noopener">sec.gov</a>`);
+
+export function answerCard(o, runId) {
+  return `<article class="panel agent-answer">
+    <p class="muted small">You asked: ${esc(o.question)}</p>
+    <div>${o.answer.split(/\n{2,}/).map((para) => /^\s*- /m.test(para) ? `<ul>${para.split(/\n/).filter(Boolean).map((l) => `<li>${esc(l.replace(/^\s*- /, ""))}</li>`).join("")}</ul>` : `<p>${esc(para)}</p>`).join("")}</div>
+    ${o.claims?.length ? `<details><summary class="small">Sources (${o.claims.length})</summary><ul class="small">${o.claims.map((c) => `<li>${esc(c.text)} ${srcLink(c.source_url)}${c.sourced ? "" : ` <span class="badge badge-warn">source not read</span>`}${c.quote ? `<blockquote>“${esc(c.quote)}” ${c.verified ? `<span class="badge badge-owned">Verified quote</span>` : `<span class="badge badge-warn">Quote not found</span>`}</blockquote>` : ""}</li>`).join("")}</ul></details>` : ""}
+    ${o.unbackedNumbers?.length ? `<p class="notice small">Check these numbers, no tool result backs them: ${o.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
+    <p class="agent-tools">Looked at: ${o.toolsUsed?.length ? o.toolsUsed.map((t) => esc(t.name.replace(/^get_/, "").replace(/_/g, " ")) + (t.args?.symbol ? ` ${esc(t.args.symbol)}` : "")).join(", ") : "nothing"}</p>
+    ${o.followUps?.length ? `<p class="small muted">Try next: ${o.followUps.map(esc).join(" · ")}</p>` : ""}
+    <footer class="agent-brief-foot"><span class="muted small">AI-written research aid, not advice. <a href="#/agents/runs/${runId}">How it was made</a></span>${feedbackButtons(runId)}</footer>
+  </article>`;
+}
+
 function runsTable(runs) {
   if (!runs.length) return emptyState({ icon: "inbox", title: "No AI runs yet", body: "Runs show up here as agents work and members use AI features." });
   return `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Agent and AI runs, newest first</caption>
@@ -122,7 +136,7 @@ async function mountRun(container, id) {
       <dt>Cost</dt><dd>${money(r.costUsd)}</dd>
       ${r.event ? `<dt>Triggered by</dt><dd>${r.event.sourceUrl ? `<a href="${safeUrl(r.event.sourceUrl)}" target="_blank" rel="noopener">${esc(r.event.title)}</a>` : esc(r.event.title)}</dd>` : ""}
     </dl>
-    <div id="runOutput">${out?.headline ? briefCard(out, { runId: r.id, feedback: r.feedback }) : ""}</div>
+    <div id="runOutput">${out?.headline ? briefCard(out, { runId: r.id, feedback: r.feedback }) : out?.kind === "ask_pif" ? answerCard(out, r.id) : ""}</div>
     <section class="panel"><h3>Steps</h3>
       <ol class="agent-steps">${(r.steps || []).map((s) => `<li><span class="muted small">${esc(s.at.slice(11, 19))}</span> <strong>${esc(s.kind)}</strong> ${
         s.kind === "tool" ? `${esc(s.name)} ${s.args ? `<code>${esc(JSON.stringify(s.args)).slice(0, 200)}</code>` : ""} ${s.ok ? "" : `<span class="badge badge-danger">${esc(s.error || "error")}</span>`}${s.source_url ? ` <a href="${s.source_url.startsWith("#") ? esc(s.source_url) : safeUrl(s.source_url)}">source</a>` : ""}`
@@ -157,6 +171,25 @@ export async function mount(container, params = {}) {
       body.innerHTML = spend + acc + runsTable(o.runs);
     } else if (tab === "events") {
       body.innerHTML = `<p class="muted small">Plain rules, no AI, decide what each filing deserves: <strong>push</strong> (bankruptcy, impairment, restatement and similar), <strong>inbox</strong> (results, executive changes, material agreements) or <strong>digest</strong> (routine).</p>` + eventsTable(o.events);
+    } else if (tab === "ask") {
+      body.innerHTML = `<form class="agent-ask" id="askForm"><label class="field-block" style="flex:1 1 320px">Ask about the fund, a holding or any ticker
+          <textarea name="q" maxlength="1000" placeholder="e.g. Which holdings have the most insider selling this quarter? What did MU say about guidance in its last 10-Q?"></textarea></label>
+        <button class="btn btn-primary">Ask</button></form>
+        <p class="muted small">Answers come only from the app's data and SEC filings, with the sources and every tool call shown. Each question costs a few cents from your daily AI budget.</p>
+        <div id="askOut"></div><div id="askHistory"></div>`;
+      const hist = await api("/api/agents/asks");
+      container.querySelector("#askHistory").innerHTML = hist.asks.length ? `<p class="pf-sub">Your recent questions</p>${hist.asks.map((a) => a.output ? answerCard(a.output, a.runId) : `<p class="muted small">${esc(a.createdAt)}: ${esc(a.error || a.status)}</p>`).join("")}` : "";
+      container.querySelector("#askForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const q = e.target.q.value.trim();
+        if (!q) return;
+        const out = container.querySelector("#askOut"), btn = e.target.querySelector("button");
+        btn.disabled = true;
+        out.innerHTML = `<p class="muted small" role="status">Looking it up in the app's data…</p>`;
+        try { const r = await api("/api/agents/ask", { method: "POST", body: JSON.stringify({ question: q }) }); out.innerHTML = answerCard(r.output, r.runId); e.target.q.value = ""; }
+        catch (err) { out.innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+        finally { btn.disabled = false; }
+      });
     } else if (tab === "approvals") {
       const r = await api("/api/agents/proposals");
       body.innerHTML = proposalsList(r.proposals);
