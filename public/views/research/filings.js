@@ -157,9 +157,11 @@ export async function render(c, { symbol }) {
               <div class="filing-actions">
                 ${f.summary ? `<button type="button" class="btn btn-ghost btn-sm" data-toggle aria-expanded="false">Show AI brief</button>`
                   : data.aiEnabled && unlocked ? `<button type="button" class="btn btn-ghost btn-sm" data-summarize>Summarize with AI</button>` : ""}
+                ${data.aiEnabled && unlocked ? `<button type="button" class="btn btn-ghost btn-sm" data-agentbrief>Cited brief</button>` : ""}
               </div>
             </div>
             <div class="filing-body" hidden>${f.summary ? summaryBlock(f.summary) : ""}</div>
+            <div class="filing-agent" hidden></div>
           </li>`).join("")}
       </ol>
     </section>`;
@@ -176,6 +178,8 @@ export async function render(c, { symbol }) {
       btn.textContent = open ? "Hide AI brief" : "Show AI brief";
       return;
     }
+    const ab = e.target.closest("[data-agentbrief]");
+    if (ab) { agentBrief(symbol, li, ab); return; }
     const btn = e.target.closest("[data-summarize]");
     if (!btn) return;
     btn.disabled = true;
@@ -195,4 +199,44 @@ export async function render(c, { symbol }) {
   });
   loadRedFlags(symbol);
   loadFilingDiff(symbol);
+  if (data.aiEnabled && unlocked) markExistingAgentBriefs(symbol, c, data.filings);
+}
+
+// ---- Research agents: cited filing briefs (quotes checked against the filing) ----
+const agentBriefs = new Map(); // sourceUrl -> { runId, brief, feedback }
+
+async function markExistingAgentBriefs(symbol, c, filings) {
+  try {
+    const r = await api(`/api/agents/briefs?symbol=${encodeURIComponent(symbol)}&limit=50`);
+    for (const b of r.briefs) if (b.brief?.sourceUrl && !agentBriefs.has(b.brief.sourceUrl)) agentBriefs.set(b.brief.sourceUrl, b);
+    for (const f of filings) {
+      if (!agentBriefs.has(f.url)) continue;
+      const btn = c.querySelector(`.filing[data-acc="${CSS.escape(f.accession)}"] [data-agentbrief]`);
+      if (btn) btn.textContent = "Show cited brief";
+    }
+  } catch { /* briefs are optional on this page */ }
+}
+
+async function agentBrief(symbol, li, btn) {
+  const box = li.querySelector(".filing-agent");
+  const url = li.querySelector(".filing-head a")?.href;
+  const { briefCard, bindFeedback } = await import("../agents.js");
+  const show = (b) => { box.innerHTML = briefCard(b.brief, { runId: b.runId, feedback: b.feedback, showSymbol: false }); if (!box.dataset.bound) { bindFeedback(box); box.dataset.bound = "1"; } };
+  if (!box.hidden) { box.hidden = true; btn.textContent = "Show cited brief"; return; }
+  const existing = agentBriefs.get(url);
+  box.hidden = false;
+  if (existing) { show(existing); btn.textContent = "Hide cited brief"; return; }
+  btn.disabled = true;
+  btn.textContent = "Reading the filing…";
+  box.innerHTML = loading("An agent is reading the filing and checking every quote. This takes up to a minute.");
+  try {
+    const r = await api("/api/agents/brief", { method: "POST", body: JSON.stringify({ symbol, accession: li.dataset.acc }) });
+    const b = { runId: r.runId, brief: r.brief, feedback: {} };
+    agentBriefs.set(url, b);
+    show(b);
+    btn.textContent = "Hide cited brief";
+  } catch (err) {
+    box.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    btn.textContent = "Try again";
+  } finally { btn.disabled = false; }
 }

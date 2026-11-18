@@ -50,6 +50,9 @@ const router = initRouter({
   "/welcome/:token": () => import("./views/welcome.js"),
   "/join/:token": () => import("./views/join.js"),
   "/glossary": () => import("./views/glossary.js"),
+  "/agents": () => import("./views/agents.js"),
+  "/agents/:tab": () => import("./views/agents.js"),
+  "/agents/runs/:id": () => import("./views/agents.js"),
 });
 
 // ---- Accounts: sign in, first-admin setup, account menu ----
@@ -67,6 +70,8 @@ function updateAuthUI() {
   btn.classList.toggle("is-guest", !m);
   el("accountInitials").innerHTML = m ? esc(initials(m.name)) : GUEST_ICON;
   el("accountLabel").textContent = m ? `Menu for ${m.name}` : "Menu";
+  // Research agents are only for members an admin gave AI access.
+  el("agentsNav")?.classList.toggle("hidden", !(m && (m.canUseAi || m.isAdmin)));
   accountPop?.close({ returnFocus: false });
 }
 
@@ -80,6 +85,7 @@ function accountMenuHtml() {
   return `<div class="account-menu-body" data-account-menu>
     ${who}
     ${m ? link("user", "My profile", "#/members/me") + link("doc", "My notes", "#/notes") + link("inbox", "Notifications", "#/inbox") : ""}
+    ${m && (m.canUseAi || m.isAdmin) ? link("flask", "Research agents", "#/agents") : ""}
     ${act("chat", "Club chat", "chat")}
     ${link("help", "Glossary", "#/glossary")}
     ${link("gear", "Settings", "#/settings")}

@@ -35,6 +35,8 @@ const { requireAppHeader } = require("./middleware/auth");
 const scheduler = require("./lib/scheduler");
 // AI spending cap: every OpenAI call is checked against it and logged (lib/agents/budget.js).
 require("./lib/agents/budget").install();
+// Research agent workflows (filing and earnings flashes, …) register with the dispatcher.
+require("./lib/agents/workflows");
 const path = require("path");
 
 const PORT = process.env.PORT || 3000;

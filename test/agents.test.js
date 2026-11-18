@@ -188,11 +188,58 @@ test("dispatch: events are deduped, routed, and only registered workflows run", 
   delete agents.workflows.earnings_flash;
 });
 
+// ---- filing and earnings flash ----
+
+test("flash: an earnings 8-K gets a brief from the press-release exhibit, with quotes checked and members notified", async () => {
+  require("../lib/agents/workflows");
+  const folder = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000099";
+  const pressRelease = "<html><body><p>NVIDIA Announces Financial Results for Third Quarter Fiscal 2027</p><p>Revenue was $57.0 billion, up 62% from a year ago.</p><p>GAAP earnings per diluted share were $1.30.</p></body></html>";
+  global.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.startsWith("https://api.openai.com/")) { requests.push(JSON.parse(opts.body)); return new Response(JSON.stringify(replies.shift()), { status: 200 }); }
+    if (u === `${folder}/index.json`) return new Response(JSON.stringify({ directory: { item: [{ name: "nvda-8k.htm" }, { name: "q3fy27pr-ex991.htm" }] } }), { status: 200 });
+    if (u === `${folder}/nvda-8k.htm`) return new Response("<p>Item 2.02 Results of Operations and Financial Condition. See Exhibit 99.1.</p>", { status: 200 });
+    if (u === `${folder}/q3fy27pr-ex991.htm`) return new Response(pressRelease, { status: 200 });
+    return new Response("not mocked", { status: 404 });
+  };
+  const admin = db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash, isAdmin) VALUES ('Flash Admin', 'Admin', '', 'flash@test.edu', 'x', 1)").run().lastInsertRowid;
+  const plain = db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash) VALUES ('No AI', 'Analyst', '', 'noai@test.edu', 'x')").run().lastInsertRowid;
+  replies.push(msg(JSON.stringify({
+    headline: "Revenue up 62% to $57.0 billion", bottomLine: "Revenue was $57.0 billion, up 62% from a year ago.", tone: "positive",
+    points: [
+      { text: "Revenue grew 62% year over year to $57.0 billion.", quote: "Revenue was $57.0 billion, up 62% from a year ago." },
+      { text: "Margins hit a record 81%.", quote: "Gross margin was a record 81%." },
+    ],
+    kpis: [{ name: "Diluted EPS (GAAP)", value: "$1.30", quote: "GAAP earnings per diluted share were $1.30." }],
+    questions: ["How much of the growth came from data center?"],
+  })));
+  const today = new Date().toISOString().slice(0, 10);
+  agents.recordEvent({ dedupeKey: "filing:NV1", symbol: "NVDA", type: "8-K", items: "2.02,9.01", asOf: today, sourceUrl: `${folder}/nvda-8k.htm` });
+  agents.routeNew();
+  const d = await agents.dispatch();
+  assert.deepEqual(d, { ran: 1, failed: 0 });
+  const run = db.prepare("SELECT * FROM agent_runs WHERE workflow = 'earnings_flash'").get();
+  const brief = JSON.parse(run.output);
+  assert.equal(brief.points[0].verified, true);
+  assert.equal(brief.points[1].verified, false, "a quote that isn't in the filing is marked");
+  assert.equal(brief.kpis[0].verified, true);
+  assert.deepEqual(brief.unbackedNumbers, ["81%"], "a number the filing doesn't contain is flagged");
+  assert.match(requests[0].input[1].content, /Revenue was \$57\.0 billion/, "the model read the exhibit, not just the cover page");
+  assert.equal(requests[0].model, "gpt-6.1-sol");
+  const notes = db.prepare("SELECT memberId, type, link FROM notifications WHERE type = 'agentBrief'").all();
+  assert.deepEqual(notes.map((n) => n.memberId), [Number(admin)], "only members with AI access are notified");
+  assert.equal(notes[0].link, `#/agents/runs/${run.id}`);
+  assert.ok(Number(plain));
+});
+
 // ---- API ----
 
 test("API: agents overview is members-only and reports budget, events and runs; admins set the caps", async () => {
   global.fetch = realFetch;
+  const key = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY; // the test server runs without AI
   const s = await startServer();
+  process.env.OPENAI_API_KEY = key;
   try {
     assert.equal((await s.api("/api/agents/overview")).status, 401);
     const o = await s.api("/api/agents/overview", { auth: true });
@@ -206,6 +253,12 @@ test("API: agents overview is members-only and reports budget, events and runs; 
     const m = await s.createMember("Analyst");
     assert.equal((await s.api("/api/settings", { method: "PUT", member: m.cookie, body: { aiMonthlyCapUsd: 1000 } })).status, 403);
     assert.equal((await s.api("/api/agents/runs/999", { auth: true })).status, 404);
+    assert.deepEqual((await s.api("/api/agents/briefs", { auth: true })).body, { briefs: [] });
+    assert.equal((await s.api("/api/agents/runs/999/feedback", { method: "POST", auth: true, body: { verdict: "useful" } })).status, 404);
+    assert.equal((await s.api("/api/agents/runs/1/feedback", { method: "POST", auth: true, body: { verdict: "meh" } })).status, 400);
+    assert.deepEqual((await s.api("/api/agents/proposals", { auth: true })).body, { proposals: [] });
+    assert.equal((await s.api("/api/agents/proposals/5/decide", { method: "POST", auth: true, body: { approve: true } })).status, 404);
+    assert.equal((await s.api("/api/agents/brief", { method: "POST", auth: true, body: { symbol: "NVDA", accession: "x" } })).status, 503, "no OpenAI key on the test server");
     // AI access is off for new members until an admin turns it on; admins always have it.
     assert.equal((await s.api("/api/agents/overview", { member: m.cookie })).status, 403);
     assert.equal((await s.api("/api/news-triage/run", { method: "POST", member: m.cookie })).status, 403);
