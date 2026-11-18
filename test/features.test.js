@@ -115,6 +115,44 @@ test("congressional trades: House index, PTR text parsing and matching", () => {
   assert.equal(matched[0].member, "Hon. Robert J. Wittman");
 });
 
+test("congressional trades: Senate eFD HTML parsing", () => {
+  const { parsePtrHtml } = require("../lib/sources/senateDisclosures");
+
+  // Shape of the eFD "print view" table: # / Transaction Date / Owner / Ticker / Asset Name /
+  // Asset Type / Type / Amount / Comment. A bond row has no ticker ("--") and is skipped.
+  const html = `
+    <table><tbody>
+      <tr>
+        <td>2</td>
+        <td>09/16/2026</td>
+        <td>Child</td>
+        <td>--</td>
+        <td>DELL INTL LLC/EMC CORP<div class="text-muted"><em>Rate/Coupon:</em> 5.6%</div></td>
+        <td>Corporate Bond</td>
+        <td>Purchase</td>
+        <td>$1,001 - $15,000</td>
+        <td>--</td>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td>02/04/2026</td>
+        <td>Joint</td>
+        <td>ADBE</td>
+        <td>Adobe Inc. - Common Stock</td>
+        <td>Stock</td>
+        <td>Purchase</td>
+        <td>$15,001 - $50,000</td>
+        <td>--</td>
+      </tr>
+    </tbody></table>`;
+  const trades = parsePtrHtml(html);
+  assert.equal(trades.length, 1); // the bond row has no ticker and is skipped
+  assert.deepEqual(trades[0], {
+    ticker: "ADBE", owner: "Joint", assetName: "Adobe Inc. - Common Stock",
+    assetType: "stock", type: "Purchase", tradeDate: "2026-02-04", amount: "$15,001 - $50,000",
+  });
+});
+
 test("13F: rows for the same security combine before weighting; values are dollars", () => {
   const { aggregateByCusip, computeWeights, qoqChanges } = require("../lib/thirteenF");
   const rows = [
