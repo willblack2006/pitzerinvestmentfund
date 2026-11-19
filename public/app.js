@@ -230,7 +230,9 @@ function connectLive() {
     if (FUND_PAGES.has(section) && !busy) router.rerender();
   });
   // Chat and presence (members only) are handled in chat.js.
-  for (const type of ["hello", "notify", "presence", "chat.message", "chat.edited", "chat.deleted", "chat.reaction", "chat.mention"]) {
+  for (const type of ["hello", "notify", "presence", "chat.message", "chat.edited", "chat.deleted", "chat.reaction", "chat.mention",
+    // Team feed (WS7): new items, comments, reactions, agents answering, presence, runs ending.
+    "feed", "feed.comment", "feed.comment_deleted", "feed.reaction", "feed.agent_working", "feed.presence", "feed.removed", "run_finished"]) {
     live.addEventListener(type, (e) => window.dispatchEvent(new CustomEvent("pif:live", { detail: { type, data: JSON.parse(e.data) } })));
   }
 }
