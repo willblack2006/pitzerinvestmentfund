@@ -102,3 +102,7 @@
 .tripwire.tripped { border-left: 3px solid var(--negative); padding-left: 8px; }
 .tripwire .btn-link { padding: 0; }
 .alert-form #twNote { flex: 1 1 100%; }
+
+/* Track record: reading the score */
+.read-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 24px; }
+.read-grid p { margin: 4px 0 0; }

@@ -4,7 +4,7 @@ const { histories } = require("../lib/prices");
 const benchmarks = require("../lib/benchmarks");
 const { getSettings } = require("../lib/settings");
 const yahoo = require("../lib/sources/yahoo");
-const { didHitTarget, brierScore, hitRate, calibrationBuckets, groupStats } = require("../lib/calibration");
+const { didHitTarget, brierScore, hitRate, calibrationBuckets, groupStats, wilson, murphy, payoff, committeeScorecard, learningCurve } = require("../lib/calibration");
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.get("/track-record", async (req, res) => {
       AND status IN ('approved', 'rejected', 'executed')
     ORDER BY createdAt
   `).all();
-  if (!pitches.length) return res.json({ rows: [], pending: [], brier: null, hitRate: null, buckets: [], byAnalyst: {}, bySector: {}, byDirection: {} });
+  if (!pitches.length) return res.json({ rows: [], pending: [], brier: null, hitRate: null, buckets: [], byAnalyst: {}, bySector: {}, byDirection: {}, murphy: null, payoff: null, committee: null, learning: null, hitRateCi: null });
 
   const symbols = [...new Set(pitches.map((p) => p.symbol))];
   const [priceHistories, benchSeries] = await Promise.all([
@@ -45,7 +45,7 @@ router.get("/track-record", async (req, res) => {
     const benchReturn = benchStart && benchEnd && benchByDate.has(benchStart) && benchByDate.has(benchEnd)
       ? benchByDate.get(benchEnd) / benchByDate.get(benchStart) - 1 : null;
     const row = {
-      id: p.id, symbol: p.symbol, direction: p.direction, author: p.author, sector: sectors[p.symbol] || "Unknown",
+      id: p.id, status: p.status, symbol: p.symbol, direction: p.direction, author: p.author, sector: sectors[p.symbol] || "Unknown",
       confidencePct: p.confidencePct, horizonMonths: p.horizonMonths, horizonDate, basePrice: p.basePrice,
       outcome, return: ret, benchReturn, excessReturn: ret !== null && benchReturn !== null ? ret - benchReturn : null,
     };
@@ -58,6 +58,11 @@ router.get("/track-record", async (req, res) => {
     rows, pending,
     brier: brierScore(items),
     hitRate: hitRate(items),
+    hitRateCi: wilson(items.filter((x) => x.outcome).length, items.length),
+    murphy: murphy(items),
+    payoff: payoff(rows),
+    committee: committeeScorecard(rows),
+    learning: learningCurve(items),
     buckets: calibrationBuckets(items),
     byAnalyst: groupStats(items, (x) => x.analyst || "Unknown"),
     bySector: groupStats(items, (x) => x.sector || "Unknown"),

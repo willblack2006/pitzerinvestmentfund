@@ -87,6 +87,11 @@ Works for any ticker. Every tab has its own link.
   see only how many votes are in, not the split or anyone's comment. A no vote needs a short
   reason, and whoever closes the vote can leave a decision note that stays with the result.
 
+- **Track record** (`#/track-record`): grades decided pitches against stated confidence. Besides hit rate and
+  Brier score it shows plausible ranges (so 3 of 4 isn't read as 75%), whether miscalibration or
+  poor discrimination drives the score, wins versus losses against the benchmark, approved versus
+  rejected calls, and early versus recent accuracy. Marked provisional below 30 calls.
+
 ### Market
 - **Macro** (`#/macro`) and **Insiders** (`#/insiders`).
 
