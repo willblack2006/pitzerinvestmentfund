@@ -133,6 +133,7 @@ test("analytics: max drawdown and too-short series", () => {
 
 test("analytics: correlation matrix is symmetric with unit diagonal", () => {
   const a = days(60, (i) => 100 + Math.sin(i)), b = days(60, (i) => 100 + Math.cos(i)), c = days(60, (i) => 100 + i);
+  assert.equal(A.correlationMatrix({}), null, "no price history at all (Yahoo down) is null, not a crash");
   const m = A.correlationMatrix({ A: a, B: b, C: c });
   for (let i = 0; i < 3; i++) {
     close(m.matrix[i][i], 1);
