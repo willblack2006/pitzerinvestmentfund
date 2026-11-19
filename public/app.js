@@ -15,6 +15,7 @@ const router = initRouter({
   "/": () => import("./views/holdings.js"),
   "/today": () => import("./views/today.js"),
   "/performance": () => import("./views/performance.js"),
+  "/risk": () => import("./views/risk.js"),
   "/allocation": () => import("./views/allocation.js"),
   "/transactions": () => import("./views/transactions.js"),
   "/dividends": () => import("./views/dividends.js"),
@@ -176,7 +177,7 @@ document.body.addEventListener("click", (e) => {
 // ---- Live updates: fund changes reach every open page (and, later, chat) ----
 
 // Pages whose data comes from the real fund; they re-render when a portfolio manager changes it.
-const FUND_PAGES = new Set(["", "today", "performance", "allocation", "transactions", "dividends", "alerts", "factors"]);
+const FUND_PAGES = new Set(["", "today", "performance", "risk", "allocation", "transactions", "dividends", "alerts", "factors"]);
 let live = null;
 function connectLive() {
   live?.close();

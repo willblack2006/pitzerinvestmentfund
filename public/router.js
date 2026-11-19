@@ -29,6 +29,7 @@ const SECTION_OF = {
   today: "today",
   "": "portfolio",
   performance: "portfolio",
+  risk: "portfolio",
   allocation: "portfolio",
   transactions: "portfolio",
   dividends: "portfolio",
