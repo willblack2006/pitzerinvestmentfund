@@ -152,6 +152,14 @@ Code: `lib/agents/` (events, router, runs, tools, verification, budget, approval
   (questions answered from the app's data with the tools shown), and weekly reports: macro
   (Mon), ownership (Wed), policy (Thu, internal only), the editor memo (Fri, needs approval);
   plus a nightly SEC-vs-Yahoo data check (code only).
+- **Data agents can read (about 58 tools):** `lib/agents/tools.js` (holdings, research overview,
+  filings and filing text, red flags, risk, comps, insiders, short interest, 13F, Congress, estimates,
+  base rate, pitches, performance, macro, earnings, alerts) and `lib/agents/dataTools.js` (financial
+  history, price history, options, news, 10-K changes, 13D/13G, customers, federal contracts,
+  liquidity, factors, attention, the fund's own thesis/pitches/trades/past agent output, transactions,
+  watchlist, dividends, calendar, signals, meeting brief, policy limits, idea screen, track record,
+  paper trading, Today's news, 13F season and managers). Ask PIF gets all of them; each workflow
+  gets the ones it needs. Members' private notes, chat and alerts are not exposed.
 - **Trust rules:** agents only read (tools wrap the app's own GET endpoints and SEC filing text);
   every quote is checked word for word against its source and numbers no source backs are
   flagged; anything that would change the app (thesis status, the weekly memo) waits in Agents →
