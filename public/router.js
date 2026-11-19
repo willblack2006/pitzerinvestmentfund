@@ -1,4 +1,5 @@
 import { sessionReady, getPref } from "./shared.js";
+import { ROUTE_FILES } from "./routes.d/index.js";
 
 function parseHash() {
   const hash = location.hash.replace(/^#/, "") || "/";
@@ -61,8 +62,41 @@ const SECTION_OF = {
 
 const SITE = "Pitzer Investment Fund";
 
+// "feed/:tab?" -> ["/feed", "/feed/:tab"]: each optional segment adds one more pattern.
+export function expandPattern(pattern) {
+  const parts = String(pattern).split("/").filter(Boolean);
+  const out = [];
+  const required = [];
+  let i = 0;
+  for (; i < parts.length && !parts[i].endsWith("?"); i++) required.push(parts[i]);
+  out.push("/" + required.join("/"));
+  const acc = [...required];
+  for (; i < parts.length; i++) { acc.push(parts[i].replace(/\?$/, "")); out.push("/" + acc.join("/")); }
+  return out;
+}
+
+// Loads public/routes.d/* entries into the route map and SECTION_OF (see routes.d/index.js).
+// Routes already in the app's own map win, so a registry file can't hijack an existing page.
+async function loadRegistryRoutes(routes) {
+  const loaded = await Promise.allSettled(ROUTE_FILES.map((f) => import(`./routes.d/${f}`)));
+  loaded.forEach((r, i) => {
+    if (r.status !== "fulfilled") { console.warn(`[router] routes.d/${ROUTE_FILES[i]} failed to load`, r.reason); return; }
+    const entries = [].concat(r.value.default || []);
+    for (const e of entries) {
+      if (!e || !e.pattern || typeof e.load !== "function") { console.warn(`[router] routes.d/${ROUTE_FILES[i]} has a bad entry`); continue; }
+      for (const p of expandPattern(e.pattern)) {
+        if (routes.some(([existing]) => existing === p)) continue;
+        routes.push([p, e.load]);
+      }
+      const first = String(e.pattern).split("/").filter(Boolean)[0] || "";
+      if (e.section && !(first in SECTION_OF)) SECTION_OF[first] = e.section;
+    }
+  });
+}
+
 export function initRouter(routeMap) {
   const routes = Object.entries(routeMap);
+  const registryReady = loadRegistryRoutes(routes).catch((err) => console.warn("[router] route registry failed", err));
   const view = document.getElementById("view");
   const announcer = document.getElementById("routeAnnouncer");
   let firstRender = true;
@@ -71,6 +105,7 @@ export function initRouter(routeMap) {
   async function render() {
     const token = ++renderToken;
     await sessionReady(); // know who's signed in before the first page draws
+    await registryReady; // routes from public/routes.d/
     // Your start page: opening the app's bare address goes to Today if you chose that.
     if (firstRender && !location.hash.replace(/^#\/?/, "") && getPref("startPage") === "today") {
       location.replace("#/today");

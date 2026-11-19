@@ -637,5 +637,8 @@ if (count === 0) {
   console.log(`Seeded ${seed.length} positions.`);
 }
 
+// Agent platform and later feature tables: one file per area in lib/schema/ (see its index.js).
+require("./lib/schema")(db, { addColumn });
+
 db.path = dbPath; // where the file lives (backups and the migration use it)
 module.exports = db;
