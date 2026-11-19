@@ -40,7 +40,7 @@ export async function mount(container) {
                 <strong>${esc(p.symbol)}</strong> ${p.title ? `<span class="muted">(${esc(p.title)})</span>` : ""}
               </a>
               <div class="muted small">${esc(p.author)} · ${esc(p.createdAt.slice(0, 10))}${p.priceAtPitch ? ` · pitched at ${fmtUSD(p.priceAtPitch)}` : ""}${upside !== null ? ` · base case ${fmtPct(upside * 100)}` : ""}</div>
-              ${p.status === "voting" ? `<div class="small">${p.voteCounts.yes} yes · ${p.voteCounts.no} no · ${p.voteCounts.abstain} abstain ${p.passing ? `<span class="tone-good">(passing)</span>` : ""}</div>` : ""}
+              ${p.status === "voting" ? `<div class="small">${p.blind ? `${p.voteTotal} vote${p.voteTotal === 1 ? "" : "s"} cast · split hidden until you vote` : `${p.voteCounts.yes} yes · ${p.voteCounts.no} no · ${p.voteCounts.abstain} abstain ${p.passing ? `<span class="tone-good">(passing)</span>` : ""}`}</div>` : ""}
             </li>`;
           }).join("")}
         </ul>

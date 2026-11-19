@@ -78,7 +78,9 @@ Works for any ticker. Every tab has its own link.
 
   The price when the pitch was made is recorded automatically. Each pitch moves through
   draft → investment committee vote → approved or rejected → executed. Signed-in members vote,
-  and the threshold and quorum are set in Settings.
+  and the threshold and quorum are set in Settings. Voting is blind: until you vote yourself you
+  see only how many votes are in, not the split or anyone's comment. A no vote needs a short
+  reason, and whoever closes the vote can leave a decision note that stays with the result.
 
 ### Market
 - **Macro** (`#/macro`) and **Insiders** (`#/insiders`).
