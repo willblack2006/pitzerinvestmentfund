@@ -16,12 +16,12 @@ async function renderCongress(symbol) {
   }
   if (!el("congressBody")) return;
   box.innerHTML = `
-    ${r.error ? `<p class="muted small">The House disclosure site couldn't be read: ${esc(r.error)}</p>`
+    ${r.error ? `<p class="muted small">The disclosure sites couldn't be read: ${esc(r.error)}</p>`
       : r.trades.length ? `<div class="table-scroll"><table class="mini-table">
-        <caption class="sr-only">House members' reported trades in ${esc(symbol)}</caption>
+        <caption class="sr-only">House and Senate members' reported trades in ${esc(symbol)}</caption>
         <thead><tr><th scope="col">Trade date</th><th scope="col">Member</th><th scope="col">Type</th><th scope="col" class="num">Amount</th><th scope="col">Report</th></tr></thead>
         <tbody>${tradeRows(r.trades, { showTicker: false })}</tbody></table></div>`
-      : `<p class="muted small">No House member reported trading ${esc(symbol)} in the last ${r.days} days of filings.</p>`}
+      : `<p class="muted small">No member of Congress reported trading ${esc(symbol)} in the last ${r.days} days of filings.</p>`}
     <p class="muted small">${EVIDENCE_NOTE}</p>`;
 }
 
@@ -109,8 +109,8 @@ export async function render(c, { symbol, data }) {
       </section>
       ${breadthPanelHtml(loading)}
       <section class="panel span-full" aria-labelledby="congress-h">
-        <div class="panel-head"><h3 id="congress-h">Congressional trades</h3><span class="muted small">House members, last 60 days of filings · <a href="#/congress">all holdings →</a></span></div>
-        <div id="congressBody">${loading("Reading House transaction reports…")}</div>
+        <div class="panel-head"><h3 id="congress-h">Congressional trades</h3><span class="muted small">House &amp; Senate, last 60 days of filings · <a href="#/congress">all holdings →</a></span></div>
+        <div id="congressBody">${loading("Reading House and Senate transaction reports…")}</div>
       </section>
       <section class="panel span-full" aria-labelledby="activist-h">
         <div class="panel-head"><h3 id="activist-h">Activist / 5%-owner filings</h3><span class="muted small">New SC 13D / 13G filings, last 12 months</span></div>
