@@ -158,8 +158,13 @@ Code: `lib/agents/` (events, router, runs, tools, verification, budget, approval
   history, price history, options, news, 10-K changes, 13D/13G, customers, federal contracts,
   liquidity, factors, attention, the fund's own thesis/pitches/trades/past agent output, transactions,
   watchlist, dividends, calendar, signals, meeting brief, policy limits, idea screen, track record,
-  paper trading, Today's news, 13F season and managers). Ask PIF gets all of them; each workflow
-  gets the ones it needs. Members' private notes, chat and alerts are not exposed.
+  paper trading, Today's news, 13F season and managers, the DCF workbench, industry comparisons
+  from SEC XBRL frames, earnings releases and call transcripts, lobbying, FDA, Federal Register,
+  22 FRED series, the momentum backtest) plus OpenAI's built-in web search. Ask PIF gets all of
+  them; each workflow gets the ones it needs. Ask PIF can read the asking member's own notes and
+  club-shared notes (`get_my_notes`), never another member's private notes; chat and personal
+  alerts are not exposed. Optional keys: `FMP_API_KEY` (call transcripts; otherwise the 8-K press
+  release), `LDA_API_KEY` / `OPENFDA_API_KEY` (rate limits), `AGENT_WEB_SEARCH=off`.
 - **Trust rules:** agents only read (tools wrap the app's own GET endpoints and SEC filing text);
   every quote is checked word for word against its source and numbers no source backs are
   flagged; anything that would change the app (thesis status, the weekly memo) waits in Agents →
