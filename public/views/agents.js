@@ -4,7 +4,7 @@ import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, 
 
 export const title = "Research agents";
 
-const TABS = [["briefs", "#/agents", "Briefs"], ["ask", "#/agents/ask", "Ask PIF"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
+const TABS = [["briefs", "#/agents", "Briefs &amp; reports"], ["ask", "#/agents/ask", "Ask PIF"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
 const WORKFLOW_LABEL = {
   filing_flash: "Filing flash", earnings_flash: "Earnings flash", ask_pif: "Ask PIF", red_team: "Red team", pitch_primer: "Pitch primer",
   earnings_preview: "Earnings preview", thesis_check: "Thesis check", weekly_memo: "Weekly memo", data_qa: "Data check", macro_brief: "Macro brief",
@@ -86,6 +86,30 @@ export function answerCard(o, runId) {
   </article>`;
 }
 
+export function reportCard(o, runId, fb) {
+  const dataQa = o.kind === "data_qa";
+  return `<article class="panel agent-brief">
+    <header class="agent-brief-head"><div>
+      <p class="muted small">${esc(workflowLabel(o.kind))}${o.symbol ? ` · <a class="symbol-cell" href="#/research/${encodeURIComponent(o.symbol)}">${esc(o.symbol)}</a>` : ""}${o.reportDate ? ` · reports ${esc(o.reportDate)}` : ""}${o.internalOnly ? ` · <span class="badge badge-warn">Internal research only</span>` : ""}${o.kind === "weekly_memo" ? ` · ${o.approved ? `<span class="badge badge-owned">Approved</span>` : `<span class="badge badge-watch">Draft, waiting for an editor</span>`}` : ""}</p>
+      <h3>${esc(o.title)}</h3></div></header>
+    <p>${esc(o.summary)}</p>
+    ${(o.sections || []).map((sec) => `<section><p class="pf-sub">${esc(sec.heading)}</p><ul class="small">${sec.items.map((i) => `<li>${i.symbol ? `<a class="symbol-cell" href="#/research/${encodeURIComponent(i.symbol)}">${esc(i.symbol)}</a> ` : ""}${esc(i.text)} ${srcLink(i.source_url)}${i.sourced ? "" : ` <span class="badge badge-warn">source not read</span>`}</li>`).join("")}</ul></section>`).join("")}
+    ${dataQa && o.mismatches?.length ? `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Mismatches between SEC filings and Yahoo</caption>
+      <thead><tr><th scope="col" class="left">Ticker</th><th scope="col" class="left">Field</th><th scope="col" class="num">As filed (SEC)</th><th scope="col" class="num">Shown (Yahoo)</th><th scope="col" class="num">Gap</th><th scope="col" class="left">Likely cause</th></tr></thead>
+      <tbody>${o.mismatches.map((m) => `<tr><th scope="row" class="left"><a class="symbol-cell" href="#/research/${encodeURIComponent(m.symbol)}">${esc(m.symbol)}</a></th><td class="left">${esc(m.field)}</td><td class="num">${Number(m.filed).toLocaleString()}</td><td class="num">${Number(m.shown).toLocaleString()}</td><td class="num">${m.diffPct}%</td><td class="left small">${esc(m.likelyCause)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${o.unbackedNumbers?.length ? `<p class="notice small">Check these numbers, no source backs them: ${o.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
+    <footer class="agent-brief-foot"><span class="muted small">${dataQa ? "Computed by code from SEC and Yahoo data, no AI." : "AI-written research aid, not advice."} <a href="#/agents/runs/${runId}">How it was made</a></span>${feedbackButtons(runId, fb)}</footer>
+  </article>`;
+}
+
+export function outputCard(o, runId, fb) {
+  if (!o) return "";
+  if (o.headline) return briefCard(o, { runId, feedback: fb });
+  if (o.kind === "ask_pif") return answerCard(o, runId);
+  if (o.sections || o.kind === "data_qa") return reportCard(o, runId, fb);
+  return "";
+}
+
 function runsTable(runs) {
   if (!runs.length) return emptyState({ icon: "inbox", title: "No AI runs yet", body: "Runs show up here as agents work and members use AI features." });
   return `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Agent and AI runs, newest first</caption>
@@ -136,7 +160,7 @@ async function mountRun(container, id) {
       <dt>Cost</dt><dd>${money(r.costUsd)}</dd>
       ${r.event ? `<dt>Triggered by</dt><dd>${r.event.sourceUrl ? `<a href="${safeUrl(r.event.sourceUrl)}" target="_blank" rel="noopener">${esc(r.event.title)}</a>` : esc(r.event.title)}</dd>` : ""}
     </dl>
-    <div id="runOutput">${out?.headline ? briefCard(out, { runId: r.id, feedback: r.feedback }) : out?.kind === "ask_pif" ? answerCard(out, r.id) : ""}</div>
+    <div id="runOutput">${outputCard(out, r.id, r.feedback)}</div>
     <section class="panel"><h3>Steps</h3>
       <ol class="agent-steps">${(r.steps || []).map((s) => `<li><span class="muted small">${esc(s.at.slice(11, 19))}</span> <strong>${esc(s.kind)}</strong> ${
         s.kind === "tool" ? `${esc(s.name)} ${s.args ? `<code>${esc(JSON.stringify(s.args)).slice(0, 200)}</code>` : ""} ${s.ok ? "" : `<span class="badge badge-danger">${esc(s.error || "error")}</span>`}${s.source_url ? ` <a href="${s.source_url.startsWith("#") ? esc(s.source_url) : safeUrl(s.source_url)}">source</a>` : ""}`
@@ -144,7 +168,7 @@ async function mountRun(container, id) {
         : s.kind === "source" ? `read <a href="${safeUrl(s.url)}" target="_blank" rel="noopener">the filing</a> (${(s.chars || 0).toLocaleString()} characters${s.truncated ? ", cut to fit" : ""})`
         : esc(JSON.stringify(s).slice(0, 200))}</li>`).join("") || "<li class=\"muted\">No steps recorded.</li>"}</ol>
     </section>
-    ${out && !out.headline ? `<details class="small"><summary>Raw output</summary><pre class="agent-raw">${esc(JSON.stringify(out, null, 2))}</pre></details>` : ""}
+    ${out && !outputCard(out, r.id) ? `<details class="small"><summary>Raw output</summary><pre class="agent-raw">${esc(JSON.stringify(out, null, 2))}</pre></details>` : ""}
   </div>`;
   bindFeedback(container);
   window.dispatchEvent(new CustomEvent("pif:agent-run", { detail: { container, run: r } }));
@@ -195,7 +219,7 @@ export async function mount(container, params = {}) {
       body.innerHTML = proposalsList(r.proposals);
     } else {
       const r = await api("/api/agents/briefs");
-      body.innerHTML = r.briefs.length ? r.briefs.map((x) => briefCard(x.brief, { runId: x.runId, feedback: x.feedback })).join("")
+      body.innerHTML = r.briefs.length ? r.briefs.map((x) => outputCard(x.brief, x.runId, x.feedback)).join("")
         : emptyState({ icon: "doc", title: "No briefs yet", body: "When a holding files an 8-K, 10-Q or 10-K, a brief appears here. You can also brief any filing from a stock's Research → Filings tab." });
     }
   };
