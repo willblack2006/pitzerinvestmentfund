@@ -166,3 +166,8 @@ Format:
 - Did: added `CLAUDE.md`, `AGENTS.md`, this file. No git changes — repo already had ~45 uncommitted files before this.
 - In progress / unfinished: those ~45 pre-existing uncommitted changes (congressTrades, govContracts, paperTrading features and related test/public/route files) are still uncommitted — review and commit before heavy multi-agent use. `codex-output/` folder mentioned in CLAUDE.md/AGENTS.md was not created — create it when Codex first needs it.
 - Gotchas: repo has both `render.yaml` (live deploy, Render) and a leftover `.vercel/` folder (not current) — don't treat `.vercel/` as live.
+
+## 2026-11-19 — Claude (data pipeline: cache)
+- Did: `lib/cache.js` `cached()` now shares one in-flight fetch per key, falls back to an expired copy (up to 3 days old) when the source errors, never stores `undefined`, and has `purgeExpired()` (run each scheduler tick) plus an `expires_at` index so `api_cache` stops growing. Tests in `test/cache.test.js`.
+- Gotcha: `test/api.test.js` "daily frames say where the window starts" fails without network (also on main).
+- Unfinished: agent tool results still report `cached: null` and `as_of: now()`; surfacing the real cache age would let agents see stale data.
