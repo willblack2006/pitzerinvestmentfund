@@ -40,7 +40,7 @@ const msg = (text, usage = { input_tokens: 1000, output_tokens: 100 }, model = "
 const call = (name, args, id = "c1", usage = { input_tokens: 500, output_tokens: 50 }) =>
   ({ model: "gpt-6.1-sol", status: "completed", usage, output: [{ type: "function_call", call_id: id, name, arguments: JSON.stringify(args) }] });
 
-test.beforeEach(() => { replies = []; requests = []; mockOpenAI(); db.exec("DELETE FROM agent_runs; DELETE FROM agent_events;"); setSettings({ aiMonthlyCapUsd: 25, aiMemberDailyUsd: 0.5 }); });
+test.beforeEach(() => { replies = []; requests = []; mockOpenAI(); db.exec("DELETE FROM agent_proposals; DELETE FROM agent_feedback; DELETE FROM agent_runs; DELETE FROM agent_events;"); setSettings({ aiMonthlyCapUsd: 25, aiMemberDailyUsd: 0.5 }); });
 test.afterEach(() => { global.fetch = realFetch; });
 
 // ---- verify ----
@@ -230,6 +230,156 @@ test("flash: an earnings 8-K gets a brief from the press-release exhibit, with q
   assert.deepEqual(notes.map((n) => n.memberId), [Number(admin)], "only members with AI access are notified");
   assert.equal(notes[0].link, `#/agents/runs/${run.id}`);
   assert.ok(Number(plain));
+});
+
+// ---- Ask PIF, red team, pitch primer ----
+
+function mockAppAndOpenAI(appData) {
+  tools.setBaseUrl("http://app.test");
+  global.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.startsWith("https://api.openai.com/")) { requests.push(JSON.parse(opts.body)); return new Response(JSON.stringify(replies.shift()), { status: 200 }); }
+    if (u.startsWith("http://app.test/api/")) {
+      const path = u.slice("http://app.test/api".length);
+      const hit = Object.entries(appData).find(([k]) => path === k);
+      return hit ? new Response(JSON.stringify(hit[1]), { status: 200 }) : new Response(JSON.stringify({ error: "nope" }), { status: 404 });
+    }
+    return new Response("not mocked", { status: 404 });
+  };
+}
+
+test("Ask PIF: answers from tool data, marks sources it actually read, flags unbacked numbers", async () => {
+  const { ask } = require("../lib/agents/workflows/ask");
+  mockAppAndOpenAI({ "/positions": [{ symbol: "NVDA", shares: 100, marketValue: 18000 }, { symbol: "MU", shares: 50, marketValue: 6000 }] });
+  replies.push(call("get_holdings", {}), msg(JSON.stringify({
+    answer: "NVDA is the largest holding at $18,000, about 3x MU.",
+    claims: [{ text: "NVDA market value is $18,000", source_url: "#/holdings", quote: "" }, { text: "MU is cheap", source_url: "#/research/MU", quote: "" }],
+    followUps: ["How has NVDA performed since purchase?"],
+  })));
+  const m = Number(db.prepare("INSERT INTO members (name, role, pinHash) VALUES ('Asker', 'Analyst', '')").run().lastInsertRowid);
+  const r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "What's our biggest holding?" }, ctx));
+  assert.equal(r.output.claims[0].sourced, true);
+  assert.equal(r.output.claims[1].sourced, false, "a source the agent never read is marked");
+  assert.deepEqual(r.output.toolsUsed.map((t) => t.name), ["get_holdings"]);
+  assert.deepEqual(r.output.unbackedNumbers, ["3x"], "a computed ratio is flagged for checking");
+  assert.equal(requests[0].tools.length > 10, true, "Ask PIF gets the whole read-only catalog");
+  assert.equal(db.prepare("SELECT memberId FROM agent_runs WHERE id = ?").get(r.runId).memberId, m, "billed to the member's daily budget");
+});
+
+test("red team: runs when a pitch opens for a vote, cites tool evidence, notifies the author", async () => {
+  require("../lib/agents/workflows");
+  const author = Number(db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash) VALUES ('Pitcher', 'Analyst', '', 'pitcher@test.edu', 'x')").run().lastInsertRowid);
+  const pitchId = Number(db.prepare("INSERT INTO pitches (symbol, title, author, authorId, status, thesis) VALUES ('MU', 'Memory upcycle', 'Pitcher', ?, 'voting', 'HBM demand')").run(author).lastInsertRowid);
+  mockAppAndOpenAI({ "/research/MU/risk": { beta: 1.6, piotroski: 4 } });
+  replies.push(call("get_risk", { symbol: "MU" }), msg(JSON.stringify({
+    summary: "The pitch ignores cyclicality.", bearCase: "Memory prices roll over.", questions: ["What if HBM pricing falls?"],
+    objections: [{ title: "High beta", detail: "Beta is 1.6, so the position swings more than the market.", severity: "medium", evidence: "beta 1.6", source_url: "#/research/MU/risk" }],
+  })));
+  agents.recordEvent({ dedupeKey: `pitch:${pitchId}:voting:x`, symbol: "MU", type: "PITCH_SUBMITTED", title: "Pitch opened", payload: { pitchId } });
+  agents.routeNew();
+  assert.deepEqual(await agents.dispatch(), { ran: 1, failed: 0 });
+  const out = JSON.parse(db.prepare("SELECT output FROM agent_runs WHERE workflow = 'red_team'").get().output);
+  assert.equal(out.pitchId, pitchId);
+  assert.equal(out.objections[0].sourced, true);
+  assert.deepEqual(out.unbackedNumbers, []);
+  assert.ok(db.prepare("SELECT 1 FROM notifications WHERE memberId = ? AND type = 'agentBrief' AND link = ?").get(author, `#/pitches/${pitchId}`), "the author is told");
+});
+
+test("pitch primer: calls a fixed set of tools, then drafts every section in one model call", async () => {
+  const { pitchPrimer, PRIMER_TOOLS } = require("../lib/agents/workflows/pitch");
+  const data = Object.fromEntries(PRIMER_TOOLS.map((t) => [t, { ok: t }]));
+  mockAppAndOpenAI({ "/research/DUOL": { name: "Duolingo", price: 300 }, "/research/DUOL/comps": { peers: [] }, "/research/DUOL/risk": {}, "/estimate-revisions/DUOL": {}, "/research/DUOL/base-rate": {}, "/insiders/DUOL": {}, "/13f/breadth/DUOL": {}, "/research/DUOL/red-flags": {} });
+  const draft = { thesis: "t", catalysts: "c", risks: "r", valuation: "v", bullCase: "b", baseCase: "b", bearCase: "b", facts: [{ fact: "price 300", tool: "get_research_overview" }], openQuestions: ["q"] };
+  replies.push(msg(JSON.stringify(draft)));
+  const r = await runs.run({ workflow: "pitch_primer" }, (ctx) => pitchPrimer({ symbol: "DUOL" }, ctx));
+  assert.equal(r.output.thesis, "t");
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].input[1].content, /<untrusted_tool_data tool="get_research_overview">/);
+  assert.equal(runs.getRun(r.runId).steps.filter((s) => s.kind === "tool").length, PRIMER_TOOLS.length);
+  assert.ok(data);
+});
+
+// ---- scheduled agents ----
+
+test("schedule: weekly reports, the nightly data check and earnings previews are recorded once per period", async () => {
+  const s = require("../lib/agents/workflows/scheduled");
+  const fri = new Date("2026-11-20T22:00:00Z"); // Friday after 21:00 UTC: every weekly report is due
+  const earnings = [{ symbol: "NVDA", date: "2026-11-24", owned: true }, { symbol: "AAPL", date: "2026-11-25", owned: false }, { symbol: "MU", date: "2026-12-20", owned: true }];
+  const n = await s.scheduledEvents(agents, { now: fri, earnings });
+  assert.equal(n, 6, "4 weekly + data check + 1 preview");
+  assert.equal(await s.scheduledEvents(agents, { now: fri, earnings }), 0, "deduped");
+  const types = db.prepare("SELECT type FROM agent_events ORDER BY type").all().map((r) => r.type);
+  assert.deepEqual(types, ["DATA_QA", "EARNINGS_PREVIEW", "MACRO_BRIEF", "OWNERSHIP_WATCH", "POLICY_WATCH", "WEEKLY_MEMO"]);
+  const mon = new Date("2026-11-23T08:00:00Z");
+  db.exec("DELETE FROM agent_events");
+  await s.scheduledEvents(agents, { now: mon, earnings: [] });
+  assert.deepEqual(db.prepare("SELECT type FROM agent_events").all().map((r) => r.type), ["DATA_QA"], "Monday before 13:00 UTC: only the data check");
+  agents.routeNew();
+  assert.equal(db.prepare("SELECT workflow FROM agent_events").get().workflow, "data_qa");
+});
+
+test("macro brief: one cheap call over tool data; items citing unread sources are marked", async () => {
+  const s = require("../lib/agents/workflows/scheduled");
+  mockAppAndOpenAI({ "/macro": { dgs10: 4.1 }, "/portfolio/allocation": { sectors: [{ name: "Technology", pct: 40 }] } });
+  replies.push(msg(JSON.stringify({ title: "Rates steady", summary: "The 10-year is 4.1.", sections: [{ heading: "Rates", items: [
+    { text: "10-year at 4.1%", source_url: "#/macro", symbol: "" }, { text: "Tech is 40% of the fund", source_url: "#/nowhere", symbol: "" }] }] }), undefined, "gpt-6-luna"));
+  const r = await runs.run({ workflow: "macro_brief" }, (ctx) => s.macroBrief({}, ctx));
+  assert.equal(requests[0].model, "gpt-6-luna", "cheap tier");
+  assert.deepEqual(r.output.sections[0].items.map((i) => i.sourced), [true, false]);
+  assert.deepEqual(r.output.unbackedNumbers, []);
+});
+
+test("data check: SEC vs Yahoo mismatches over 15% are listed with a likely cause, no model call", async () => {
+  const s = require("../lib/agents/workflows/scheduled");
+  const sec = require("../lib/sources/sec"), yahoo = require("../lib/sources/yahoo");
+  const orig = [sec.getCompanyFacts, yahoo.getQuoteSummary];
+  const top = db.prepare("SELECT symbol FROM positions ORDER BY marketValue DESC").get().symbol;
+  sec.getCompanyFacts = async (sym) => sym === top ? { longTermDebt: [{ end: "2026-09-30", val: 1000 }], shortTermDebt: [{ end: "2026-09-30", val: 0 }], cash: [{ val: 500 }], sharesOutstanding: [{ val: 100 }] } : null;
+  yahoo.getQuoteSummary = async () => ({ financialData: { totalDebt: { raw: 1600 }, totalCash: { raw: 520 } }, defaultKeyStatistics: { sharesOutstanding: { raw: 100 } } });
+  try {
+    const r = await runs.run({ workflow: "data_qa" }, (ctx) => s.dataQa({}, ctx));
+    assert.deepEqual(r.output.mismatches.map((m) => [m.symbol, m.field, m.diffPct]), [[top, "debt", 37.5]]);
+    assert.match(r.output.mismatches[0].likelyCause, /leases/);
+    assert.equal(requests.length, 0);
+  } finally { [sec.getCompanyFacts, yahoo.getQuoteSummary] = orig; }
+});
+
+test("thesis check: a flash on a holding with a thesis queues a check; the status changes only on approval", async () => {
+  const s = require("../lib/agents/workflows/scheduled");
+  const proposals = require("../lib/agents/proposals");
+  const sym = db.prepare("SELECT symbol FROM positions LIMIT 1").get().symbol;
+  db.prepare("INSERT OR REPLACE INTO research_notes (symbol, thesis) VALUES (?, 'Margins expand as the new fab ramps.')").run(sym);
+  const brief = { headline: "Fab delayed a year", bottomLine: "The new fab is delayed to 2028.", points: [{ text: "Fab delayed", quote: "The fab is now expected in 2028.", verified: true }] };
+  const briefRunId = Number(db.prepare("INSERT INTO agent_runs (workflow, status, output) VALUES ('filing_flash', 'done', ?)").run(JSON.stringify(brief)).lastInsertRowid);
+  replies.push(msg(JSON.stringify({ status: "weakened", reason: "The ramp the thesis needs is a year later.", evidence: "The fab is now expected in 2028." })));
+  const r = await runs.run({ workflow: "thesis_check" }, (ctx) => s.thesisCheck({ payload: { symbol: sym, briefRunId } }, ctx));
+  assert.equal(r.output.status, "weakened");
+  assert.equal(r.output.evidenceVerified, true);
+  assert.equal(db.prepare("SELECT thesisStatus FROM research_notes WHERE symbol = ?").get(sym).thesisStatus, null, "nothing changes before approval");
+  const [p] = proposals.list();
+  assert.equal(p.kind, "thesis_status");
+  await proposals.decide(p.id, { id: 1, name: "Reviewer" }, true);
+  const note = db.prepare("SELECT thesisStatus, thesisStatusBy FROM research_notes WHERE symbol = ?").get(sym);
+  assert.deepEqual(note, { thesisStatus: "weakened", thesisStatusBy: "Reviewer" });
+  await assert.rejects(proposals.decide(p.id, { id: 1, name: "Reviewer" }, true), /already decided/);
+});
+
+test("weekly memo: top tier, uses only this week's output not marked wrong, waits for an editor", async () => {
+  const s = require("../lib/agents/workflows/scheduled");
+  const proposals = require("../lib/agents/proposals");
+  const good = Number(db.prepare("INSERT INTO agent_runs (workflow, symbol, status, output) VALUES ('filing_flash', 'NVDA', 'done', ?)").run(JSON.stringify({ headline: "Good", bottomLine: "b", points: [] })).lastInsertRowid);
+  const bad = Number(db.prepare("INSERT INTO agent_runs (workflow, symbol, status, output) VALUES ('filing_flash', 'MU', 'done', ?)").run(JSON.stringify({ headline: "Bad", bottomLine: "b", points: [] })).lastInsertRowid);
+  const m = Number(db.prepare("INSERT INTO members (name, role, pinHash) VALUES ('Critic', 'Analyst', '')").run().lastInsertRowid);
+  db.prepare("INSERT INTO agent_feedback (runId, memberId, verdict) VALUES (?, ?, 'wrong')").run(bad, m);
+  mockAppAndOpenAI({ "/portfolio/performance": {}, "/positions": [] });
+  replies.push(msg(JSON.stringify({ title: "Week", summary: "Quiet week.", sections: [] }), undefined, "gpt-6-astra"));
+  const r = await runs.run({ workflow: "weekly_memo" }, (ctx) => s.weeklyMemo({ payload: { since: "2000-01-01" } }, ctx));
+  assert.equal(requests[0].model, "gpt-6-astra");
+  assert.deepEqual(r.output.runIds, [good], "output members marked wrong is left out");
+  const [p] = proposals.list();
+  assert.equal(p.kind, "weekly_memo");
+  await proposals.decide(p.id, { id: m, name: "Editor" }, true);
+  assert.equal(JSON.parse(db.prepare("SELECT output FROM agent_runs WHERE id = ?").get(r.runId).output).approved, true);
 });
 
 // ---- API ----

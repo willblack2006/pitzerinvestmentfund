@@ -12,7 +12,7 @@ const sec = require("../lib/sources/sec");
 const openai = require("../lib/sources/openai");
 
 const router = express.Router();
-const BRIEF_WORKFLOWS = ["filing_flash", "earnings_flash"];
+const BRIEF_WORKFLOWS = ["filing_flash", "earnings_flash", "earnings_preview", "weekly_memo", "macro_brief", "ownership_watch", "policy_watch", "data_qa"];
 
 const runSummary = (r) => ({
   id: r.id, workflow: r.workflow, eventId: r.eventId, memberId: r.memberId, symbol: r.symbol, status: r.status,
@@ -119,3 +119,44 @@ router.post("/agents/proposals/:id/decide", requireAi, async (req, res) => {
 });
 
 module.exports = router;
+
+// ---- Ask PIF, pitch primer, red team (run on the member's own daily budget) ----
+const { ask } = require("../lib/agents/workflows/ask");
+const { pitchPrimer, redTeam } = require("../lib/agents/workflows/pitch");
+
+async function memberRun(req, res, workflow, symbol, fn) {
+  if (!openai.configured()) return res.status(503).json({ error: "AI needs OPENAI_API_KEY set on the server." });
+  try {
+    const out = await runs.run({ workflow, memberId: req.member.id, symbol }, fn);
+    res.json({ runId: out.runId, output: out.output, costUsd: out.costUsd });
+  } catch (err) {
+    res.status(err.status || 502).json({ error: err.message, runId: err.runId || null, code: err.code });
+  }
+}
+
+router.post("/agents/ask", requireAi, (req, res) => memberRun(req, res, "ask_pif", null, (ctx) => ask({ question: req.body?.question }, ctx)));
+
+router.get("/agents/asks", requireAi, (req, res) => {
+  const rows = db.prepare("SELECT id, status, output, error, costUsd, createdAt FROM agent_runs WHERE workflow = 'ask_pif' AND memberId = ? ORDER BY id DESC LIMIT 30").all(req.member.id);
+  res.json({ asks: rows.map((r) => ({ runId: r.id, status: r.status, error: r.error, costUsd: r.costUsd, createdAt: r.createdAt, output: r.output ? JSON.parse(r.output) : null })) });
+});
+
+router.post("/agents/primer", requireAi, (req, res) => {
+  const symbol = String(req.body?.symbol || "").toUpperCase().trim();
+  if (!/^[A-Z0-9.\-]{1,12}$/.test(symbol)) return res.status(400).json({ error: "A ticker is required." });
+  return memberRun(req, res, "pitch_primer", symbol, (ctx) => pitchPrimer({ symbol }, ctx));
+});
+
+router.get("/pitches/:id/red-team", requireAi, (req, res) => {
+  const id = Number(req.params.id);
+  const rows = db.prepare("SELECT id, status, output, error, costUsd, createdAt FROM agent_runs WHERE workflow = 'red_team' AND status = 'done' ORDER BY id DESC LIMIT 50").all();
+  const hit = rows.find((r) => JSON.parse(r.output || "{}").pitchId === id);
+  const running = db.prepare("SELECT COUNT(*) AS c FROM agent_runs r JOIN agent_events e ON e.id = r.eventId WHERE r.workflow = 'red_team' AND r.status = 'running' AND json_extract(e.payload, '$.pitchId') = ?").get(id).c;
+  res.json({ report: hit ? { runId: hit.id, createdAt: hit.createdAt, costUsd: hit.costUsd, ...JSON.parse(hit.output) } : null, running: running > 0 });
+});
+
+router.post("/pitches/:id/red-team", requireAi, (req, res) => {
+  const p = db.prepare("SELECT id, symbol FROM pitches WHERE id = ?").get(Number(req.params.id));
+  if (!p) return res.status(404).json({ error: "Pitch not found." });
+  return memberRun(req, res, "red_team", p.symbol, (ctx) => redTeam({ payload: { pitchId: p.id } }, ctx));
+});

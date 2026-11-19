@@ -351,6 +351,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
       <div class="research-main">
         <section class="panel" aria-labelledby="thesis-h">
           <div class="panel-head"><h3 id="thesis-h">Team thesis</h3><span class="muted small" id="thesisMeta">${thesisMeta(t)}</span></div>
+          ${t?.thesisStatus ? `<p class="small"><span class="badge ${{ intact: "badge-owned", watch: "badge-watch", weakened: "badge-warn", broken: "badge-danger" }[t.thesisStatus] || ""}">Thesis ${esc(t.thesisStatus)}</span> ${esc(t.thesisStatusNote || "")} <span class="muted">Approved by ${esc(t.thesisStatusBy || "a member")} on ${esc((t.thesisStatusAt || "").slice(0, 10))} from an agent's thesis check.</span></p>` : ""}
           ${t?.targetPrice ? `
             <div class="kv-grid kv-4 thesis-kpis">
               <div><span class="muted small">Team target</span><strong>${fmtUSD(t.targetPrice)}</strong></div>

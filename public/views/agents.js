@@ -4,7 +4,7 @@ import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, 
 
 export const title = "Research agents";
 
-const TABS = [["briefs", "#/agents", "Briefs"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
+const TABS = [["briefs", "#/agents", "Briefs &amp; reports"], ["ask", "#/agents/ask", "Ask PIF"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
 const WORKFLOW_LABEL = {
   filing_flash: "Filing flash", earnings_flash: "Earnings flash", ask_pif: "Ask PIF", red_team: "Red team", pitch_primer: "Pitch primer",
   earnings_preview: "Earnings preview", thesis_check: "Thesis check", weekly_memo: "Weekly memo", data_qa: "Data check", macro_brief: "Macro brief",
@@ -72,6 +72,44 @@ export function bindFeedback(container) {
   });
 }
 
+const srcLink = (u) => (!u ? "" : u.startsWith("#") ? `<a href="${esc(u)}">${esc(u.replace(/^#\//, ""))}</a>` : `<a href="${safeUrl(u)}" target="_blank" rel="noopener">sec.gov</a>`);
+
+export function answerCard(o, runId) {
+  return `<article class="panel agent-answer">
+    <p class="muted small">You asked: ${esc(o.question)}</p>
+    <div>${o.answer.split(/\n{2,}/).map((para) => /^\s*- /m.test(para) ? `<ul>${para.split(/\n/).filter(Boolean).map((l) => `<li>${esc(l.replace(/^\s*- /, ""))}</li>`).join("")}</ul>` : `<p>${esc(para)}</p>`).join("")}</div>
+    ${o.claims?.length ? `<details><summary class="small">Sources (${o.claims.length})</summary><ul class="small">${o.claims.map((c) => `<li>${esc(c.text)} ${srcLink(c.source_url)}${c.sourced ? "" : ` <span class="badge badge-warn">source not read</span>`}${c.quote ? `<blockquote>“${esc(c.quote)}” ${c.verified ? `<span class="badge badge-owned">Verified quote</span>` : `<span class="badge badge-warn">Quote not found</span>`}</blockquote>` : ""}</li>`).join("")}</ul></details>` : ""}
+    ${o.unbackedNumbers?.length ? `<p class="notice small">Check these numbers, no tool result backs them: ${o.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
+    <p class="agent-tools">Looked at: ${o.toolsUsed?.length ? o.toolsUsed.map((t) => esc(t.name.replace(/^get_/, "").replace(/_/g, " ")) + (t.args?.symbol ? ` ${esc(t.args.symbol)}` : "")).join(", ") : "nothing"}</p>
+    ${o.followUps?.length ? `<p class="small muted">Try next: ${o.followUps.map(esc).join(" · ")}</p>` : ""}
+    <footer class="agent-brief-foot"><span class="muted small">AI-written research aid, not advice. <a href="#/agents/runs/${runId}">How it was made</a></span>${feedbackButtons(runId)}</footer>
+  </article>`;
+}
+
+export function reportCard(o, runId, fb) {
+  const dataQa = o.kind === "data_qa";
+  return `<article class="panel agent-brief">
+    <header class="agent-brief-head"><div>
+      <p class="muted small">${esc(workflowLabel(o.kind))}${o.symbol ? ` · <a class="symbol-cell" href="#/research/${encodeURIComponent(o.symbol)}">${esc(o.symbol)}</a>` : ""}${o.reportDate ? ` · reports ${esc(o.reportDate)}` : ""}${o.internalOnly ? ` · <span class="badge badge-warn">Internal research only</span>` : ""}${o.kind === "weekly_memo" ? ` · ${o.approved ? `<span class="badge badge-owned">Approved</span>` : `<span class="badge badge-watch">Draft, waiting for an editor</span>`}` : ""}</p>
+      <h3>${esc(o.title)}</h3></div></header>
+    <p>${esc(o.summary)}</p>
+    ${(o.sections || []).map((sec) => `<section><p class="pf-sub">${esc(sec.heading)}</p><ul class="small">${sec.items.map((i) => `<li>${i.symbol ? `<a class="symbol-cell" href="#/research/${encodeURIComponent(i.symbol)}">${esc(i.symbol)}</a> ` : ""}${esc(i.text)} ${srcLink(i.source_url)}${i.sourced ? "" : ` <span class="badge badge-warn">source not read</span>`}</li>`).join("")}</ul></section>`).join("")}
+    ${dataQa && o.mismatches?.length ? `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Mismatches between SEC filings and Yahoo</caption>
+      <thead><tr><th scope="col" class="left">Ticker</th><th scope="col" class="left">Field</th><th scope="col" class="num">As filed (SEC)</th><th scope="col" class="num">Shown (Yahoo)</th><th scope="col" class="num">Gap</th><th scope="col" class="left">Likely cause</th></tr></thead>
+      <tbody>${o.mismatches.map((m) => `<tr><th scope="row" class="left"><a class="symbol-cell" href="#/research/${encodeURIComponent(m.symbol)}">${esc(m.symbol)}</a></th><td class="left">${esc(m.field)}</td><td class="num">${Number(m.filed).toLocaleString()}</td><td class="num">${Number(m.shown).toLocaleString()}</td><td class="num">${m.diffPct}%</td><td class="left small">${esc(m.likelyCause)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${o.unbackedNumbers?.length ? `<p class="notice small">Check these numbers, no source backs them: ${o.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
+    <footer class="agent-brief-foot"><span class="muted small">${dataQa ? "Computed by code from SEC and Yahoo data, no AI." : "AI-written research aid, not advice."} <a href="#/agents/runs/${runId}">How it was made</a></span>${feedbackButtons(runId, fb)}</footer>
+  </article>`;
+}
+
+export function outputCard(o, runId, fb) {
+  if (!o) return "";
+  if (o.headline) return briefCard(o, { runId, feedback: fb });
+  if (o.kind === "ask_pif") return answerCard(o, runId);
+  if (o.sections || o.kind === "data_qa") return reportCard(o, runId, fb);
+  return "";
+}
+
 function runsTable(runs) {
   if (!runs.length) return emptyState({ icon: "inbox", title: "No AI runs yet", body: "Runs show up here as agents work and members use AI features." });
   return `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Agent and AI runs, newest first</caption>
@@ -122,7 +160,7 @@ async function mountRun(container, id) {
       <dt>Cost</dt><dd>${money(r.costUsd)}</dd>
       ${r.event ? `<dt>Triggered by</dt><dd>${r.event.sourceUrl ? `<a href="${safeUrl(r.event.sourceUrl)}" target="_blank" rel="noopener">${esc(r.event.title)}</a>` : esc(r.event.title)}</dd>` : ""}
     </dl>
-    <div id="runOutput">${out?.headline ? briefCard(out, { runId: r.id, feedback: r.feedback }) : ""}</div>
+    <div id="runOutput">${outputCard(out, r.id, r.feedback)}</div>
     <section class="panel"><h3>Steps</h3>
       <ol class="agent-steps">${(r.steps || []).map((s) => `<li><span class="muted small">${esc(s.at.slice(11, 19))}</span> <strong>${esc(s.kind)}</strong> ${
         s.kind === "tool" ? `${esc(s.name)} ${s.args ? `<code>${esc(JSON.stringify(s.args)).slice(0, 200)}</code>` : ""} ${s.ok ? "" : `<span class="badge badge-danger">${esc(s.error || "error")}</span>`}${s.source_url ? ` <a href="${s.source_url.startsWith("#") ? esc(s.source_url) : safeUrl(s.source_url)}">source</a>` : ""}`
@@ -130,7 +168,7 @@ async function mountRun(container, id) {
         : s.kind === "source" ? `read <a href="${safeUrl(s.url)}" target="_blank" rel="noopener">the filing</a> (${(s.chars || 0).toLocaleString()} characters${s.truncated ? ", cut to fit" : ""})`
         : esc(JSON.stringify(s).slice(0, 200))}</li>`).join("") || "<li class=\"muted\">No steps recorded.</li>"}</ol>
     </section>
-    ${out && !out.headline ? `<details class="small"><summary>Raw output</summary><pre class="agent-raw">${esc(JSON.stringify(out, null, 2))}</pre></details>` : ""}
+    ${out && !outputCard(out, r.id) ? `<details class="small"><summary>Raw output</summary><pre class="agent-raw">${esc(JSON.stringify(out, null, 2))}</pre></details>` : ""}
   </div>`;
   bindFeedback(container);
   window.dispatchEvent(new CustomEvent("pif:agent-run", { detail: { container, run: r } }));
@@ -157,12 +195,31 @@ export async function mount(container, params = {}) {
       body.innerHTML = spend + acc + runsTable(o.runs);
     } else if (tab === "events") {
       body.innerHTML = `<p class="muted small">Plain rules, no AI, decide what each filing deserves: <strong>push</strong> (bankruptcy, impairment, restatement and similar), <strong>inbox</strong> (results, executive changes, material agreements) or <strong>digest</strong> (routine).</p>` + eventsTable(o.events);
+    } else if (tab === "ask") {
+      body.innerHTML = `<form class="agent-ask" id="askForm"><label class="field-block" style="flex:1 1 320px">Ask about the fund, a holding or any ticker
+          <textarea name="q" maxlength="1000" placeholder="e.g. Which holdings have the most insider selling this quarter? What did MU say about guidance in its last 10-Q?"></textarea></label>
+        <button class="btn btn-primary">Ask</button></form>
+        <p class="muted small">Answers come only from the app's data and SEC filings, with the sources and every tool call shown. Each question costs a few cents from your daily AI budget.</p>
+        <div id="askOut"></div><div id="askHistory"></div>`;
+      const hist = await api("/api/agents/asks");
+      container.querySelector("#askHistory").innerHTML = hist.asks.length ? `<p class="pf-sub">Your recent questions</p>${hist.asks.map((a) => a.output ? answerCard(a.output, a.runId) : `<p class="muted small">${esc(a.createdAt)}: ${esc(a.error || a.status)}</p>`).join("")}` : "";
+      container.querySelector("#askForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const q = e.target.q.value.trim();
+        if (!q) return;
+        const out = container.querySelector("#askOut"), btn = e.target.querySelector("button");
+        btn.disabled = true;
+        out.innerHTML = `<p class="muted small" role="status">Looking it up in the app's data…</p>`;
+        try { const r = await api("/api/agents/ask", { method: "POST", body: JSON.stringify({ question: q }) }); out.innerHTML = answerCard(r.output, r.runId); e.target.q.value = ""; }
+        catch (err) { out.innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+        finally { btn.disabled = false; }
+      });
     } else if (tab === "approvals") {
       const r = await api("/api/agents/proposals");
       body.innerHTML = proposalsList(r.proposals);
     } else {
       const r = await api("/api/agents/briefs");
-      body.innerHTML = r.briefs.length ? r.briefs.map((x) => briefCard(x.brief, { runId: x.runId, feedback: x.feedback })).join("")
+      body.innerHTML = r.briefs.length ? r.briefs.map((x) => outputCard(x.brief, x.runId, x.feedback)).join("")
         : emptyState({ icon: "doc", title: "No briefs yet", body: "When a holding files an 8-K, 10-Q or 10-K, a brief appears here. You can also brief any filing from a stock's Research → Filings tab." });
     }
   };
