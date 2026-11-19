@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-19, Claude (merged the AI PRs #10-#15 to main, integration test)
+- Did: merged #11 → #12 → #10 → #13 → #14 → #15 locally (conflicts in AGENT_NOTES, tools.js exports, runs.js tool memo/agent loop, ask.js prompt, .env.example), pushed main @ 3511d56 with Will's OK. #13-#15 were stacked, so they were closed as merged-by-push. Fixes found while testing: `analytics.align()` crashed on an empty map (Performance 500 whenever Yahoo is down), plain-English tool names in `public/aiFormat.js`, Ask PIF hint mentions the web, clearer `get_dcf` error.
+- Tested offline on a DB copy with a fake OpenAI preloaded via `node -r` (scripted tool calls, schema-shaped answers): Ask PIF through the UI panel, primer, red team, all 7 scheduled workflows, every page at 1280px and 375px (no JS errors, no sideways scroll). Only network-backed tools failed, as expected.
+- Not verified: real OpenAI (web search, Responses API tool loop), live Yahoo/SEC/FRED/lda.gov/openFDA/Federal Register, the Render deploy itself.
+
 ## 2026-11-19, Claude (agents: web search, transcripts, own notes, DCF, industry comps, gov data, macro, backtest fix)
 - Did (stacked PRs after #10, Will approved everything on the list except Finviz Elite):
   - **Web search:** OpenAI's built-in `web_search` as a pseudo-tool (`TOOLS.web_search.builtin`, off with `AGENT_WEB_SEARCH=off`). `openai.respondRaw` returns `searches` and `citations`; `runs.js` bills $0.01 per search (`WEB_SEARCH_COST_USD`) and logs each cited page as a `web_search` tool step so Ask PIF marks web claims as sourced. Ask PIF and red team only.
