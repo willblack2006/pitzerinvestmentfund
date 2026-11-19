@@ -8,6 +8,7 @@ const { fitCheck } = require("../lib/pitchFit");
 const portfolio = require("../lib/portfolio");
 const yahoo = require("../lib/sources/yahoo");
 const { readiness } = require("../lib/pitchReadiness");
+const pitchReview = require("../lib/pitchReview");
 
 const router = express.Router();
 
@@ -94,7 +95,7 @@ router.get("/pitches/:id", optionalMember, async (req, res) => {
   const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
   if (!p) return res.status(404).json({ error: "Pitch not found." });
   const prices = await latestPrices([p.symbol]);
-  res.json({ ...p, readiness: readiness(p), tally: viewTally(p.id, p.status, req.member), currentPrice: prices[p.symbol]?.price ?? null });
+  res.json({ ...p, readiness: readiness(p), review: pitchReview.review(p, prices[p.symbol]?.price ?? null, new Date().toISOString().slice(0, 10), db.prepare("SELECT * FROM tripwires WHERE pitchId = ?").all(p.id)), tally: viewTally(p.id, p.status, req.member), currentPrice: prices[p.symbol]?.price ?? null });
 });
 
 // What this trade would do to position, sector and cash weights and the policy limits.
@@ -165,6 +166,7 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
   } else if (action === "executed" && p.status === "approved") {
     status = "executed";
     db.prepare("UPDATE pitches SET status='executed', updatedAt=datetime('now') WHERE id=?").run(p.id);
+    pitchReview.seedTripwires(db, p);
   } else if (action === "withdraw" && ["draft", "voting"].includes(p.status)) {
     status = "withdrawn";
     db.prepare("UPDATE pitches SET status='withdrawn', decidedAt=datetime('now'), updatedAt=datetime('now') WHERE id=?").run(p.id);

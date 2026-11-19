@@ -79,7 +79,9 @@ Works for any ticker. Every tab has its own link.
     sell, with a state and a date).
 
   A pitch can't open for a vote until it has a thesis, base target, confidence and horizon (so it can be
-  graded later), a pre-mortem and kill criteria; the draft page lists what's missing.
+  graded later), a pre-mortem and kill criteria; the draft page lists what's missing. When a buy or add is
+  marked executed, its kill criteria, bear-case price and horizon date become exit tripwires, and the pitch page
+  shows how the call is going against its target and horizon.
 
   The price when the pitch was made is recorded automatically. Each pitch moves through
   draft → investment committee vote → approved or rejected → executed. Signed-in members vote,

@@ -602,6 +602,8 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS tripwires_symbol ON tripwires (symbol, status);
 `);
+// Tripwires seeded from a pitch when it is executed point back at it.
+addColumn("tripwires", "pitchId", "INTEGER");
 
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund
 // enters its own IPS rather than inheriting placeholder numbers.
