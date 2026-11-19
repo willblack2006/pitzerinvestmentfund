@@ -9,6 +9,7 @@ const TOOLS = [
   ["meeting_prep", "Meeting prep", "A one-page agenda from this week: results, decisions, alerts, what's coming."],
   ["ideas", "Idea hunt", "Three to five names worth researching, with why now and what would kill the idea."],
 ];
+const RUN_LABEL = { compare: "Compare", what_if: "Run the what-if", meeting_prep: "Prepare the agenda", ideas: "Find ideas" };
 const TITLES = { compare: "Comparison", what_if: "What-if", meeting_prep: "Meeting prep", ideas: "Idea hunt" };
 
 const pct = (v) => `${Number(v).toFixed(1)}%`;
@@ -65,11 +66,13 @@ export async function mountDesk(body, { kind = "compare" } = {}) {
     <div class="agent-followups desk-tabs" role="tablist" aria-label="Research desk tools">${TOOLS.map(([k, label, hint]) => `<button type="button" role="tab" class="btn btn-ghost btn-sm agent-chip" data-kind="${k}" aria-selected="${k === kind}" title="${esc(hint)}">${esc(label)}</button>`).join("")}</div>
     <form class="panel desk-form" id="deskForm"></form><div id="deskOut"></div><div id="deskHistory"></div>`;
   const form = body.querySelector("#deskForm"), out = body.querySelector("#deskOut"), hist = body.querySelector("#deskHistory");
-  let current = kind;
+  let current = kind, firstPaint = true;
   const renderForm = () => {
     const t = TOOLS.find(([k]) => k === current);
     body.querySelectorAll("[data-kind]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.kind === current)));
-    form.innerHTML = `<p class="small"><strong>${esc(t[1])}.</strong> ${esc(t[2])}</p>${formFor(current)}<button class="btn btn-primary">Run</button>`;
+    form.innerHTML = `<p class="desk-lead"><strong>${esc(t[1])}</strong>${esc(t[2])}</p>${formFor(current)}<button class="btn btn-primary">${RUN_LABEL[current]}</button>`;
+    if (!firstPaint) form.querySelector("input:not([type=date]), select")?.focus({ preventScroll: true });
+    firstPaint = false;
   };
   const renderHistory = async () => {
     try {
@@ -93,6 +96,7 @@ export async function mountDesk(body, { kind = "compare" } = {}) {
     const btn = form.querySelector(".btn-primary");
     const { path, body: reqBody } = payload(current, form);
     btn.disabled = true;
+    out.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
     try {
       const r = await withProgress(out, api(`/api/agents/desk/${path}`, { method: "POST", body: JSON.stringify(reqBody) }), { workflow: current, intro: "Planning what to look up", expect: "Usually 30 to 90 seconds" });
       out.innerHTML = deskResult(r.output, r.runId);

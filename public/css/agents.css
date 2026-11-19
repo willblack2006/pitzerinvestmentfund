@@ -128,7 +128,7 @@
 @media (max-width: 600px) { .ask-open span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 
 /* ============ Polish: motion, rhythm and quiet controls for every AI surface ============ */
-:root { --ease-out: cubic-bezier(0.22, 1, 0.36, 1); --ease-std: cubic-bezier(0.4, 0, 0.2, 1); }
+:root { --ease-std: var(--ease-in-out); }
 
 /* Side panel glides in; the controls inside it stay calm. */
 @media (prefers-reduced-motion: no-preference) {
@@ -146,7 +146,7 @@
   .agent-progress-list li { animation: ask-rise 220ms var(--ease-out) both; }
   .agent-pulse { animation: ask-pulse 1.4s var(--ease-std) infinite; }
   .agent-shimmer { animation: ask-shimmer 1.8s linear infinite; }
-  .agent-chip, .ask-send, .ask-btn { transition: background-color 150ms var(--ease-std), border-color 150ms var(--ease-std), transform 150ms var(--ease-out), opacity 150ms; }
+  .agent-chip, .ask-send, .ask-btn { transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast); }
   .agent-chip:active, .ask-send:active { transform: scale(0.97); }
 }
 
@@ -209,14 +209,13 @@
 .agent-progress-meta { font-variant-numeric: tabular-nums; min-height: 1.2em; }
 
 /* Brief and report cards share the same rhythm */
-.agent-brief { padding: var(--sp-5); gap: var(--sp-4); }
+.agent-brief { padding: var(--sp-5); gap: var(--sp-4); box-shadow: var(--shadow-1); }
 .agent-brief-head h3 { font-size: var(--fs-xl); letter-spacing: -0.01em; line-height: 1.25; }
 .agent-brief > p { line-height: 1.6; font-size: 15px; text-wrap: pretty; }
 @media (prefers-reduced-motion: no-preference) { .agent-brief { animation: ask-rise 300ms var(--ease-out) both; } }
 
 /* Desk and agents page */
 .agent-ask textarea { border-radius: var(--r-lg); }
-.desk-trade { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .agent-hist { transition: border-color 150ms; }
 .agent-hist:hover { border-color: var(--border-strong); }
 .ai-brief-link { padding: 2px 0; }
@@ -228,3 +227,54 @@
 .ask-hint span { white-space: nowrap; }
 .ask-hint span:first-child { display: none; }
 @media (hover: hover) { .ask-hint span:first-child { display: inline; } }
+
+/* ---- Agents page: budget, tabs' content, ask form ---- */
+.agent-meter { height: 6px; }
+.agent-meter > span { transition: width var(--dur-slow) var(--ease-out); }
+.agent-ask { align-items: stretch; margin: var(--sp-4) 0; padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); border: 1px solid var(--border-strong); border-radius: var(--r-xl); background: var(--surface-1); box-shadow: var(--shadow-1); transition: border-color var(--dur-fast), box-shadow var(--dur-base); flex-wrap: nowrap; }
+.agent-ask:focus-within { border-color: var(--accent); box-shadow: var(--ring); }
+.agent-ask .field-block { flex: 1; margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
+.agent-ask textarea { border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; min-height: 56px; padding: 6px 0 !important; font-size: 15px; color: var(--text); resize: none; }
+.agent-ask > .btn { align-self: flex-end; border-radius: var(--r-full); padding-inline: var(--sp-5); }
+@media (max-width: 560px) { .agent-ask { flex-wrap: wrap; } .agent-ask > .btn { width: 100%; } }
+.ask-suggest-page { margin-bottom: var(--sp-3); }
+.agent-hist > summary { padding: 12px 16px; transition: background-color var(--dur-fast) var(--ease-out); border-radius: var(--r-lg); }
+.agent-hist > summary:hover { background: var(--surface-2); }
+.agent-hist { border-radius: var(--r-lg); }
+.agent-proposals li.panel { padding: var(--sp-4); }
+.agent-proposals .row-actions { margin-top: var(--sp-3); display: flex; gap: var(--sp-2); }
+
+/* ---- Research desk: one segmented control, tidy form ---- */
+.desk-tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; margin: var(--sp-3) 0 var(--sp-4); background: var(--surface-3); border-radius: var(--r-full); }
+.desk-tabs .agent-chip { border: 0; border-radius: var(--r-full); background: transparent; color: var(--text-2); font-weight: 600; padding: 6px 14px; }
+.desk-tabs .agent-chip:hover { color: var(--text); background: transparent; }
+.desk-tabs [aria-selected="true"] { background: var(--surface-1); color: var(--text); box-shadow: var(--shadow-1); }
+.desk-form { max-width: 680px; gap: var(--sp-3); padding: var(--sp-5); }
+.desk-form .desk-lead { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-2); }
+.desk-form .desk-lead strong { display: block; font-size: var(--fs-lg); color: var(--text); letter-spacing: -0.01em; margin-bottom: 2px; }
+.desk-form .btn-primary { justify-self: start; border-radius: var(--r-full); padding-inline: var(--sp-5); }
+#deskOut:not(:empty) { max-width: 760px; margin-bottom: var(--sp-4); }
+
+/* ---- Red team: each objection is its own quiet card ---- */
+.agent-objections { list-style: none; padding: 0; gap: var(--sp-3); counter-reset: obj; }
+.agent-objections li { position: relative; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface-1); }
+.agent-objections li:has(.badge-danger) { border-left-color: var(--negative); }
+.agent-objections li:has(.badge-warn) { border-left-color: var(--caution); }
+.agent-objections li > p:first-child { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: 4px; }
+.agent-objections li p.small { line-height: 1.5; font-size: var(--fs-md); }
+.agent-objections li p.muted { margin-top: var(--sp-2); }
+#redTeamBody > p.small:first-child { font-size: 15px; line-height: 1.55; color: var(--text); text-wrap: pretty; }
+#redTeamBody .pf-sub { margin-top: var(--sp-4); }
+#redTeamBody > .btn { margin-top: var(--sp-3); }
+@media (prefers-reduced-motion: no-preference) { .agent-objections li { animation: ask-rise 340ms var(--ease-out) both; } .agent-objections li:nth-child(2) { animation-delay: 70ms; } .agent-objections li:nth-child(3) { animation-delay: 140ms; } .agent-objections li:nth-child(n+4) { animation-delay: 200ms; } }
+.agent-waiting { display: flex; align-items: center; gap: var(--sp-3); color: var(--text-2); }
+
+/* ---- Briefs and reports ---- */
+.agent-brief-head p.small { text-transform: none; letter-spacing: 0; }
+.agent-points { gap: var(--sp-4); }
+.agent-points li > p { line-height: 1.55; font-size: 15px; }
+.agent-points blockquote { border-left-color: var(--accent); background: var(--accent-soft); border-radius: 0 var(--r-md) var(--r-md) 0; padding: var(--sp-2) var(--sp-3); color: var(--text); }
+.agent-brief .pf-sub { margin: 0 0 var(--sp-2); }
+.agent-brief .mini-table { font-variant-numeric: tabular-nums; }
+.agent-brief + .agent-brief { margin-top: 0; }
+.desk-form #addTrade { justify-self: start; }
