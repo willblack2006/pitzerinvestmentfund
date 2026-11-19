@@ -177,6 +177,9 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
     return res.status(409).json({ error: `Can't ${action} a pitch that is ${p.status}.` });
   }
   const link = `#/pitches/${p.id}`;
+  const fresh = db.prepare("SELECT * FROM pitches WHERE id = ?").get(p.id);
+  if (status === "voting") require("../lib/feed/activity").pitchOpened(fresh, req.member);
+  else if (["approved", "rejected", "executed"].includes(status)) require("../lib/feed/activity").pitchDecided(fresh, status, req.member, status === "executed" ? null : tally(p.id).counts);
   if (status === "voting") {
     // Research agents: the red team reads the pitch when it opens for a vote.
     const agents = require("../lib/agents");
