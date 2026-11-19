@@ -3,9 +3,9 @@
 import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, bindRetry, tabNav, toast, safeUrl, fmtUSD, icon } from "../shared.js";
 import { answerCard, feedbackButtons, bindFeedback, sourceLink, withProgress, aiErrorHtml, suggestionsFor, localTime } from "../ai.js";
 
-export { answerCard, feedbackButtons, bindFeedback };
+export { answerCard, feedbackButtons, bindFeedback, money };
 
-export const title = "Research agents";
+export const title = "Agents";
 
 const TABS = [["briefs", "#/agents", "Briefs &amp; reports"], ["ask", "#/agents/ask", "Ask PIF"], ["desk", "#/agents/desk", "Research desk"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
 const WORKFLOW_LABEL = {
@@ -85,7 +85,7 @@ export function outputCard(o, runId, fb) {
   return "";
 }
 
-function runsTable(runs) {
+export function runsTable(runs) {
   if (!runs.length) return emptyState({ icon: "inbox", title: "No AI runs yet", body: "Runs show up here as agents work and members use AI features." });
   return `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Agent and AI runs, newest first</caption>
     <thead><tr><th scope="col" class="left">When</th><th scope="col" class="left">What</th><th scope="col" class="left">Ticker</th><th scope="col" class="left">Status</th><th scope="col" class="left">Model</th><th scope="col" class="num">Cost</th></tr></thead>
@@ -98,7 +98,7 @@ function runsTable(runs) {
       <td class="num">${money(r.costUsd)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
-function eventsTable(events) {
+export function eventsTable(events) {
   if (!events.length) return emptyState({ icon: "inbox", title: "No events yet", body: "New filings on holdings appear here within about 10 minutes of hitting EDGAR." });
   const TIER = { push: "badge-danger", inbox: "badge-watch", digest: "", ignore: "" };
   return `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Events the agents saw, newest first</caption>
@@ -111,7 +111,7 @@ function eventsTable(events) {
       <td class="left small">${esc(e.status)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
-function proposalsList(list) {
+export function proposalsList(list) {
   if (!list.length) return emptyState({ icon: "check", title: "Nothing waiting for approval", body: "When an agent suggests a change, like a thesis pillar status, it waits here for a member to approve it." });
   return `<ul class="agent-proposals">${list.map((p) => `<li class="panel">
     <p class="muted small">${esc(p.kindLabel)}${p.symbol ? ` · <a class="symbol-cell" href="#/research/${encodeURIComponent(p.symbol)}">${esc(p.symbol)}</a>` : ""} · ${esc(p.createdAt.slice(0, 16))}${p.runId ? ` · <a href="#/agents/runs/${p.runId}">Evidence</a>` : ""}</p>
@@ -149,88 +149,65 @@ async function mountRun(container, id) {
   window.dispatchEvent(new CustomEvent("pif:agent-run", { detail: { container, run: r } }));
 }
 
+// ---- The Agents hub shell (WS11) ----
+// A thin shell over the tab registry (public/views/agents/index.js): each tab is its own module
+// (home, ask, briefs, desk, approvals, activity, events, plus any other workstream's tab). Links
+// to other agent-section pages (Feed, Theses, Cockpit) show once their route is registered.
+
+const SECTION_LINKS = [["feed", "#/feed", "Feed", 15], ["theses", "#/theses", "Theses", 45], ["cockpit", "#/cockpit", "Cockpit", 95]];
+let sectionLinksCache = null;
+async function registeredSectionLinks() {
+  if (sectionLinksCache) return sectionLinksCache;
+  const firsts = new Set();
+  try {
+    const { ROUTE_FILES } = await import("../routes.d/index.js");
+    const mods = await Promise.allSettled(ROUTE_FILES.map((f) => import(`../routes.d/${f}`)));
+    for (const m of mods) if (m.status === "fulfilled") for (const e of [].concat(m.value.default || [])) firsts.add(String(e?.pattern || "").split("/").filter(Boolean)[0]);
+  } catch { /* no registry */ }
+  return (sectionLinksCache = SECTION_LINKS.filter(([k]) => firsts.has(k)));
+}
+
+// "#/agents/ask?thread=3" arrives as tab "ask?thread=3".
+function splitTab(raw = "") {
+  const [key, qs = ""] = String(raw).split("?");
+  return { key, query: new URLSearchParams(qs) };
+}
+
 export async function mount(container, params = {}) {
   if (!can("ai")) {
-    container.innerHTML = pageHead("Research agents") + `<div class="toolbar">${lockedHint("Sign in to use the research agents.", "ai")}</div>`;
+    container.innerHTML = pageHead("Agents") + `<div class="toolbar">${lockedHint("Sign in to use the research agents.", "ai")}</div>`;
     return;
   }
   if (params.id) return mountRun(container, params.id);
-  const tab = TABS.some(([k]) => k === params.tab) ? params.tab : "briefs";
-  container.innerHTML = pageHead("Research agents", "Agents read new filings on holdings and write cited briefs. Every quote is checked against the filing, every run and its cost is logged, and nothing changes in the app without a member's approval.")
-    + `<div class="page-pad" id="agentTop">${skeleton("text", { rows: 2 })}</div>${tabNav(TABS, tab, "Agent sections")}<div class="page-pad" id="agentBody">${skeleton("cards", { rows: 3 })}</div>`;
+  const { key: wanted, query } = splitTab(params.tab);
+  const [{ loadTabs }, links] = await Promise.all([import("./agents/index.js"), registeredSectionLinks()]);
+  const tabs = await loadTabs();
+  // "#/agents/new" opens the builder tab when it's there (WS3).
+  const alias = wanted === "new" ? tabs.find((t) => ["build", "builder"].includes(t.key)) : null;
+  const tab = alias || tabs.find((t) => t.key === wanted) || tabs.find((t) => t.key === "home") || tabs[0];
+  if (!tab) { container.innerHTML = pageHead("Agents") + errorState({ title: "Couldn't load the agents page." }); return; }
+  const nav = [...tabs.map((t) => [t.key, t.key === "home" ? "#/agents" : `#/agents/${t.key}`, esc(t.label), t.order ?? 100]),
+    ...links.map(([k, href, label, order]) => [k, href, label, order])].sort((a, b) => a[3] - b[3]);
+  container.innerHTML = pageHead("Agents", "Your fund's research agents and the team's: what they found, what is running, what needs you. Every source is shown, every run and its cost is logged, and nothing changes in the app without a member's approval.",
+    `<button type="button" class="btn btn-ghost btn-sm ask-open" data-ask-open>${icon("sparkle", { size: 16 })}<span>Ask PIF</span></button>`)
+    + `<div class="page-pad agents-top" id="agentTop"></div>${tabNav(nav.map(([k, h, l]) => [k, h, l]), tab.key, "Agent sections")}<div class="page-pad agents-tab agents-tab-${esc(tab.key)}" id="agentBody">${skeleton("cards", { rows: 3 })}</div>`;
   const top = container.querySelector("#agentTop"), body = container.querySelector("#agentBody");
-  const load = async () => {
-    let o;
-    try { o = await api("/api/agents/overview"); } catch (err) { body.innerHTML = errorState({ title: "Couldn't load the agents.", detail: err.message, retryId: "agents" }); bindRetry(body, "agents", load); return; }
-    top.innerHTML = budgetBar(o.budget) + (o.aiConfigured ? "" : `<p class="notice small">AI is off on the server (no OpenAI key is set), so agents record events but don't run.</p>`)
-      + (o.pendingProposals ? `<p class="small"><a href="#/agents/approvals">${o.pendingProposals} change${o.pendingProposals === 1 ? "" : "s"} waiting for approval</a></p>` : "");
-    if (tab === "activity") {
-      const spend = o.monthByFeature.length ? `<p class="pf-sub">This month by feature</p><ul class="chip-list">${o.monthByFeature.map((f) => `<li class="chip">${esc(workflowLabel(f.workflow))}: ${f.runs} run${f.runs === 1 ? "" : "s"}, ${money(f.costUsd)}</li>`).join("")}</ul>` : "";
-      const acc = o.acceptance.length ? `<p class="pf-sub">Member verdicts</p><ul class="chip-list">${o.acceptance.map((a) => `<li class="chip">${esc(workflowLabel(a.workflow))}: ${a.useful} useful, ${a.notUseful} not useful, ${a.wrong} wrong</li>`).join("")}</ul>` : "";
-      body.innerHTML = spend + acc + runsTable(o.runs);
-    } else if (tab === "events") {
-      body.innerHTML = `<p class="muted small">Plain rules, no AI, decide what each filing deserves: <strong>push</strong> (bankruptcy, impairment, restatement and similar), <strong>inbox</strong> (results, executive changes, material agreements) or <strong>digest</strong> (routine).</p>` + eventsTable(o.events);
-    } else if (tab === "ask") {
-      body.innerHTML = `<form class="agent-ask" id="askForm"><label class="field-block" style="flex:1 1 320px">Ask about the fund, a holding or any ticker
-          <textarea name="q" maxlength="1000" placeholder="e.g. Which holdings have the most insider selling this quarter? What did MU say about guidance in its last 10-Q?"></textarea></label>
-        <button class="btn btn-primary">Ask</button></form>
-        <div class="agent-followups ask-suggest-page"><span class="small muted">Try</span>${suggestionsFor(null).map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>
-        <p class="muted small">Answers come from the app's data and SEC filings, with every source shown. Each question costs a few cents of your daily budget. <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to ask, or press <kbd>A</kbd> on any page for the side panel.</p>
-        <div id="askOut"></div><div id="askHistory"></div>`;
-      const form = container.querySelector("#askForm"), out = container.querySelector("#askOut");
-      const renderHistory = async () => {
-        const hist = await api("/api/agents/asks");
-        const past = hist.asks.filter((a) => a.output || a.error);
-        container.querySelector("#askHistory").innerHTML = past.length ? `<p class="pf-sub">Your recent questions</p><div class="agent-history">${past.map((a, i) => `<details class="agent-hist"${i === 0 ? " open" : ""}>
-            <summary><span>${esc(a.output?.question || "Question that failed")}</span><span class="muted small">${esc(localTime(a.createdAt))}${a.output ? "" : " · failed"}</span></summary>
-            ${a.output ? answerCard(a.output, a.runId) : `<p class="muted small">${esc(a.error || a.status)}</p>`}</details>`).join("")}</div>` : "";
-      };
-      const run = async (q) => {
-        q = String(q || "").trim();
-        if (!q) return;
-        const btn = form.querySelector("button");
-        btn.disabled = true;
-        form.q.value = q;
-        try {
-          const r = await withProgress(out, api("/api/agents/ask", { method: "POST", body: JSON.stringify({ question: q }) }), { workflow: "ask_pif", intro: "Reading your question", expect: "Usually 10 to 40 seconds" });
-          out.innerHTML = answerCard(r.output, r.runId);
-          form.q.value = "";
-          renderHistory().catch(() => {});
-        } catch (err) { out.innerHTML = aiErrorHtml(err); }
-        finally { btn.disabled = false; }
-      };
-      form.addEventListener("submit", (e) => { e.preventDefault(); run(form.q.value); });
-      form.q.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit(); } });
-      // Suggested and follow-up questions ask here instead of opening the side panel.
-      body.addEventListener("click", (e) => {
-        const b = e.target.closest("[data-ask]");
-        if (!b || !body.contains(form)) return;
-        e.preventDefault();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        run(b.dataset.ask);
-      });
-      await renderHistory();
-    } else if (tab === "desk") {
-      await (await import("../deskView.js")).mountDesk(body);
-    } else if (tab === "approvals") {
-      const r = await api("/api/agents/proposals");
-      body.innerHTML = proposalsList(r.proposals);
-    } else {
-      const r = await api("/api/agents/briefs");
-      body.innerHTML = r.briefs.length ? r.briefs.map((x) => outputCard(x.brief, x.runId, x.feedback)).join("")
-        : emptyState({ icon: "doc", title: "No briefs yet", body: "When a holding files an 8-K, 10-Q or 10-K, its brief appears here. You can also brief any filing from a stock's Filings tab." });
-    }
+  let overview = null;
+  const loadOverview = async () => {
+    overview = await api("/api/agents/overview");
+    top.innerHTML = tab.key === "home" || tab.key === "activity" ? budgetBar(overview.budget) + (overview.aiConfigured ? "" : `<p class="notice small">AI is off on the server (no OpenAI key is set), so agents record events but don't run.</p>`) : (overview.aiConfigured ? "" : `<p class="notice small">AI is off on the server (no OpenAI key is set), so agents record events but don't run.</p>`);
+    return overview;
   };
-  await load();
+  const ctx = {
+    container, params, query, tab: tab.key,
+    overview: () => overview ? Promise.resolve(overview) : loadOverview(),
+    reload: () => { overview = null; return render(); },
+  };
+  async function render() {
+    try { await tab.render(body, ctx); }
+    catch (err) { body.innerHTML = errorState({ title: `Couldn't load ${tab.label}.`, detail: err.message, retryId: "agents" }); bindRetry(body, "agents", render); }
+  }
+  ctx.overview().catch(() => {});
+  await render();
   bindFeedback(body);
-  body.addEventListener("click", async (e) => {
-    const d = e.target.closest("[data-decide]");
-    if (!d) return;
-    d.disabled = true;
-    try {
-      await api(`/api/agents/proposals/${d.dataset.decide}/decide`, { method: "POST", body: JSON.stringify({ approve: d.dataset.approve === "1" }) });
-      toast(d.dataset.approve === "1" ? "Approved and applied." : "Rejected.", { type: "success" });
-      load();
-    } catch (err) { d.disabled = false; toast(err.message, { type: "error" }); }
-  });
 }
