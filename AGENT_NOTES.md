@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-19, Claude (AI experience polish, cloud session)
+- Did: Ask PIF panel and every AI card. Panel glides in, answers fade in paragraph by paragraph (once, `is-new`), progress shows the last 3 steps with a soft pulse and folds older ones, composer is one rounded field with a round send button that grows with the text and stays quiet until there is text, Up arrow recalls the last question, "New chat" clears the panel, empty state is friendlier, feedback buttons fade until hover. Brief/report cards got the same type rhythm. All in `public/ai.js` and the end of `public/css/agents.css`; all motion is off under `prefers-reduced-motion`. New `arrow-up` icon.
+- Checked: screenshots at 1280 and 390 against a fake OpenAI (scripted tool call plus canned answer) in `/mnt/project-files/ai-polish/`. `npm test` 232 pass; one `features.test.js` Senate eFD test failed once in the full run and passes alone.
+- Gotchas: answers still arrive whole (no token streaming from the server); the reveal is a CSS stagger, not real streaming.
+
 ## 2026-11-19, Claude (product experience pass, cloud session)
 - Did: ran every main page at 1280 and 390 on a DB copy and fixed what showed up: the Portfolio total broke mid-number on phones (now a full row, no wrapping); Research's partial-data notice named internal fields (`quoteSummary`) and now says plain English; the Today "no edition" notice was double-indented; when the chart library fails to load the Research chart showed the drawing toolbar over an empty box, now it collapses to a message with Retry; the first heading of each page is exposed as `aria-level=1` (the app had no h1).
 - Checked: screenshots before/after, `npm test` 170 pass, 1 fail (known `api.test.js` chart-bars test).

@@ -46,7 +46,7 @@ function answerBody(text) {
     : `<p>${esc(para)}</p>`).join("");
 }
 
-export function answerCard(o, runId, { feedback, compact = false } = {}) {
+export function answerCard(o, runId, { feedback, compact = false, fresh = false } = {}) {
   if (!o) return "";
   const claims = o.claims || [];
   const quotes = claims.filter((c) => c.quote);
@@ -65,7 +65,7 @@ export function answerCard(o, runId, { feedback, compact = false } = {}) {
       ${c.quote ? `<blockquote>“${esc(c.quote)}” ${c.verified ? `<span class="badge badge-owned" title="Found word for word in the source">Verified quote</span>${c.repaired ? ` <span class="badge" title="The agent paraphrased; this is the exact filing sentence it matched.">Matched to filing text</span>` : ""}` : `<span class="badge badge-warn" title="Not found in the source. Check it before relying on it.">Quote not found</span>`}</blockquote>` : ""}
     </div></li>`;
   const tools = (o.toolsUsed || []);
-  return `<article class="panel agent-answer${compact ? " is-compact" : ""}" data-run="${runId}">
+  return `<article class="panel agent-answer${compact ? " is-compact" : ""}${fresh ? " is-new" : ""}" data-run="${runId}">
     <p class="agent-q">${icon("chat", { size: 14 })}<span>${esc(o.question)}</span></p>
     <div class="agent-answer-text">${answerBody(o.answer)}</div>
     <div class="agent-checks" aria-label="Checks on this answer">${checks}</div>
@@ -99,12 +99,18 @@ export function progressHtml({ steps = [], intro = "Starting", elapsed = 0, expe
     : lastModel?.toolCalls?.length && steps[steps.length - 1].kind === "model" ? `Looking up ${lastModel.toolCalls.map((n) => toolLabel(n)).join(", ")}`
     : steps[steps.length - 1].kind === "tool" || steps[steps.length - 1].kind === "source" ? "Reading what it found"
     : "Checking sources and numbers";
+  // Only the latest few steps stay visible; the rest fold into a count so the list never grows into a wall.
+  const SHOW = 3, hidden = Math.max(0, lines.length - SHOW);
+  const line = (l) => `<li class="${l.bad ? "is-bad" : "is-done"}">${icon(l.bad ? "x" : "check", { size: 14 })}<span>${esc(l.text)}</span></li>`;
+  const time = elapsed >= 3 ? `${elapsed}s` : "";
   return `<div class="agent-progress" role="status" aria-live="polite">
     <ol class="agent-progress-list">
-      ${lines.map((l) => `<li class="${l.bad ? "is-bad" : "is-done"}">${icon(l.bad ? "x" : "check", { size: 14 })}<span>${esc(l.text)}</span></li>`).join("")}
-      <li class="is-now"><span class="spinner" aria-hidden="true"></span><span>${esc(next)}…</span></li>
+      ${hidden ? `<li class="is-done is-earlier"><span class="agent-progress-more">${hidden} earlier step${hidden === 1 ? "" : "s"} done</span></li>` : ""}
+      ${lines.slice(-SHOW).map(line).join("")}
+      <li class="is-now"><span class="agent-pulse" aria-hidden="true"></span><span>${esc(next)}…</span></li>
     </ol>
-    <p class="muted small">${elapsed ? `${elapsed}s` : ""}${expect ? `${elapsed ? " · " : ""}${esc(expect)}` : ""}</p>
+    <div class="agent-shimmer" aria-hidden="true"></div>
+    <p class="muted small agent-progress-meta">${time}${expect ? `${time ? " · " : ""}${esc(expect)}` : ""}</p>
   </div>`;
 }
 
@@ -128,7 +134,7 @@ export async function withProgress(box, promise, { workflow, symbol, intro = "St
 
 // An AI error with the next step a member can take.
 export function aiErrorHtml(err) {
-  const msg = esc(err?.message || "Something went wrong.");
+  const msg = esc(err?.message || "That didn't work. Please try again in a moment.");
   const run = err?.runId ? ` <a href="#/agents/runs/${err.runId}">What happened</a>` : "";
   if (err?.code === "ai_member_cap" || err?.code === "ai_month_cap") return `<p class="notice small" role="alert">${msg} <a href="#/agents/activity">See AI spending</a></p>`;
   if (err?.code === "ai_required") return `<p class="notice small" role="alert">${msg}</p>`;
@@ -154,13 +160,13 @@ let busy = false;
 function panelHtml() {
   return `<div class="ask">
     <header class="chat-head"><div><h2 id="askTitle">${icon("sparkle")} Ask PIF</h2></div>
-      <div><a class="small" href="#/agents/ask">All questions</a><button type="button" class="icon-btn" id="askClose" aria-label="Close Ask PIF">${icon("x")}</button></div></header>
+      <div class="ask-head-actions"><button type="button" class="btn-link small hidden" id="askNew">New chat</button><a class="small" href="#/agents/ask">History</a><button type="button" class="icon-btn" id="askClose" aria-label="Close Ask PIF">${icon("x")}</button></div></header>
     <div class="ask-list" id="askList"></div>
     <form class="ask-compose" id="askPanelForm">
       <label for="askPanelInput" class="sr-only">Your question</label>
-      <div class="chat-input-row"><textarea id="askPanelInput" rows="2" maxlength="1000" placeholder="Ask about the fund, a holding or any ticker"></textarea>
-      <button class="btn btn-primary" id="askPanelSend">Ask</button></div>
-      <p class="muted small ask-hint">Answers use the app's data and SEC filings, and the web only when those don't cover it. Enter to ask, Shift+Enter for a new line. <span id="askBudget"></span></p>
+      <div class="ask-field"><textarea id="askPanelInput" rows="1" maxlength="1000" placeholder="Ask about the fund or a ticker"></textarea>
+      <button class="ask-send" id="askPanelSend" aria-label="Ask" disabled>${icon("arrow-up", { size: 16 })}</button></div>
+      <p class="muted small ask-hint"><span>Enter to ask · Shift+Enter for a new line</span><span id="askBudget"></span></p>
     </form>
   </div>`;
 }
@@ -169,13 +175,14 @@ function renderList() {
   const list = panel?.querySelector("#askList");
   if (!list) return;
   if (!convo.length) {
-    list.innerHTML = `<div class="ask-empty"><p class="ask-empty-title">Ask a question about the fund</p>
-      <p class="muted small">PIF looks things up in the app (holdings, filings, insiders, valuation, macro) and shows where every fact came from.</p>
+    list.innerHTML = `<div class="ask-empty"><span class="ask-empty-mark" aria-hidden="true">${icon("sparkle", { size: 22 })}</span><p class="ask-empty-title">What would you like to know?</p>
+      <p class="muted">PIF looks things up in the app and in SEC filings, and shows where every fact came from.</p>
       <div class="ask-suggest">${suggestionsFor().map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask-fill="${esc(q)}">${esc(q)}</button>`).join("")}</div></div>`;
     return;
   }
-  list.innerHTML = convo.map((c, i) => c.output ? answerCard(c.output, c.runId, { compact: true })
-    : c.error ? `<div class="panel agent-answer is-compact"><p class="agent-q">${icon("chat", { size: 14 })}<span>${esc(c.q)}</span></p>${aiErrorHtml(c.error)}<button type="button" class="btn btn-ghost btn-sm" data-ask="${esc(c.q)}">Try again</button></div>`
+  panel.querySelector("#askNew")?.classList.toggle("hidden", !convo.length || busy);
+  list.innerHTML = convo.map((c, i) => c.output ? answerCard(c.output, c.runId, { compact: true, fresh: c.fresh })
+    : c.error ? `<div class="panel agent-answer is-compact"><p class="agent-q">${icon("chat", { size: 14 })}<span>${esc(c.q)}</span></p>${aiErrorHtml(c.error)}<div><button type="button" class="btn btn-ghost btn-sm" data-ask="${esc(c.q)}">Try again</button></div></div>`
     : `<div class="panel agent-answer is-compact"><p class="agent-q">${icon("chat", { size: 14 })}<span>${esc(c.q)}</span></p><div id="askProgress${i}"></div></div>`).join("");
 }
 
@@ -184,7 +191,7 @@ async function refreshBudget() {
     const o = await api("/api/agents/overview");
     const b = o.budget;
     const node = panel?.querySelector("#askBudget");
-    if (node && b?.memberRemainingUsd != null) node.textContent = `${fmtUSD(b.memberRemainingUsd)} of your daily AI budget left.`;
+    if (node && b?.memberRemainingUsd != null) node.textContent = `${fmtUSD(b.memberRemainingUsd)} left today`;
     if (node && !o.aiConfigured) node.textContent = "AI is off on the server right now.";
   } catch { /* optional */ }
 }
@@ -198,19 +205,32 @@ export async function ask(question) {
   renderList();
   const list = panel.querySelector("#askList");
   list.scrollTop = list.scrollHeight;
-  const send = panel.querySelector("#askPanelSend");
-  send.disabled = true;
+  syncSend();
   const box = panel.querySelector(`#askProgress${convo.length - 1}`);
   try {
     const r = await withProgress(box, api("/api/agents/ask", { method: "POST", body: JSON.stringify({ question: q }) }), { workflow: "ask_pif", intro: "Reading your question", expect: "Usually 10 to 40 seconds" });
-    Object.assign(item, { output: r.output, runId: r.runId });
+    Object.assign(item, { output: r.output, runId: r.runId, fresh: true });
   } catch (err) { item.error = err; }
   busy = false;
-  send.disabled = false;
+  syncSend();
   renderList();
+  item.fresh = false; // the reveal animation plays once; later re-renders show the card at rest
   const cards = list.querySelectorAll(".agent-answer");
-  cards[cards.length - 1]?.scrollIntoView({ block: "start" });
+  cards[cards.length - 1]?.scrollIntoView({ block: "start", behavior: reduceMotion() ? "auto" : "smooth" });
+  const input = panel.querySelector("#askPanelInput");
+  if (panel.open && !document.activeElement?.closest?.("a, button, summary")) input.focus({ preventScroll: true });
   refreshBudget();
+}
+
+const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// The send button is quiet until there is something to send, and the box grows with the question.
+function syncSend() {
+  const input = panel?.querySelector("#askPanelInput");
+  if (!input) return;
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+  panel.querySelector("#askPanelSend").disabled = busy || !input.value.trim();
 }
 
 function closeAsk() {
@@ -229,21 +249,27 @@ export function openAsk({ question = "", autoSubmit = false } = {}) {
     panel.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); closeAsk(); } });
     panel.querySelector("#askClose").addEventListener("click", closeAsk);
     const input = panel.querySelector("#askPanelInput");
-    panel.querySelector("#askPanelForm").addEventListener("submit", (e) => { e.preventDefault(); const q = input.value; input.value = ""; ask(q); });
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); panel.querySelector("#askPanelForm").requestSubmit(); } });
+    panel.querySelector("#askPanelForm").addEventListener("submit", (e) => { e.preventDefault(); const q = input.value; input.value = ""; syncSend(); ask(q); });
+    input.addEventListener("input", syncSend);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); panel.querySelector("#askPanelForm").requestSubmit(); }
+      // Up arrow in an empty box brings back the last question, like a terminal or Messages.
+      if (e.key === "ArrowUp" && !input.value) { const last = [...convo].reverse().find((c) => c.q); if (last) { e.preventDefault(); input.value = last.q; syncSend(); } }
+    });
+    panel.querySelector("#askNew").addEventListener("click", () => { if (busy) return; convo.length = 0; renderList(); input.focus(); });
     panel.addEventListener("click", (e) => {
       const f = e.target.closest("[data-ask-fill]");
-      if (f) { input.value = f.dataset.askFill; input.focus(); }
+      if (f) { input.value = f.dataset.askFill; syncSend(); input.focus(); }
       if (e.target.closest("a[href^='#/']") && window.matchMedia("(max-width: 720px)").matches) closeAsk();
     });
     bindFeedback(panel);
     renderList();
   }
-  if (!panel.open) { panel.show(); refreshBudget(); if (!convo.length) renderList(); }
+  if (!panel.open) { panel.show(); refreshBudget(); if (!convo.length) renderList(); syncSend(); }
   el("chatBtn") && document.querySelector(".chat-panel:not(.ask-panel)[open]")?.close();
   const input = panel.querySelector("#askPanelInput");
   if (question && autoSubmit) ask(question);
-  else { if (question) input.value = question; input.focus(); }
+  else { if (question) input.value = question; syncSend(); input.focus(); }
 }
 
 export function initAsk() {
