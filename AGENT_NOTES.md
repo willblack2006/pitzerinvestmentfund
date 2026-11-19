@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-19, Claude (research workflow: financials accuracy, TTM, P/E history; PRs #21 and stacked)
+- Did: `lib/sources/sec.js` now builds fiscal Q4 (FY minus Q1-Q3) and single quarters from year-to-date cash-flow totals (`pick(..., {cumulative})`, `deriveQ4`); items carry `derived: true`. Facts cache key is `sec_facts_v4_`. `lib/fundamentals.js`: `ttm` row, stock comp and FCF after stock comp, FCF is null (not OCF) when capex is missing; `dcf` inputs get `fcfTtm`. Financials tab shows a TTM column. New `lib/valuationHistory.js` + `GET /api/research/:symbol/pe-history` and a "P/E against its own history" panel on Valuation (weekly price / TTM EPS known at the time, 40-day filing lag).
+- Not verified: no outside network, so SEC derivations are tested only on synthetic company facts (`test/secQuarters.test.js`, `test/valuationHistory.test.js`). Check a non-calendar fiscal year (NVDA, MSFT) after deploy. Q4 EPS is FY EPS minus three quarters, which is approximate when share count moved.
+- Gotchas: a company with no capex tag now has no FCF/DCF start; add its tag in `FLOW.capex`. `lib/dcf.js` (agents copy) doesn't use `fcfTtm`.
+
 ## 2026-11-19, Claude (merged the AI PRs #10-#15 to main, integration test)
 - Did: merged #11 → #12 → #10 → #13 → #14 → #15 locally (conflicts in AGENT_NOTES, tools.js exports, runs.js tool memo/agent loop, ask.js prompt, .env.example), pushed main @ 3511d56 with Will's OK. #13-#15 were stacked, so they were closed as merged-by-push. Fixes found while testing: `analytics.align()` crashed on an empty map (Performance 500 whenever Yahoo is down), plain-English tool names in `public/aiFormat.js`, Ask PIF hint mentions the web, clearer `get_dcf` error.
 - Tested offline on a DB copy with a fake OpenAI preloaded via `node -r` (scripted tool calls, schema-shaped answers): Ask PIF through the UI panel, primer, red team, all 7 scheduled workflows, every page at 1280px and 375px (no JS errors, no sideways scroll). Only network-backed tools failed, as expected.

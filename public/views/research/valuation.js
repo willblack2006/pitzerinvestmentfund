@@ -131,6 +131,7 @@ function dcfPanel(symbol, data, price) {
         <label>Starting free cash flow
           <select id="dcfBase">
             <option value="${d.fcf}">Last fiscal year: ${fmtMoneyCompact(d.fcf)}</option>
+            ${d.fcfTtm != null && d.fcfTtmEnd !== d.fiscalYearEnd ? `<option value="${d.fcfTtm}">Trailing 12 months to ${esc(d.fcfTtmEnd)}: ${fmtMoneyCompact(d.fcfTtm)}</option>` : ""}
             ${d.fcfAvg3 ? `<option value="${d.fcfAvg3}">3-year average: ${fmtMoneyCompact(d.fcfAvg3)}</option>` : ""}
           </select>
         </label>
