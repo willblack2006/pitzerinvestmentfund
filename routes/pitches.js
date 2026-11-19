@@ -1,6 +1,6 @@
 const express = require("express");
 const db = require("../db");
-const { requireSignedIn } = require("../middleware/auth");
+const { requireSignedIn, optionalMember } = require("../middleware/auth");
 const { getSettings } = require("../lib/settings");
 const { latestPrices } = require("../lib/prices");
 const { notify } = require("../lib/notify");
@@ -69,19 +69,31 @@ function tally(pitchId) {
   };
 }
 
-router.get("/pitches", (req, res) => {
+// Blind voting: while a vote is open, nobody sees the yes/no split or anyone's comment until
+// they have voted themselves (so early votes don't anchor later ones). Closed pitches show all.
+function viewTally(pitchId, status, member) {
+  const t = tally(pitchId);
+  const voted = !!member && t.votes.some((v) => v.memberId === member.id);
+  if (status !== "voting" || voted) return { ...t, blind: false };
+  return {
+    votes: [], counts: null, total: t.total, yesPct: null, quorum: t.quorum, thresholdPct: t.thresholdPct,
+    quorumMet: t.quorumMet, passing: null, blind: true,
+  };
+}
+
+router.get("/pitches", optionalMember, (req, res) => {
   const rows = db.prepare("SELECT * FROM pitches ORDER BY CASE status WHEN 'voting' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, updatedAt DESC").all();
   res.json(rows.map((p) => {
-    const t = tally(p.id);
-    return { ...p, voteCounts: t.counts, voteTotal: t.total, passing: t.passing };
+    const t = viewTally(p.id, p.status, req.member);
+    return { ...p, voteCounts: t.counts, voteTotal: t.total, passing: t.passing, blind: t.blind };
   }));
 });
 
-router.get("/pitches/:id", async (req, res) => {
+router.get("/pitches/:id", optionalMember, async (req, res) => {
   const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
   if (!p) return res.status(404).json({ error: "Pitch not found." });
   const prices = await latestPrices([p.symbol]);
-  res.json({ ...p, tally: tally(p.id), currentPrice: prices[p.symbol]?.price ?? null });
+  res.json({ ...p, tally: viewTally(p.id, p.status, req.member), currentPrice: prices[p.symbol]?.price ?? null });
 });
 
 // What this trade would do to position, sector and cash weights and the policy limits.
@@ -147,7 +159,8 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
     const t = tally(p.id);
     if (!t.quorumMet) return res.status(400).json({ error: `Quorum not met: ${t.total} of ${t.quorum} required votes cast.` });
     status = t.passing ? "approved" : "rejected";
-    db.prepare("UPDATE pitches SET status=?, decidedAt=datetime('now'), updatedAt=datetime('now') WHERE id=?").run(status, p.id);
+    const note = String(req.body?.note || "").trim().slice(0, 1000);
+    db.prepare("UPDATE pitches SET status=?, decisionNote=?, decidedAt=datetime('now'), updatedAt=datetime('now') WHERE id=?").run(status, note, p.id);
   } else if (action === "executed" && p.status === "approved") {
     status = "executed";
     db.prepare("UPDATE pitches SET status='executed', updatedAt=datetime('now') WHERE id=?").run(p.id);
@@ -170,9 +183,9 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
   } else if (["approved", "rejected", "executed"].includes(status)) {
     const voters = db.prepare("SELECT memberId FROM votes WHERE pitchId = ?").all(p.id).map((v) => v.memberId);
     const what = status === "executed" ? "was carried out in the real fund" : `was ${status}`;
-    notify([authorIdOf(p), ...voters].filter((id) => id != null), { type: "pitchResult", title: `${pitchLabel(p)} ${what}`, body: status === "executed" ? "" : `${tally(p.id).counts.yes} yes, ${tally(p.id).counts.no} no.`, link }, { except: req.member.id });
+    notify([authorIdOf(p), ...voters].filter((id) => id != null), { type: "pitchResult", title: `${pitchLabel(p)} ${what}`, body: status === "executed" ? "" : `${tally(p.id).counts.yes} yes, ${tally(p.id).counts.no} no.${action === "close" && req.body?.note ? ` ${String(req.body.note).trim().slice(0, 200)}` : ""}`, link }, { except: req.member.id });
   }
-  res.json({ ...db.prepare("SELECT * FROM pitches WHERE id = ?").get(p.id), tally: tally(p.id) });
+  res.json({ ...db.prepare("SELECT * FROM pitches WHERE id = ?").get(p.id), tally: viewTally(p.id, status, req.member) });
 });
 
 router.post("/pitches/:id/vote", requireSignedIn, (req, res) => {
@@ -181,11 +194,12 @@ router.post("/pitches/:id/vote", requireSignedIn, (req, res) => {
   if (p.status !== "voting") return res.status(409).json({ error: "Voting isn't open on this pitch." });
   const { vote, comment = "" } = req.body || {};
   if (!["yes", "no", "abstain"].includes(vote)) return res.status(400).json({ error: "Vote must be yes, no or abstain." });
+  if (vote === "no" && String(comment).trim().length < 5) return res.status(400).json({ error: "Say why you're voting no, in a few words, so the author can answer it." });
   db.prepare(`
     INSERT INTO votes (pitchId, memberId, vote, comment) VALUES (?, ?, ?, ?)
     ON CONFLICT(pitchId, memberId) DO UPDATE SET vote = excluded.vote, comment = excluded.comment, createdAt = datetime('now')
   `).run(p.id, req.member.id, vote, String(comment).slice(0, 1000));
-  res.json(tally(p.id));
+  res.json(viewTally(p.id, p.status, req.member));
 });
 
 router.delete("/pitches/:id", requireSignedIn, (req, res) => {

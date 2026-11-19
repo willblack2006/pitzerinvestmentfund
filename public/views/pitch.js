@@ -116,24 +116,37 @@ function votePanel(p) {
   const member = currentMember();
   const mine = member && t.votes.find((v) => v.memberId === member.id);
   const pct = (n) => (t.total ? (n / t.total) * 100 : 0);
-  return `
-    <section class="panel vote-panel" aria-labelledby="vote-h">
-      <h3 id="vote-h">Investment committee vote</h3>
-      <div class="tally-bar" aria-hidden="true"><span class="t-yes" style="width:${pct(t.counts.yes)}%"></span><span class="t-no" style="width:${pct(t.counts.no)}%"></span><span class="t-abs" style="width:${pct(t.counts.abstain)}%"></span></div>
-      <p><strong>${t.counts.yes}</strong> yes · <strong>${t.counts.no}</strong> no · <strong>${t.counts.abstain}</strong> abstain
-        <span class="muted small">(${t.yesPct.toFixed(0)}% of decisive votes)</span></p>
-      <p class="small ${t.quorumMet ? "" : "tone-warn"}">Rules: more than ${t.thresholdPct}% yes of yes+no votes, with at least ${t.quorum} votes cast. ${t.quorumMet ? (t.passing ? `<span class="tone-good">Currently passing.</span>` : `<span class="tone-bad">Currently failing.</span>`) : `Quorum not yet met (${t.total}/${t.quorum}).`}</p>
-      ${p.status === "voting" ? (member ? `
+  const rules = `Rules: more than ${t.thresholdPct}% yes of yes+no votes, with at least ${t.quorum} votes cast.`;
+  const canClose = member && (member.isAdmin || member.canTrade);
+  const form = p.status === "voting" ? (member ? `
         <form id="voteForm" class="vote-form">
           <fieldset><legend class="small">Your vote, ${esc(member.name)}${mine ? ` (currently <strong>${esc(mine.vote)}</strong>)` : ""}</legend>
             <div class="seg">
               ${["yes", "no", "abstain"].map((v) => `<label class="seg-opt"><input type="radio" name="vote" value="${v}" ${mine?.vote === v ? "checked" : ""} required /> <span>${v[0].toUpperCase() + v.slice(1)}</span></label>`).join("")}
             </div>
           </fieldset>
-          <label class="field-block small">Comment (optional) <input name="comment" value="${esc(mine?.comment || "")}" maxlength="1000" placeholder="Why you voted this way" /></label>
+          <label class="field-block small">Comment <span class="muted">(required for a no)</span> <input name="comment" value="${esc(mine?.comment || "")}" maxlength="1000" placeholder="Why you voted this way" /></label>
           <button class="btn btn-primary btn-sm">${mine ? "Change vote" : "Cast vote"}</button>
-        </form>` : `<p><button type="button" class="btn btn-primary btn-sm" data-signin>Sign in to vote</button></p>`) : ""}
+        </form>` : `<p><button type="button" class="btn btn-primary btn-sm" data-signin>Sign in to vote</button></p>`) : "";
+  const closeNote = p.status === "voting" && canClose ? `<label class="field-block small">Decision note when closing <span class="muted">(optional, saved with the result)</span><input id="decisionNote" maxlength="1000" placeholder="e.g. Approved at half size until the next earnings report" /></label>` : "";
+  if (t.blind) return `
+    <section class="panel vote-panel" aria-labelledby="vote-h">
+      <h3 id="vote-h">Investment committee vote</h3>
+      <p><strong>${t.total}</strong> of ${t.quorum} needed votes cast.</p>
+      <p class="small muted">The split and everyone's comments stay hidden until you vote, so early votes don't sway later ones. ${rules}</p>
+      ${form}${closeNote}
+    </section>`;
+  return `
+    <section class="panel vote-panel" aria-labelledby="vote-h">
+      <h3 id="vote-h">Investment committee vote</h3>
+      <div class="tally-bar" aria-hidden="true"><span class="t-yes" style="width:${pct(t.counts.yes)}%"></span><span class="t-no" style="width:${pct(t.counts.no)}%"></span><span class="t-abs" style="width:${pct(t.counts.abstain)}%"></span></div>
+      <p><strong>${t.counts.yes}</strong> yes · <strong>${t.counts.no}</strong> no · <strong>${t.counts.abstain}</strong> abstain
+        <span class="muted small">(${t.yesPct.toFixed(0)}% of decisive votes)</span></p>
+      <p class="small ${t.quorumMet ? "" : "tone-warn"}">${rules} ${t.quorumMet ? (t.passing ? `<span class="tone-good">Currently passing.</span>` : `<span class="tone-bad">Currently failing.</span>`) : `Quorum not yet met (${t.total}/${t.quorum}).`}</p>
+      ${form}
       ${t.votes.length ? `<ul class="vote-list">${t.votes.map((v) => `<li><span class="vote-chip v-${esc(v.vote)}">${esc(v.vote)}</span> <strong>${esc(v.name)}</strong>${v.comment ? ` <span class="muted small">(${esc(v.comment)})</span>` : ""}</li>`).join("")}</ul>` : ""}
+      ${closeNote}
+      ${p.decisionNote ? `<p class="small"><strong>Decision note:</strong> ${esc(p.decisionNote)}</p>` : ""}
     </section>`;
 }
 
@@ -304,7 +317,7 @@ export async function mount(container, params) {
       if (!ok) return;
     }
     try {
-      const r = await api(`/api/pitches/${p.id}/status`, { method: "POST", body: JSON.stringify({ action }) });
+      const r = await api(`/api/pitches/${p.id}/status`, { method: "POST", body: JSON.stringify({ action, note: action === "close" ? el("decisionNote")?.value || "" : undefined }) });
       toast(`Pitch is now ${r.status}.`, { type: "success" });
       mount(container, params);
     } catch (err) {
@@ -325,6 +338,7 @@ export async function mount(container, params) {
     e.preventDefault();
     const f = new FormData(e.target);
     if (!f.get("vote")) { toast("Choose yes, no or abstain.", { type: "error" }); return; }
+    if (f.get("vote") === "no" && String(f.get("comment") || "").trim().length < 5) { toast("Say why you're voting no, in a few words.", { type: "error" }); return; }
     try {
       await api(`/api/pitches/${p.id}/vote`, { method: "POST", body: JSON.stringify({ vote: f.get("vote"), comment: f.get("comment") }) });
       toast("Vote recorded.", { type: "success" });
