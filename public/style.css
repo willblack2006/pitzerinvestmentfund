@@ -1107,6 +1107,7 @@ select { max-width: 100%; }
 .brief-grid { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 16px; padding: 18px var(--gutter) 32px; align-items: start; }
 .brief-main, .brief-side { display: grid; gap: 16px; min-width: 0; }
 .brief-main > div:empty, .brief-side > div:empty { display: none; }
+.brief-main > .notice { margin: 0; } /* the grid already pads by --gutter */
 /* One column: interleave so the portfolio and what's coming sit above the long story list. */
 @media (max-width: 960px) {
   .brief-grid { grid-template-columns: 1fr; }

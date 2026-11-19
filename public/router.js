@@ -137,6 +137,9 @@ export function initRouter(routeMap) {
   // Move focus to the new page's heading so keyboard and screen-reader users land on the
   // content (not left at the top of the document) and hear which page loaded.
   function focusHeading() {
+    // Pages title themselves with an h2 (the topbar is the h1-less shell); expose it as the page's level-1 heading.
+    const title = view.querySelector("h2");
+    if (title && !view.querySelector("h1")) title.setAttribute("aria-level", "1");
     if (firstRender) { firstRender = false; return; }
     const h = view.querySelector("h2");
     if (h) {
