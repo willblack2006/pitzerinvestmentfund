@@ -37,3 +37,18 @@ test("requestAge records the oldest cached row a request used", async () => {
   });
   assert.strictEqual(store.oldest, "2026-01-01T00:00:00.000Z");
 });
+
+test("callTool reports the age of cached rows a direct-source tool used", async () => {
+  const tools = require("../lib/agents/tools");
+  tools.TOOLS.t_direct = { name: "t_direct", run: async () => { await cached("t:age", 60, "test", async () => ({})); return { data: {}, source_url: null, as_of: "now", cached: null }; } };
+  const out = await tools.callTool("t_direct", {});
+  assert.strictEqual(out.as_of, "2026-01-01T00:00:00.000Z");
+  assert.strictEqual(out.cached, true);
+  delete tools.TOOLS.t_direct;
+});
+
+test("a DCF with negative starting FCF is not computed", () => {
+  const { dcfValue, workbench } = require("../lib/dcf");
+  assert.strictEqual(dcfValue({ fcf: -50, g: 0.1, gT: 0.025, r: 0.09, shares: 10 }), null);
+  assert.match(workbench({ fcf: -50, shares: 10 }, { g: 0.1, gT: 0.025, r: 0.09 }).error, /not positive/);
+});

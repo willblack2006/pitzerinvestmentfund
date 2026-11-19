@@ -288,6 +288,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_thirteenf_positions_period ON thirteenf_positions(period, cusip);
 `);
 
+// Ledger lookups by ticker (a company's trades, its dividends) and by type (realized gain,
+// dividend totals) scanned the whole table.
+db.exec(`
+  CREATE INDEX IF NOT EXISTS transactions_symbol ON transactions (symbol, date);
+  CREATE INDEX IF NOT EXISTS transactions_type ON transactions (type, date);
+`);
+
 // Dividends the fund is owed or has received, one row per holding per ex-dividend date,
 // logged automatically from the date holdings were last reconciled with Schwab (lib/dividends.js).
 // status: expected (ex-date passed, not yet confirmed) | received (recorded as a dividend
