@@ -225,3 +225,10 @@ Format:
 - New `tripwires` table, `lib/tripwires.js` (pure `evaluate` + `check`), `routes/tripwires.js`, panel on Research > Thesis. Kinds: price below/above, review-by date, custom (marked by hand). `check()` runs every 5 min in the scheduler quick loop and on `/api/alerts` and `/api/tripwires`; a trip notifies all members once (type `tripwire`) and shows under "Exit tripwires" in Needs attention until someone re-arms or removes it.
 - Meeting brief already existed (Alerts page), so no separate agenda page was built.
 - Price tripwires could not be seen tripping in the sandbox (no Yahoo access); date ones are covered by an API test.
+
+- Not done at the time: CSP, AI rate limits, async scrypt (all added below).
+
+### Follow-up (same day)
+- Password hashing/verification in `routes/auth.js` is async (`hashSecretAsync`/`verifySecretAsync`); setup, join and invite re-check state after hashing so concurrent requests can't both win.
+- `requireAi` caps AI POSTs at 60/member/hour (`AI_RATE_PER_HOUR`), via `consume()` in `middleware/rateLimit.js`.
+- Content-Security-Policy in `server.js`: scripts only from self + cdn.jsdelivr.net, no inline scripts. Don't add inline `<script>` or `onclick=` attributes (use listeners); a new external host needs adding to the CSP. Inline styles are still allowed.

@@ -53,6 +53,17 @@ app.use((req, res, next) => {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
+    // Scripts only from this site and the one CDN that serves the chart libraries; no inline
+    // scripts, no plugins, no framing. Styles allow inline (the UI sets some style attributes).
+    "Content-Security-Policy": [
+      "default-src 'self'",
+      "script-src 'self' https://cdn.jsdelivr.net",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: blob:",
+      "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.jsdelivr.net data: blob:",
+      "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+    ].join("; "),
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
     ...(process.env.NODE_ENV === "production" || process.env.RENDER ? { "Strict-Transport-Security": "max-age=15552000" } : {}),
   });

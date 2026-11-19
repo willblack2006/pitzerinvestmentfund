@@ -34,6 +34,19 @@ function verifySecret(secret, stored) {
   return safeEqual(crypto.scryptSync(String(secret), salt, 32).toString("hex"), hash);
 }
 
+// Async versions for request handlers: scrypt is deliberately slow (tens of milliseconds), and
+// the sync calls above hold up every other member's request while they run.
+const scryptAsync = (secret, salt) => new Promise((resolve, reject) => crypto.scrypt(String(secret), salt, 32, (err, key) => (err ? reject(err) : resolve(key.toString("hex")))));
+async function hashSecretAsync(secret) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return `${salt}:${await scryptAsync(secret, salt)}`;
+}
+async function verifySecretAsync(secret, stored) {
+  const [salt, hash] = String(stored || "").split(":");
+  if (!salt || !hash) return false;
+  return safeEqual(await scryptAsync(secret, salt), hash);
+}
+
 function readCookie(req, name) {
   const header = req.headers.cookie || "";
   for (const part of header.split(";")) {
@@ -106,9 +119,15 @@ function requireTrader(req, res, next) {
   next();
 }
 
+const AI_PER_HOUR = () => Math.max(1, parseInt(process.env.AI_RATE_PER_HOUR, 10) || 60);
 function requireAi(req, res, next) {
   if (!attach(req)) return res.status(401).json({ error: "Sign in to do this.", code: "signin_required" });
   if (!(req.member.canUseAi || req.member.isAdmin)) return res.status(403).json({ error: "AI features are turned on per member by an admin. Ask an admin for access in Settings.", code: "ai_required" });
+  // Anything that starts an AI run (POST) is capped per member per hour, on top of the fund-wide
+  // spending cap, so one runaway page or script can't use up everyone's budget.
+  if (req.method !== "GET" && !require("./rateLimit").consume(`ai|${req.member.id}`, AI_PER_HOUR(), 60 * 60 * 1000)) {
+    return res.status(429).json({ error: "You've used a lot of AI requests this hour. Try again a little later.", code: "ai_rate_limited" });
+  }
   next();
 }
 
@@ -133,7 +152,7 @@ function logActivity(req, action, detail = {}) {
 }
 
 module.exports = {
-  EDIT_PASSWORD, SESSION_COOKIE, safeEqual, sha256, hashSecret, verifySecret, readCookie,
+  EDIT_PASSWORD, SESSION_COOKIE, safeEqual, sha256, hashSecret, verifySecret, hashSecretAsync, verifySecretAsync, readCookie,
   setSessionCookie, clearSessionCookie, createSession, endSession, publicMember,
   memberFromRequest, optionalMember, requireSignedIn, requireTrader, requireAi, requireAdmin, requireAppHeader, logActivity,
 };
