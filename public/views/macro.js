@@ -1,3 +1,4 @@
+import { regimeHtml, loadRegime } from "./macroRegime.js";
 import { el, esc, api, pageHead, subTabs, errorState, bindRetry, skeleton } from "../shared.js";
 import { MARKET_TABS } from "./insiders.js";
 import { sparkline, destroyAllTv } from "../tvchart.js";
@@ -70,12 +71,14 @@ export async function mount(container) {
   container.innerHTML = `
     ${subTabs(MARKET_TABS, "#/macro")}
     ${pageHead("Macro backdrop", "The economic context for every pitch: rates, inflation, and jobs. Source: Federal Reserve Economic Data (FRED).")}
+    ${regimeHtml()}
     <div class="macro-grid">
       ${Object.entries(series).map(([key, s]) => card(key, s)).join("")}
     </div>
     <p class="muted small page-pad">Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts<span class="sr-only"> (opens in a new tab)</span></a>.</p>
   `;
 
+  loadRegime();
   Object.entries(series).forEach(([key, s]) => {
     if (s) sparkline(el(`spark-${key}`), { times: s.observations.map((o) => o.date), values: s.observations.map((o) => o.value) });
   });
