@@ -318,4 +318,5 @@ router.get("/cockpit/position/:symbol", async (req, res) => {
   });
 });
 
+router.autoMount = true;
 module.exports = router;
