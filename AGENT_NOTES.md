@@ -12,7 +12,7 @@ Format:
 
 ## 2026-11-19, Claude (member onboarding: Start here path, beginner glossary)
 - Did: `#/learn` "Start here": 7 short lessons (`public/learnContent.js`), each tied to the page where the idea lives, with glossary "?" terms, an optional Ask PIF button, and a checklist that fills in from what the member actually did (`lib/learnProgress.js`, `GET /api/learn/progress`: watchlist/follow, note, paper order, paper order with reason plus target or stop, pitch, vote). Lessons marked read are the pref `learnRead`; the quiet one-line reminder on Today is hidden for good by `learnHidden` (no notifications, no alerts). 21 beginner glossary terms (market cap, weight, cost basis, EPS, free cash flow, thesis, catalyst...), and the Glossary page now has search. Account menu has "Start here". `test/learn.test.js`.
-- Not done / ideas: a first-pitch wizard, quizzes, and the paper page explaining each rule inline.
+- Round 2 (same branch): two-question practice quiz per lesson (`QUIZ` in `learnContent.js`, client-side, nothing saved), a "Why these rules?" explainer on the Paper page built from the season's own numbers (`public/paperExplain.js`), and a six-step first-pitch guide above the new-pitch form (`FIRST_PITCH`). Not done: a full wizard that blocks fields, graded quizzes.
 - Gotchas: `learnSummary` counts lessons read plus auto-detected actions (13 steps); add an action key in `learnProgress.js` and the lesson together (the test checks the keys).
 
 ## 2026-11-19, Claude (merged the AI PRs #10-#15 to main, integration test)

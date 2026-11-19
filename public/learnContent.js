@@ -78,7 +78,7 @@ export const LESSONS = [
       "Give bull, base and bear price targets and a position size. The price at pitch time is saved so the call can be graded later.",
     ],
     terms: ["thesis", "catalyst", "scenarios", "priceTarget", "weight"],
-    actions: [{ label: "Start a pitch (drafts are private until you open voting)", href: "#/pitches/new", done: "pitch" }],
+    actions: [{ label: "Start a pitch (it only goes to a vote when you open voting)", href: "#/pitches/new", done: "pitch" }],
     ask: "Review what makes a strong stock pitch, using the fund's template: thesis, catalysts, risks and valuation.",
   },
   {
@@ -106,3 +106,46 @@ export function learnSummary(done = {}, read = []) {
   const next = LESSONS.find((l) => !read.includes(l.id) || l.actions.some((a) => a.done && !done[a.done]));
   return { count, total, pct: Math.round((count / total) * 100), finished: count === total, next };
 }
+
+// Two quick checks per lesson. Answers are explained either way; nothing is graded or stored,
+// so it's practice, not a test. `a` is the index of the right option.
+export const QUIZ = {
+  fund: [
+    { q: "A stock is 30% of the fund and falls 20%. About how much does the fund lose from that stock alone?", o: ["20%", "6%", "30%"], a: 1, why: "A 20% fall on 30% of the portfolio is 0.30 × 20% = 6%. Weight turns a stock's move into the fund's move." },
+    { q: "The fund returned 8% while its benchmark returned 12%. What does that say?", o: ["The fund did well because it's positive", "Buying the index would have done better", "Nothing, the two can't be compared"], a: 1, why: "The benchmark is the do-nothing alternative. Trailing it means the fund's choices cost it, at least over this period." },
+  ],
+  company: [
+    { q: "A company's profit is rising but its free cash flow is negative. What's the best first question?", o: ["Where is the cash going?", "Nothing, profit is what matters", "Is the stock price up?"], a: 0, why: "Profit can include items that never become cash. Check capital spending, unpaid customers and stock-based pay before trusting the earnings." },
+    { q: "Which filing reports a material event between quarterly reports?", o: ["10-K", "8-K", "13F"], a: 1, why: "An 8-K covers events such as earnings, an executive leaving or an auditor change. The 10-K is the annual report; a 13F lists a big manager's holdings." },
+  ],
+  value: [
+    { q: "A stock has a P/E of 60 while its peers sit near 20. Does that make it a bad buy?", o: ["Yes, always", "Not by itself: it means growth is expected", "No, P/E doesn't matter"], a: 1, why: "A high P/E says the market expects strong growth. The question is whether that growth is believable, which is what a reverse DCF checks." },
+    { q: "In a DCF, which change usually moves the answer most?", o: ["Small changes to growth or the discount rate", "The company's logo", "The day of the week"], a: 0, why: "A DCF is very sensitive to its assumptions. Read the sensitivity grid, not a single number." },
+  ],
+  risk: [
+    { q: "Two holdings are highly correlated. What does that do for diversification?", o: ["Helps a lot", "Helps little: they tend to fall together", "Nothing either way, it only affects returns"], a: 1, why: "Diversification works when holdings don't move together. Two highly correlated stocks are close to one bet." },
+    { q: "Max drawdown measures...", o: ["The largest fall from a peak to a later low", "The average daily loss", "The size of the biggest position"], a: 0, why: "It shows the worst ride an owner would have sat through, which is often more telling than the average return." },
+  ],
+  paper: [
+    { q: "When is the best time to decide your stop price?", o: ["After the stock falls", "Before you buy", "Never, stops are for professionals"], a: 1, why: "Decided before, a stop is a plan. Decided after a loss, it's usually a hope. Write it down when you're calm." },
+    { q: "After a few weeks your paper portfolio is up 5%. What's the most useful thing to check?", o: ["Whether your reasons actually played out", "How to brag on the leaderboard", "Nothing; up is up"], a: 0, why: "You learn from whether the reason was right. A gain for the wrong reason is luck you can't repeat." },
+  ],
+  pitch: [
+    { q: "Which part of a pitch should you write first?", o: ["The bull case", "The bear case and risks", "The price target"], a: 1, why: "Starting with what could go wrong guards against falling in love with the idea and shows how much you could lose." },
+    { q: "Which catalyst is the most useful in a pitch?", o: ["\"The company is great\"", "A dated event, such as an earnings report or a product launch", "\"The market will realize it eventually\""], a: 1, why: "A catalyst is a specific event that could change minds. Without one, a cheap stock can stay cheap for years." },
+  ],
+  vote: [
+    { q: "A pitch you voted for is up 12% in two months. What does that prove?", o: ["The process is good", "Very little: one call is a small sample", "The benchmark was wrong"], a: 1, why: "Judge a process over many calls. Compare each result with the benchmark over the same days, not with zero." },
+    { q: "Which vote helps the pitch's author learn the most?", o: ["Yes", "No", "A yes or no with a one-line reason"], a: 2, why: "The reason is what the author can act on. It's also what you can look at later to see whether you were right for the right reason." },
+  ],
+};
+
+// Shown above the pitch form for a new pitch: the order that works for a first pitch.
+export const FIRST_PITCH = [
+  ["Check the basics", "Open the company's Research page first: what it sells, whether sales and free cash flow are growing, and what the Valuation tab says the price assumes."],
+  ["Write the risks first", "What would make you wrong? What is the first number you'd watch to find out? If you can't answer, you're not ready to pitch."],
+  ["Thesis in three sentences", "What does the market believe, what do you believe instead, and why now? If it needs a page, it isn't clear yet."],
+  ["Add dated catalysts", "Events in the next 6 to 18 months that could change minds. \"It's undervalued\" is not a catalyst."],
+  ["Set bear, base and bull prices", "Use the DCF's sensitivity grid for a sense of the range. Check the reward-to-risk shown under the targets: if you could lose as much as you could gain, think again."],
+  ["Size it, then write the pre-mortem", "Keep the size inside the policy limits. Then imagine it lost 40% a year from now and write what happened."],
+];

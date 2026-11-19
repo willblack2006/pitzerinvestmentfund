@@ -49,3 +49,22 @@ test("API: learn progress follows what the member did; prefs validate", async ()
     assert.equal((await s.api("/api/prefs", { method: "PUT", auth: true, body: { learnHidden: "yes" } })).status, 400);
   } finally { await s.stop(); }
 });
+
+test("Learn: every lesson has a quiz whose answers exist; paper rules and first-pitch guide read cleanly", async () => {
+  const { LESSONS, QUIZ, FIRST_PITCH } = await import("../public/learnContent.js");
+  const { ruleExplanations } = await import("../public/paperExplain.js");
+  for (const l of LESSONS) {
+    assert.ok(QUIZ[l.id]?.length >= 2, `${l.id} needs a quiz`);
+    for (const q of QUIZ[l.id]) {
+      assert.ok(q.a >= 0 && q.a < q.o.length, `${l.id}: bad answer index`);
+      assert.ok(q.why.length > 20);
+    }
+  }
+  assert.equal(FIRST_PITCH.length, 6);
+  const rules = ruleExplanations({ feeBps: 10, minHoldings: 5, maxPositionPct: 25, minPrice: 5, minMarketCap: 3e8 });
+  const titles = rules.map((r) => r[0]).join("|");
+  assert.match(titles, /0\.10% a trade/);
+  assert.match(titles, /At least 5 holdings/);
+  assert.match(titles, /25% in one stock/);
+  assert.match(titles, /\$5 and \$300 million/);
+});

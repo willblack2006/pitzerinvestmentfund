@@ -1549,3 +1549,12 @@ body.ct-max-open { overflow: hidden; }
 .learn-term { white-space: nowrap; margin-right: 8px; }
 .learn-nudge { display: flex; justify-content: space-between; gap: var(--sp-3); align-items: center; margin: 0 0 var(--sp-3); }
 .glossary-search { display: grid; gap: 4px; max-width: 360px; margin-bottom: var(--sp-3); font-weight: 600; }
+.paper-why-list dt { font-weight: 700; margin-top: 10px; }
+.paper-why-list dd { margin: 2px 0 0; max-width: 70ch; }
+.learn-quiz { margin: var(--sp-3) 0; display: grid; gap: var(--sp-3); }
+.learn-q { border: 1px solid var(--border); border-radius: var(--r-md, 8px); padding: var(--sp-3); min-width: 0; }
+.learn-opt { margin: 6px 6px 0 0; }
+.learn-q legend { font-weight: 600; padding: 0 4px; }
+.learn-q .learn-why { margin: 8px 0 0; }
+.learn-opt.is-right { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.learn-opt.is-wrong { border-style: dashed; opacity: .75; }
