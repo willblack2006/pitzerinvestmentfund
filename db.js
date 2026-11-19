@@ -607,4 +607,5 @@ if (count === 0) {
   console.log(`Seeded ${seed.length} positions.`);
 }
 
+db.path = dbPath; // where the file lives (backups and the migration use it)
 module.exports = db;

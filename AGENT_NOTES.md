@@ -166,3 +166,11 @@ Format:
 - Did: added `CLAUDE.md`, `AGENTS.md`, this file. No git changes — repo already had ~45 uncommitted files before this.
 - In progress / unfinished: those ~45 pre-existing uncommitted changes (congressTrades, govContracts, paperTrading features and related test/public/route files) are still uncommitted — review and commit before heavy multi-agent use. `codex-output/` folder mentioned in CLAUDE.md/AGENTS.md was not created — create it when Codex first needs it.
 - Gotchas: repo has both `render.yaml` (live deploy, Render) and a leftover `.vercel/` folder (not current) — don't treat `.vercel/` as live.
+
+## 2026-11-19 — Reliability/security hardening (Claude)
+- Fixed the one failing test: `/api/research/:symbol/bars` now returns `visibleFrom`/`intraday` even when Yahoo errors (that test failed offline, which is why CI was red on every PR).
+- `lib/backup.js`: daily `VACUUM INTO` snapshot named `auto-pif-<time>.db` in `<db folder>/backups` (Render: `/data/backups`), newest 3 kept (`BACKUP_KEEP`, `BACKUP_DIR` override). Hand-made backups are never pruned. Run from the scheduler tick. Each is ~50 MB, so watch the 1 GB Render disk.
+- Scheduler jobs skip a round if the previous run is still going; expired sessions are purged daily.
+- `/healthz` (no external calls) replaces `/api/positions` as the Render health check; SIGTERM/SIGINT now drain and checkpoint the WAL.
+- HSTS + Permissions-Policy headers; login-limiter map is swept; first-admin setup refuses to run on Render/production with the default EDIT_PASSWORD.
+- Not done: CSP (the pages use inline scripts/styles), per-route rate limits on AI endpoints (the AI spending cap already bounds cost), moving scrypt off the event loop.

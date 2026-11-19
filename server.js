@@ -42,6 +42,10 @@ const path = require("path");
 const PORT = process.env.PORT || 3000;
 
 const app = express();
+// Cheap liveness check for the host's health probe: no data-source calls, one trivial query.
+app.get("/healthz", (req, res) => {
+  try { require("./db").prepare("SELECT 1").get(); res.json({ ok: true }); } catch { res.status(503).json({ ok: false }); }
+});
 app.set("trust proxy", 1); // Render/most hosts sit behind one proxy; needed for per-IP rate limits
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -49,6 +53,8 @@ app.use((req, res, next) => {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    ...(process.env.NODE_ENV === "production" || process.env.RENDER ? { "Strict-Transport-Security": "max-age=15552000" } : {}),
   });
   next();
 });
@@ -123,12 +129,25 @@ if (require.main === module) {
   process.on("unhandledRejection", (err) => console.error("[unhandled rejection]", err?.stack || err));
   const interrupted = require("./lib/agents/runs").markInterrupted();
   if (interrupted) console.log(`[agents] ${interrupted} run(s) interrupted by the last restart marked failed`);
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     // Agent tools call the app's own read-only endpoints in-process.
     require("./lib/agents/tools").setBaseUrl(`http://127.0.0.1:${PORT}`);
     console.log(`PIF tracker running on http://localhost:${PORT}`);
     if (process.env.DISABLE_SCHEDULER !== "true") scheduler.start();
   });
+  // A deploy sends SIGTERM: finish in-flight requests, fold the write-ahead log back into the
+  // database file, then exit (and force it after 10s so a stuck connection can't block a deploy).
+  const shutdown = (signal) => {
+    console.log(`[server] ${signal} received, shutting down`);
+    setTimeout(() => process.exit(1), 10000).unref();
+    server.close(() => {
+      try { syncDb.pragma("wal_checkpoint(TRUNCATE)"); } catch (err) { console.error("[server] checkpoint failed:", err.message); }
+      process.exit(0);
+    });
+    server.closeIdleConnections?.();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 module.exports = app;

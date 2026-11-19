@@ -137,7 +137,8 @@ router.get("/research/:symbol/bars", async (req, res) => {
     const bars = await yahoo.getChart(symbol, range, interval);
     res.json({ symbol, frame, range, interval, visibleFrom: frameStart(back), intraday: !interval.endsWith("d") && !interval.endsWith("wk") && !interval.endsWith("mo"), bars });
   } catch (e) {
-    res.json({ symbol, frame, range, interval, bars: [], error: e.message });
+    // Still say where the window starts, so the chart doesn't have to special-case an outage.
+    res.json({ symbol, frame, range, interval, visibleFrom: frameStart(back), intraday: !interval.endsWith("d") && !interval.endsWith("wk") && !interval.endsWith("mo"), bars: [], error: e.message });
   }
 });
 

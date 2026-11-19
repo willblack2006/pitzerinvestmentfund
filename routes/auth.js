@@ -24,6 +24,11 @@ router.get("/auth/session", optionalMember, (req, res) => {
 // once any admin exists.
 router.post("/auth/setup", loginLimiter("setup"), (req, res) => {
   if (adminCount() > 0) return res.status(409).json({ error: "The first admin already exists. Ask an admin for an invite." });
+  // The built-in default password is public (it's in the source), so on a real deployment it
+  // can't be what protects creating the first admin.
+  if (process.env.EDIT_PASSWORD === undefined && (process.env.NODE_ENV === "production" || process.env.RENDER)) {
+    return res.status(503).json({ error: "Set the EDIT_PASSWORD environment variable on the server, then restart, before creating the first admin." });
+  }
   const { setupPassword, name, email, password } = req.body || {};
   if (typeof setupPassword !== "string" || !safeEqual(setupPassword, EDIT_PASSWORD)) {
     req.loginFailed();

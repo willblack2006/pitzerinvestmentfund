@@ -4,6 +4,9 @@ const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 10;
 const failures = new Map(); // key -> { count, resetAt }
 
+// Entries only expire when the same key is seen again, so sweep the rest now and then.
+setInterval(() => { const now = Date.now(); for (const [k, f] of failures) if (now > f.resetAt) failures.delete(k); }, WINDOW_MS).unref();
+
 function keyFor(req, scope) {
   const ip = req.ip || req.socket?.remoteAddress || "unknown";
   return `${scope}|${ip}`;
