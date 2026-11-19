@@ -90,7 +90,7 @@ export function treemap(container, holdings, opts = {}) {
         const boxes = squarify(groups, { x: 0, y: 0, w, h });
         for (const b of boxes) {
           const head = b.w > 70 && b.h > 44 ? 16 : 0;
-          if (head) headers.push(`<text class="viz-tm-sector" x="${b.x + 4}" y="${b.y + 12}">${esc(fit(b.sector, b.w - 8, 6.4))}</text>`);
+          if (head) headers.push(`<text class="viz-tm-sector" x="${b.x + 4}" y="${b.y + 12}">${esc(fit(b.sector, b.w - 8, 7.8))}</text>`);
           tiles.push(...squarify(b.items, { x: b.x + 1, y: b.y + head + 1, w: b.w - 2, h: b.h - head - 2 }).map((t) => ({ ...t, sectorBox: b })));
         }
       } else {

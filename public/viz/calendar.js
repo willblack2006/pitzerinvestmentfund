@@ -30,16 +30,16 @@ export function returnCalendar(container, days, { benchName = "Benchmark", label
     table,
     draw(w) {
       const left = 26, topPad = 16;
-      const cell = Math.max(10, Math.min(16, Math.floor((w - left) / Math.max(1, weeksAll.length))));
+      const cell = Math.max(10, Math.min(24, Math.floor((w - left) / Math.max(1, weeksAll.length))));
       const fitWeeks = Math.max(1, Math.floor((w - left) / cell));
       const weeks = weeksAll.slice(-fitWeeks);
       const h = topPad + 5 * cell + 6;
-      let months = "", cells = "", lastMonth = "";
+      let months = "", cells = "", lastMonth = "", lastLabelX = -99;
       weeks.forEach((wk, i) => {
         const x = left + i * cell;
         const m = new Date(wk + 4 * DAY).toISOString().slice(0, 7);
         if (m !== lastMonth) {
-          if (i < weeks.length - 1 || !lastMonth) months += `<text x="${x}" y="11" class="viz-axis-label">${esc(fmt.monthYear(m))}</text>`;
+          if (x - lastLabelX >= 44 && x < w - 30) { months += `<text x="${x}" y="11" class="viz-axis-label">${esc(fmt.monthYear(m))}</text>`; lastLabelX = x; }
           lastMonth = m;
         }
         for (let d = 0; d < 5; d++) {
