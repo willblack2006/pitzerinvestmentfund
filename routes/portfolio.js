@@ -11,6 +11,7 @@ const { latestPrices, histories } = require("../lib/prices");
 const { basesFor, PERIODS } = require("../lib/periods");
 const { getSettings } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
+const { portfolioRisk } = require("../lib/portfolioRisk");
 const { benchmarkFor } = require("../lib/prefs");
 
 const router = express.Router();
@@ -154,6 +155,29 @@ router.get("/portfolio/performance", async (req, res) => {
   });
 });
 
+// ---- Portfolio risk: risk contribution, loss measures, drawdown, stress scenarios ----
+
+router.get("/portfolio/risk", async (req, res) => {
+  try {
+    const stored = db.prepare("SELECT symbol, shares, marketValue FROM positions").all();
+    if (!stored.length) return res.json({ risk: null, reason: "No holdings yet." });
+    const symbols = stored.map((p) => p.symbol);
+    const [hist, live, spy, spyLong, growth] = await Promise.all([
+      histories(symbols, "1y"),
+      latestPrices(symbols).catch(() => ({})),
+      yahooSrc.getChart("SPY", "1y", "1d").catch(() => []),
+      yahooSrc.getChart("SPY", "10y", "1d").catch(() => null),
+      yahooSrc.getChart("QQQ", "1y", "1d").catch(() => null),
+    ]);
+    const values = Object.fromEntries(stored.map((p) => [p.symbol, live[p.symbol]?.price ? live[p.symbol].price * p.shares : p.marketValue]));
+    const st = getSettings();
+    const risk = portfolioRisk({ histories: hist, spy, spyLong, growth, values, cash: st.cash || 0, limits: { maxPositionPct: st.maxPositionPct } });
+    res.json({ risk, reason: risk ? null : "Not enough overlapping price history yet." });
+  } catch (e) {
+    res.status(502).json({ error: `Risk is unavailable: ${e.message}` });
+  }
+});
+
 // ---- Time-frame starting prices for the Holdings table ----
 
 // Every frame's base close for every holding in one response, from the 1-year daily
@@ -284,6 +308,13 @@ router.get("/alerts", async (req, res) => {
       });
     }
   }
+
+  try {
+    await require("../lib/tripwires").check();
+    for (const t of db.prepare("SELECT * FROM tripwires WHERE status = 'tripped' ORDER BY trippedAt").all()) {
+      alerts.push({ type: "tripwire", level: "action", symbol: t.symbol, title: `${t.symbol} tripwire: ${require("../lib/tripwires").describe(t)}`, detail: `${t.trippedDetail}${t.note ? ` Why we set it: ${t.note}` : ""} Decide whether to trim, sell or reset it.` });
+    }
+  } catch { /* best-effort */ }
 
   try {
     const alloc = await portfolio.allocation();

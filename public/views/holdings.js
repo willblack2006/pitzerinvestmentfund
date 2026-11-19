@@ -320,6 +320,7 @@ const ATT_GROUPS = {
   insider: { head: "Insider activity", icon: "user" },
   policy: { head: "Policy", icon: "alert" },
   vote: { head: "Open votes", icon: "vote", action: "Cast your vote on each pitch page." },
+  tripwire: { head: "Exit tripwires", icon: "flag" },
   price: { head: "Price alerts", icon: "target" },
   target: { head: "Price targets", icon: "target" },
   short: { head: "Short pressure", icon: "arrow-down" },

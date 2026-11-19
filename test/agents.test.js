@@ -216,7 +216,13 @@ test("flash: an earnings 8-K gets a brief from the press-release exhibit, with q
   const today = new Date().toISOString().slice(0, 10);
   agents.recordEvent({ dedupeKey: "filing:NV1", symbol: "NVDA", type: "8-K", items: "2.02,9.01", asOf: today, sourceUrl: `${folder}/nvda-8k.htm` });
   agents.routeNew();
-  const d = await agents.dispatch();
+  // A big holding's earnings go out on their own (smaller ones wait for the daily digest).
+  const before = db.prepare("SELECT * FROM positions WHERE symbol = 'NVDA'").get();
+  db.prepare("INSERT INTO positions (symbol, shares, marketValue) VALUES ('NVDA', 1, 1e12) ON CONFLICT(symbol) DO UPDATE SET marketValue = 1e12").run();
+  let d;
+  try { d = await agents.dispatch(); } finally {
+    if (before) db.prepare("UPDATE positions SET marketValue = ? WHERE symbol = 'NVDA'").run(before.marketValue); else db.prepare("DELETE FROM positions WHERE symbol = 'NVDA'").run();
+  }
   assert.deepEqual(d, { ran: 1, failed: 0 });
   const run = db.prepare("SELECT * FROM agent_runs WHERE workflow = 'earnings_flash'").get();
   const brief = JSON.parse(run.output);
@@ -229,6 +235,7 @@ test("flash: an earnings 8-K gets a brief from the press-release exhibit, with q
   const notes = db.prepare("SELECT memberId, type, link FROM notifications WHERE type = 'agentBrief'").all();
   assert.deepEqual(notes.map((n) => n.memberId), [Number(admin)], "only members with AI access are notified");
   assert.equal(notes[0].link, `#/agents/runs/${run.id}`);
+  assert.match(brief.alerted, /earnings on a \d+% holding/);
   assert.ok(Number(plain));
 });
 
@@ -267,7 +274,7 @@ test("Ask PIF: answers from tool data, marks sources it actually read, flags unb
   db.exec("DELETE FROM positions");
   db.prepare("INSERT INTO positions (symbol, shares, marketValue) VALUES ('NVDA', 100, 18000), ('MU', 50, 6000)").run();
   let r;
-  try { r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "What's our biggest holding?" }, ctx)); } finally {
+  try { r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "Which holding is biggest across the portfolio?" }, ctx)); } finally {
     db.exec("DELETE FROM positions");
     for (const p of saved) db.prepare(`INSERT INTO positions (${Object.keys(p).join(",")}) VALUES (${Object.keys(p).map(() => "?").join(",")})`).run(...Object.values(p));
   }
@@ -278,7 +285,7 @@ test("Ask PIF: answers from tool data, marks sources it actually read, flags unb
   assert.equal(requests[2].tools.length > 10, true, "the revision turn may call tools");
   assert.equal(r.output.revised, true);
   assert.deepEqual(r.output.unbackedNumbers, ["3x"], "a computed ratio is still flagged for checking");
-  assert.equal(requests[0].tools.length > 10, true, "Ask PIF gets the whole read-only catalog");
+  assert.equal(requests[0].tools.length > 10, true, "Ask PIF gets the fund tools plus the core ones");
   assert.match(requests[0].input[1].content, /Fund holdings \(weight[^\n]*NVDA 75\.0%, MU 25\.0%/, "holdings are in the prompt so the model can route");
   assert.equal(db.prepare("SELECT memberId FROM agent_runs WHERE id = ?").get(r.runId).memberId, m, "billed to the member's daily budget");
 });

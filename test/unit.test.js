@@ -1150,3 +1150,45 @@ test("chart indicators: SMA, EMA, Bollinger, RSI, MACD, ATR, VWAP, Heikin Ashi",
   close(ha[1].open, (ha[0].open + ha[0].close) / 2);
   assert.ok(ha.every((b) => b.high >= Math.max(b.open, b.close) && b.low <= Math.min(b.open, b.close)));
 });
+
+test("backup: daily snapshot, newest few kept, hand-made backups untouched", () => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+  const Database = require("libsql");
+  const { backupIfDue, listBackups } = require("../lib/backup");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pif-backup-"));
+  const dbPath = path.join(dir, "t.db");
+  const db = new Database(dbPath);
+  db.exec("CREATE TABLE a (x); INSERT INTO a VALUES (1)");
+  db.prepare = ((p) => (sql) => p(sql))(db.prepare.bind(db));
+  process.env.BACKUP_DIR = path.join(dir, "b");
+  process.env.BACKUP_KEEP = "2";
+  fs.mkdirSync(process.env.BACKUP_DIR);
+  fs.writeFileSync(path.join(process.env.BACKUP_DIR, "pif-manual.db"), "keep me");
+  const day = 864e5, t0 = Date.parse("2026-01-01T00:00:00Z");
+  assert.equal(backupIfDue(db, dbPath, { now: new Date(t0) }).ran, true);
+  assert.equal(backupIfDue(db, dbPath, { now: new Date(t0 + 1000) }).ran, false, "one per day");
+  for (let i = 1; i <= 3; i++) {
+    const f = path.join(process.env.BACKUP_DIR, listBackups(process.env.BACKUP_DIR).at(-1));
+    fs.utimesSync(f, new Date(t0 - 3 * day), new Date(t0 - 3 * day)); // age the newest so the next is due
+    backupIfDue(db, dbPath, { now: new Date(t0 + i * day) });
+  }
+  assert.equal(listBackups(process.env.BACKUP_DIR).length, 2);
+  assert.ok(fs.existsSync(path.join(process.env.BACKUP_DIR, "pif-manual.db")));
+  const copy = new Database(path.join(process.env.BACKUP_DIR, listBackups(process.env.BACKUP_DIR).at(-1)));
+  assert.equal(copy.prepare("SELECT x FROM a").get().x, 1);
+  delete process.env.BACKUP_DIR; delete process.env.BACKUP_KEEP;
+});
+
+test("rate limit: consume allows up to max per window, then refuses", () => {
+  const { consume } = require("../middleware/rateLimit");
+  const key = `t|${Math.random()}`;
+  assert.deepEqual([1, 2, 3, 4].map(() => consume(key, 3, 60000)), [true, true, true, false]);
+  assert.equal(consume(`${key}x`, 3, 60000), true, "other keys are independent");
+});
+
+test("async password hashing matches the sync format both ways", async () => {
+  const a = require("../middleware/auth");
+  assert.equal(a.verifySecret("correct horse battery", await a.hashSecretAsync("correct horse battery")), true);
+  assert.equal(await a.verifySecretAsync("correct horse battery", a.hashSecret("correct horse battery")), true);
+  assert.equal(await a.verifySecretAsync("wrong", a.hashSecret("right")), false);
+});

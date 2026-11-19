@@ -46,11 +46,11 @@ import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
 export const title = "Alerts";
 
-const ICON_NAME = { price: "target", target: "target", policy: "alert", earnings: "calendar", insider: "user", vote: "vote", short: "arrow-down", revision: "pencil", filingchange: "doc", redflag: "flag", activist: "percent", crowding: "megaphone" };
+const ICON_NAME = { tripwire: "flag", price: "target", target: "target", policy: "alert", earnings: "calendar", insider: "user", vote: "vote", short: "arrow-down", revision: "pencil", filingchange: "doc", redflag: "flag", activist: "percent", crowding: "megaphone" };
 // Icon HTML per alert type (callers drop these straight into markup).
 export const ICON = Object.fromEntries(Object.entries(ICON_NAME).map(([k, n]) => [k, icon(n, { size: 16 })]));
 // Each alert opens the research tab whose panel explains it.
-export const TAB = { earnings: "/street", revision: "/street", insider: "/ownership", activist: "/ownership", target: "/thesis", short: "/risk", filingchange: "/filings", redflag: "/filings" };
+export const TAB = { tripwire: "/thesis", earnings: "/street", revision: "/street", insider: "/ownership", activist: "/ownership", target: "/thesis", short: "/risk", filingchange: "/filings", redflag: "/filings" };
 
 function timeAgo(iso) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);

@@ -3,6 +3,7 @@ import { aiPanelHtml, loadAiPanel } from "../ai.js";
 import { destroyAll } from "../charts.js";
 import { priceTerminalHtml, mountPriceTerminal } from "../priceTerminal.js";
 import { mountMyAlerts } from "../myAlerts.js";
+import { mountTripwires } from "./research/tripwires.js";
 import { openPopover } from "../ui/popover.js";
 import { govContractsPanelHtml, loadGovContracts } from "./govContractsPanel.js";
 import { signalsGlanceHtml, loadSignalsGlance } from "./signalsGlance.js";
@@ -386,6 +387,11 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
             : `<p class="muted">No pitches yet.</p>`}
           <p><a class="btn btn-ghost btn-sm" href="#/pitches/new/${encodeURIComponent(symbol)}">+ Start a pitch</a></p>
         </section>
+        <section class="panel" aria-labelledby="tw-h">
+          <h3 id="tw-h">Exit tripwires</h3>
+          <p class="muted small">Conditions that mean "revisit or sell", written down in advance. Nothing is sent until one trips.</p>
+          <div id="tripwireBox"></div>
+        </section>
         <section class="panel" aria-labelledby="alerts-h">
           <h3 id="alerts-h">Price alerts</h3>
           ${unlocked ? `<p class="pf-sub">Just for me</p><div id="myAlertsBox"></div><p class="pf-sub">For the club <span class="muted small">(everyone sees these on the Alerts page)</span></p>` : ""}
@@ -405,6 +411,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
       </aside>
     </div>`;
 
+  mountTripwires(el("tripwireBox"), { symbol });
   if (unlocked) {
     let draft = null;
     try { draft = localStorage.getItem(`pif_draft_${symbol}`); } catch { /* ignore */ }
@@ -520,7 +527,8 @@ export async function mount(container, params) {
   if (owned) pills.push(`<span class="badge badge-owned">Owned</span>`);
   else if (watched) pills.push(`<span class="badge badge-watch">Watching</span>`);
 
-  const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => k);
+  const PARTIAL_LABELS = { chart: "price chart", quote: "live quote", quoteSummary: "company profile and estimates", peers: "peer comparison", financials: "financial statements", news: "news", sec: "SEC filings", filings: "SEC filings" };
+  const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => PARTIAL_LABELS[k] || k);
 
   container.innerHTML = `
     <div class="page-head research-head">

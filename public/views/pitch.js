@@ -1,4 +1,5 @@
 import { el, esc, api, fmtUSD, fmtPct, signed, toast, confirmAction, currentMember, requestSignIn, icon, skeleton, errorState, can, safeUrl } from "../shared.js";
+import { FIRST_PITCH } from "../learnContent.js";
 import { statusPill } from "./pitches.js";
 import { withProgress, aiErrorHtml, sourceLink } from "../ai.js";
 
@@ -6,8 +7,10 @@ export const title = (p) => (p.id ? `Pitch #${p.id}` : "New pitch");
 
 const SECTIONS = [
   ["thesis", "Investment thesis", "What does the market misunderstand? Why now?", 6],
+  ["variantView", "Variant view", "What does the market expect today (consensus numbers, what's priced in), and why is our view different and better founded?", 3],
   ["catalysts", "Catalysts", "Specific events in the next 6 to 18 months that should close the gap (earnings, launches, buybacks…)", 3],
   ["risks", "Key risks", "What would make this thesis wrong? What would make us sell?", 3],
+  ["killCriteria", "Kill criteria", "State and date: \"If by (date) we haven't seen (specific result), we sell or trim.\" Write it now, before we own it.", 3],
   ["valuation", "Valuation", "Multiples vs peers, DCF assumptions, how the target was derived", 3],
 ];
 
@@ -53,6 +56,9 @@ function editor(p, isNew, current) {
     </label>`;
   return `
     <form id="pitchForm" class="pitch-form" novalidate>
+      ${isNew ? `<details class="explainer small first-pitch"><summary>First pitch? A six-step guide</summary>
+        <ol class="first-pitch-list">${FIRST_PITCH.map(([t, d]) => `<li><strong>${esc(t)}.</strong> ${esc(d)}</li>`).join("")}</ol>
+        <p class="muted">A draft doesn't open voting until you decide it is ready. More in <a href="#/learn">Start here</a>.</p></details>` : ""}
       ${can("ai") ? `<div class="agent-primer"><button type="button" class="btn btn-ghost btn-sm" id="primerBtn">Draft empty sections with AI</button><span class="muted small" id="primerNote">Fills only empty sections from the app's data, marked as an AI draft for you to rewrite.</span></div>` : ""}
       <div class="form-row">
         <label>Ticker <input name="symbol" data-ticker value="${esc(p.symbol || "")}" required maxlength="10" autocapitalize="characters" ${isNew ? "" : "readonly"} /></label>
@@ -105,7 +111,9 @@ function readView(p) {
   const blocks = SECTIONS.filter(([k]) => p[k]?.trim()).map(([k, label]) => `<section class="pitch-section"><h3>${label}</h3><div class="prose">${esc(p[k])}</div></section>`).join("");
   const cases = [["Bear", p.bearCase, p.bearPrice], ["Base", p.baseCase, p.basePrice], ["Bull", p.bullCase, p.bullPrice]].filter(([, t, v]) => t?.trim() || v);
   const checklist = parseChecklist(p.bearChecklist);
-  return `${blocks || `<p class="muted">No write-up yet.</p>`}
+  const rd = p.status === "draft" && p.readiness && !p.readiness.ready
+    ? `<section class="pitch-section notice" role="note"><h3>Before this can go to a vote</h3><ul class="link-list small">${p.readiness.items.map((i) => `<li>${i.done ? "✓" : i.required ? "○ <strong>Needed:</strong>" : "○ Suggested:"} ${esc(i.label)}</li>`).join("")}</ul></section>` : "";
+  return `${rd}${blocks || `<p class="muted">No write-up yet.</p>`}
     ${cases.length ? `<section class="pitch-section"><h3>Scenarios</h3><div class="case-grid">${cases.map(([l, t, v]) => `<div class="case case-${l.toLowerCase()}"><strong>${l}${v ? ` · ${fmtUSD(v)}` : ""}</strong><p class="small">${esc(t || "")}</p></div>`).join("")}</div></section>` : ""}
     ${p.preMortem?.trim() ? `<section class="pitch-section"><h3>Pre-mortem</h3><p class="prose">${esc(p.preMortem)}</p></section>` : ""}
     ${checklist.length ? `<section class="pitch-section"><h3>Bear-case checklist</h3><ul class="link-list small">${BEAR_CHECKLIST.map((label, i) => checklist.includes(i) ? `<li>✓ ${esc(label)}</li>` : "").join("")}</ul></section>` : ""}`;
@@ -116,24 +124,37 @@ function votePanel(p) {
   const member = currentMember();
   const mine = member && t.votes.find((v) => v.memberId === member.id);
   const pct = (n) => (t.total ? (n / t.total) * 100 : 0);
-  return `
-    <section class="panel vote-panel" aria-labelledby="vote-h">
-      <h3 id="vote-h">Investment committee vote</h3>
-      <div class="tally-bar" aria-hidden="true"><span class="t-yes" style="width:${pct(t.counts.yes)}%"></span><span class="t-no" style="width:${pct(t.counts.no)}%"></span><span class="t-abs" style="width:${pct(t.counts.abstain)}%"></span></div>
-      <p><strong>${t.counts.yes}</strong> yes · <strong>${t.counts.no}</strong> no · <strong>${t.counts.abstain}</strong> abstain
-        <span class="muted small">(${t.yesPct.toFixed(0)}% of decisive votes)</span></p>
-      <p class="small ${t.quorumMet ? "" : "tone-warn"}">Rules: more than ${t.thresholdPct}% yes of yes+no votes, with at least ${t.quorum} votes cast. ${t.quorumMet ? (t.passing ? `<span class="tone-good">Currently passing.</span>` : `<span class="tone-bad">Currently failing.</span>`) : `Quorum not yet met (${t.total}/${t.quorum}).`}</p>
-      ${p.status === "voting" ? (member ? `
+  const rules = `Rules: more than ${t.thresholdPct}% yes of yes+no votes, with at least ${t.quorum} votes cast.`;
+  const canClose = member && (member.isAdmin || member.canTrade);
+  const form = p.status === "voting" ? (member ? `
         <form id="voteForm" class="vote-form">
           <fieldset><legend class="small">Your vote, ${esc(member.name)}${mine ? ` (currently <strong>${esc(mine.vote)}</strong>)` : ""}</legend>
             <div class="seg">
               ${["yes", "no", "abstain"].map((v) => `<label class="seg-opt"><input type="radio" name="vote" value="${v}" ${mine?.vote === v ? "checked" : ""} required /> <span>${v[0].toUpperCase() + v.slice(1)}</span></label>`).join("")}
             </div>
           </fieldset>
-          <label class="field-block small">Comment (optional) <input name="comment" value="${esc(mine?.comment || "")}" maxlength="1000" placeholder="Why you voted this way" /></label>
+          <label class="field-block small">Comment <span class="muted">(required for a no)</span> <input name="comment" value="${esc(mine?.comment || "")}" maxlength="1000" placeholder="Why you voted this way" /></label>
           <button class="btn btn-primary btn-sm">${mine ? "Change vote" : "Cast vote"}</button>
-        </form>` : `<p><button type="button" class="btn btn-primary btn-sm" data-signin>Sign in to vote</button></p>`) : ""}
+        </form>` : `<p><button type="button" class="btn btn-primary btn-sm" data-signin>Sign in to vote</button></p>`) : "";
+  const closeNote = p.status === "voting" && canClose ? `<label class="field-block small">Decision note when closing <span class="muted">(optional, saved with the result)</span><input id="decisionNote" maxlength="1000" placeholder="e.g. Approved at half size until the next earnings report" /></label>` : "";
+  if (t.blind) return `
+    <section class="panel vote-panel" aria-labelledby="vote-h">
+      <h3 id="vote-h">Investment committee vote</h3>
+      <p><strong>${t.total}</strong> of ${t.quorum} needed votes cast.</p>
+      <p class="small muted">The split and everyone's comments stay hidden until you vote, so early votes don't sway later ones. ${rules}</p>
+      ${form}${closeNote}
+    </section>`;
+  return `
+    <section class="panel vote-panel" aria-labelledby="vote-h">
+      <h3 id="vote-h">Investment committee vote</h3>
+      <div class="tally-bar" aria-hidden="true"><span class="t-yes" style="width:${pct(t.counts.yes)}%"></span><span class="t-no" style="width:${pct(t.counts.no)}%"></span><span class="t-abs" style="width:${pct(t.counts.abstain)}%"></span></div>
+      <p><strong>${t.counts.yes}</strong> yes · <strong>${t.counts.no}</strong> no · <strong>${t.counts.abstain}</strong> abstain
+        <span class="muted small">(${t.yesPct.toFixed(0)}% of decisive votes)</span></p>
+      <p class="small ${t.quorumMet ? "" : "tone-warn"}">${rules} ${t.quorumMet ? (t.passing ? `<span class="tone-good">Currently passing.</span>` : `<span class="tone-bad">Currently failing.</span>`) : `Quorum not yet met (${t.total}/${t.quorum}).`}</p>
+      ${form}
       ${t.votes.length ? `<ul class="vote-list">${t.votes.map((v) => `<li><span class="vote-chip v-${esc(v.vote)}">${esc(v.vote)}</span> <strong>${esc(v.name)}</strong>${v.comment ? ` <span class="muted small">(${esc(v.comment)})</span>` : ""}</li>`).join("")}</ul>` : ""}
+      ${closeNote}
+      ${p.decisionNote ? `<p class="small"><strong>Decision note:</strong> ${esc(p.decisionNote)}</p>` : ""}
     </section>`;
 }
 
@@ -233,11 +254,13 @@ export async function mount(container, params) {
         <section class="panel">${editing ? editor(p, isNew, current) : `${scenarioBar(p, current)}${readView(p)}`}</section>
       </div>
       ${!isNew ? `<aside class="research-side">${votePanel(p)}
+        ${["draft", "voting", "approved"].includes(p.status) ? `<section class="panel" aria-labelledby="fit-h"><div class="panel-head"><h3 id="fit-h">Fit with the fund</h3></div><div id="fitBody">${skeleton("text", { rows: 2, label: "Checking fit" })}</div></section>` : ""}
         ${can("ai") ? `<section class="panel" aria-labelledby="rt-h"><div class="panel-head"><h3 id="rt-h">Red team</h3></div><div id="redTeamBody">${skeleton("text", { rows: 3, label: "Loading the red team report" })}</div></section>` : ""}
         ${p.status === "approved" ? `<section class="panel"><h3>Next step</h3><p class="small">Place the trade, then record it under <a href="#/transactions">Transactions</a> and mark this pitch executed.</p></section>` : ""}
       </aside>` : ""}
     </div>`;
 
+  if (!isNew && el("fitBody")) loadFit(p);
   if (!isNew && can("ai")) loadRedTeam(p);
   el("primerBtn")?.addEventListener("click", () => draftWithAi(el("pitchForm")));
   el("editBtn")?.addEventListener("click", () => { container.dataset.editing = String(p.id); mount(container, params); });
@@ -302,7 +325,7 @@ export async function mount(container, params) {
       if (!ok) return;
     }
     try {
-      const r = await api(`/api/pitches/${p.id}/status`, { method: "POST", body: JSON.stringify({ action }) });
+      const r = await api(`/api/pitches/${p.id}/status`, { method: "POST", body: JSON.stringify({ action, note: action === "close" ? el("decisionNote")?.value || "" : undefined }) });
       toast(`Pitch is now ${r.status}.`, { type: "success" });
       mount(container, params);
     } catch (err) {
@@ -323,6 +346,7 @@ export async function mount(container, params) {
     e.preventDefault();
     const f = new FormData(e.target);
     if (!f.get("vote")) { toast("Choose yes, no or abstain.", { type: "error" }); return; }
+    if (f.get("vote") === "no" && String(f.get("comment") || "").trim().length < 5) { toast("Say why you're voting no, in a few words.", { type: "error" }); return; }
     try {
       await api(`/api/pitches/${p.id}/vote`, { method: "POST", body: JSON.stringify({ vote: f.get("vote"), comment: f.get("comment") }) });
       toast("Vote recorded.", { type: "success" });
@@ -332,6 +356,25 @@ export async function mount(container, params) {
       toast(err.message, { type: "error" });
     }
   });
+}
+
+function fitHtml(f) {
+  if (!f.ok) return `<p class="muted small">${esc(f.reason)}</p>`;
+  const row = (label, a, b, unit = "%") => `<tr><th scope="row">${label}</th><td>${a}${unit}</td><td>→ <strong>${b}${unit}</strong></td></tr>`;
+  const issues = f.issues.map((i) => `<li class="${i.level === "breach" ? "fit-breach" : "muted"}"><strong>${esc(i.rule)}.</strong> ${esc(i.detail)}</li>`).join("");
+  return `<table class="small fit-table"><tbody>
+      ${row(`${esc(f.symbol)} weight`, f.before.position, f.after.position)}
+      ${row(`${esc(f.sector)}`, f.before.sector, f.after.sector)}
+      ${row("Cash", f.before.cash, f.after.cash)}
+      ${row("Holdings", f.before.positions, f.after.positions, "")}
+    </tbody></table>
+    ${issues ? `<ul class="link-list small">${issues}</ul>` : `<p class="small">Within every policy limit.</p>`}`;
+}
+
+async function loadFit(p) {
+  const box = el("fitBody");
+  try { box.innerHTML = fitHtml(await api(`/api/pitches/${p.id}/fit`)); }
+  catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; }
 }
 
 // ---- Research agents: red team and pitch primer (members with AI access) ----

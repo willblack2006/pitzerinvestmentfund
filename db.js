@@ -288,6 +288,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_thirteenf_positions_period ON thirteenf_positions(period, cusip);
 `);
 
+// Ledger lookups by ticker (a company's trades, its dividends) and by type (realized gain,
+// dividend totals) scanned the whole table.
+db.exec(`
+  CREATE INDEX IF NOT EXISTS transactions_symbol ON transactions (symbol, date);
+  CREATE INDEX IF NOT EXISTS transactions_type ON transactions (type, date);
+`);
+
 // Dividends the fund is owed or has received, one row per holding per ex-dividend date,
 // logged automatically from the date holdings were last reconciled with Schwab (lib/dividends.js).
 // status: expected (ex-date passed, not yet confirmed) | received (recorded as a dividend
@@ -479,6 +486,11 @@ db.exec(`
 
 // Personal notifications (the inbox) and personal price alerts.
 addColumn("pitches", "authorId", "INTEGER");
+// Why the committee decided as it did (written by whoever closes the vote).
+addColumn("pitches", "decisionNote", "TEXT NOT NULL DEFAULT ''");
+// Variant view (what the market expects, why we differ) and kill criteria (what would make us sell, state + date).
+addColumn("pitches", "variantView", "TEXT NOT NULL DEFAULT ''");
+addColumn("pitches", "killCriteria", "TEXT NOT NULL DEFAULT ''");
 db.exec(`
   CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -573,6 +585,22 @@ db.exec(`
     createdAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS agent_proposals_status ON agent_proposals (status, id);
+  -- Exit tripwires: conditions written down in advance that mean "revisit or sell this holding".
+  CREATE TABLE IF NOT EXISTS tripwires (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('price_below','price_above','review_by','custom')),
+    value REAL,
+    dueDate TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    authorId INTEGER REFERENCES members(id) ON DELETE SET NULL,
+    author TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','tripped','resolved')),
+    trippedAt TEXT,
+    trippedDetail TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS tripwires_symbol ON tripwires (symbol, status);
 `);
 
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund
@@ -607,4 +635,5 @@ if (count === 0) {
   console.log(`Seeded ${seed.length} positions.`);
 }
 
+db.path = dbPath; // where the file lives (backups and the migration use it)
 module.exports = db;

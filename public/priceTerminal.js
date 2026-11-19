@@ -541,7 +541,12 @@ export async function mountPriceTerminal(ctx) {
       return;
     }
     if (!$("ctChart")) return;
-    if (!LW) { status.textContent = "The chart library didn't load. Check your connection."; return; }
+    $("ctChart").closest(".ct-body")?.classList.toggle("no-lib", !LW);
+    if (!LW) {
+      status.innerHTML = `The chart couldn't load. Check your connection. <button type="button" class="btn btn-ghost btn-sm" id="ctRetry">Retry</button>`;
+      $("ctRetry")?.addEventListener("click", draw);
+      return;
+    }
     const bars = (main.bars || []).filter((b) => Number.isFinite(b.close));
     if (!bars.length) { status.textContent = main.error ? `No price data: ${main.error}` : "No price data for this timeframe."; view?.remove(); view = null; return; }
     status.textContent = cmps.some((c) => !c.bars?.length) ? `No data for ${state.compare.filter((_, i) => !cmps[i].bars?.length).join(", ")}.` : "";

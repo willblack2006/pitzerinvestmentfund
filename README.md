@@ -74,11 +74,23 @@ Works for any ticker. Every tab has its own link.
 - **Pitches** (`#/pitches`): a structured pitch template:
   - thesis, catalysts, risks and valuation;
   - bear, base and bull cases with price targets;
-  - proposed position size.
+  - proposed position size;
+  - a variant view (what the market expects and why we differ), and kill criteria (what would make us
+    sell, with a state and a date).
+
+  A pitch can't open for a vote until it has a thesis, base target, confidence and horizon (so it can be
+  graded later), a pre-mortem and kill criteria; the draft page lists what's missing.
 
   The price when the pitch was made is recorded automatically. Each pitch moves through
   draft → investment committee vote → approved or rejected → executed. Signed-in members vote,
-  and the threshold and quorum are set in Settings.
+  and the threshold and quorum are set in Settings. Voting is blind: until you vote yourself you
+  see only how many votes are in, not the split or anyone's comment. A no vote needs a short
+  reason, and whoever closes the vote can leave a decision note that stays with the result.
+
+- **Track record** (`#/track-record`): grades decided pitches against stated confidence. Besides hit rate and
+  Brier score it shows plausible ranges (so 3 of 4 isn't read as 75%), whether miscalibration or
+  poor discrimination drives the score, wins versus losses against the benchmark, approved versus
+  rejected calls, and early versus recent accuracy. Marked provisional below 30 calls.
 
 ### Market
 - **Macro** (`#/macro`) and **Insiders** (`#/insiders`).

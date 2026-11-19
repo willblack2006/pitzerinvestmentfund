@@ -119,3 +119,9 @@ body.ct-max-open .ui-pop { z-index: 1000; }
   .ct-chart { top: 56px; }
   .ct-legend { right: 8px; font-size: 11px; }
 }
+
+/* Chart library failed to load: drop the drawing tools and the empty plot area, keep the message and Retry. */
+.ct-body.no-lib .ct-draw, .ct-body.no-lib .ct-chart { display: none; }
+.ct-body.no-lib { display: block; }
+.ct-body.no-lib .ct-stage { height: auto; }
+.ct-body.no-lib .ct-status { position: static; transform: none; pointer-events: auto; padding: 28px 0; text-align: center; }

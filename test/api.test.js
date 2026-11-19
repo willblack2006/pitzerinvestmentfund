@@ -228,14 +228,32 @@ test("pitches: lifecycle, quorum, threshold, permissions", async () => {
   await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { thesis: "x", basePrice: 50, bullPrice: 70, bearPrice: 30 } });
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).status, 400, "needs a pre-mortem too");
   await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { preMortem: "Thesis broke because of X." } });
+  const notReady = await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } });
+  assert.equal(notReady.status, 400, "needs kill criteria and a gradable confidence/horizon");
+  assert.equal(notReady.body.missing.length, 2);
+  assert.equal((await s.api(`/api/pitches/${id}`)).body.readiness.ready, false);
+  await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { killCriteria: "If by Dec 2027 margins are below 20%, sell.", confidencePct: 60, horizonMonths: 12 } });
+  assert.equal((await s.api(`/api/pitches/${id}`)).body.readiness.ready, true);
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).body.status, "voting");
 
   assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", body: { vote: "yes" } })).status, 401, "anonymous can't vote");
   assert.equal((await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Cy, body: { thesis: "hijack" } })).status, 403, "only the author or an admin edits");
   assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ana, body: { vote: "maybe" } })).status, 400);
   await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ana, body: { vote: "yes" } });
-  await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ana, body: { vote: "no" } }); // changing a vote doesn't double count
-  let t = (await s.api(`/api/pitches/${id}`)).body.tally;
+  assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ana, body: { vote: "no" } })).status, 400, "a no needs a reason");
+  await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ana, body: { vote: "no", comment: "Valuation too rich" } }); // changing a vote doesn't double count
+  // Blind voting: someone who hasn't voted (or a visitor) sees only the count, not the split or comments.
+  let blind = (await s.api(`/api/pitches/${id}`, { member: tokens.Ben })).body.tally;
+  assert.equal(blind.blind, true);
+  assert.equal(blind.total, 1);
+  assert.equal(blind.counts, null);
+  assert.deepEqual(blind.votes, []);
+  assert.equal((await s.api(`/api/pitches/${id}`)).body.tally.blind, true);
+  const listed = (await s.api("/api/pitches", { member: tokens.Ben })).body.find((x) => x.id === id);
+  assert.equal(listed.voteCounts, null);
+  assert.equal(listed.voteTotal, 1);
+  let t = (await s.api(`/api/pitches/${id}`, { member: tokens.Ana })).body.tally;
+  assert.equal(t.blind, false, "after voting you see the split");
   assert.equal(t.total, 1);
   assert.equal(t.counts.no, 1);
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "close" } })).status, 403, "members can't close a vote");
@@ -243,17 +261,19 @@ test("pitches: lifecycle, quorum, threshold, permissions", async () => {
 
   await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ben, body: { vote: "yes" } });
   await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Cy, body: { vote: "yes", comment: "<i>c</i>" } });
-  t = (await s.api(`/api/pitches/${id}`)).body.tally;
+  t = (await s.api(`/api/pitches/${id}`, { member: tokens.Cy })).body.tally;
   assert.equal(t.passing, true, "2 yes / 1 no > 50%");
   assert.equal((await s.api(`/api/pitches/${id}`, { method: "DELETE", member: tokens.Ana })).status, 409, "only drafts deletable");
 
   // A 2/3 threshold makes the same vote fail.
   await s.api("/api/settings", { method: "PUT", auth: true, body: { voteThresholdPct: 66.7 } });
-  assert.equal((await s.api(`/api/pitches/${id}`)).body.tally.passing, false);
+  assert.equal((await s.api(`/api/pitches/${id}`, { member: tokens.Cy })).body.tally.passing, false);
   await s.api("/api/settings", { method: "PUT", auth: true, body: { voteThresholdPct: 50 } });
 
-  const closed = await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ben, body: { action: "close" } });
+  const closed = await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ben, body: { action: "close", note: "Approved at the proposed size." } });
   assert.equal(closed.body.status, "approved");
+  assert.equal(closed.body.decisionNote, "Approved at the proposed size.");
+  assert.equal((await s.api(`/api/pitches/${id}`)).body.tally.blind, false, "everything is visible once decided");
   assert.equal((await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { thesis: "y" } })).status, 409, "decided pitches frozen");
   assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ben, body: { vote: "no" } })).status, 409);
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "executed" } })).status, 403, "only a portfolio manager executes");
@@ -731,4 +751,18 @@ test("symbol search, chart bars and red-flag endpoints degrade cleanly", async (
   assert.equal(saved.status, 200);
   assert.deepEqual(saved.body.chartSettings, { frame: "1Y", type: "candles", log: false, marks: true, indicators: [{ id: "rsi", params: { n: 400 } }] });
   assert.deepEqual(saved.body.chartDrawings, { HSY: [{ t: "trend", p: [{ time: 1, price: 2 }, { time: 3, price: 4 }] }] });
+});
+
+test("tripwires: members add, review-date ones trip once, others can't be added by visitors", async () => {
+  assert.equal((await s.api("/api/tripwires", { method: "POST", body: { symbol: "ZZT", kind: "review_by", dueDate: "2020-01-01" } })).status, 401);
+  assert.equal((await s.api("/api/tripwires", { method: "POST", member: tokens.Ana, body: { symbol: "ZZT", kind: "price_below", value: -1 } })).status, 400);
+  assert.equal((await s.api("/api/tripwires", { method: "POST", member: tokens.Ana, body: { symbol: "ZZT", kind: "custom" } })).status, 400, "custom needs a description");
+  const tw = await s.api("/api/tripwires", { method: "POST", member: tokens.Ana, body: { symbol: "zzt", kind: "review_by", dueDate: "2020-01-01", note: "check margins" } });
+  assert.equal(tw.status, 201);
+  const list = (await s.api("/api/tripwires?symbol=ZZT")).body;
+  assert.equal(list[0].status, "tripped", "an overdue review date trips on the next check");
+  assert.equal((await s.api("/api/tripwires?symbol=ZZT")).body.length, 1, "and only once");
+  assert.equal((await s.api(`/api/tripwires/${tw.body.id}/reset`, { method: "POST", member: tokens.Ana, body: {} })).body.status, "active");
+  assert.equal((await s.api(`/api/tripwires/${tw.body.id}/resolve`, { method: "POST", member: tokens.Ana, body: {} })).body.status, "resolved");
+  assert.equal((await s.api("/api/tripwires?symbol=ZZT")).body.length, 0);
 });

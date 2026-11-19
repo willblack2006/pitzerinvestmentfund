@@ -7,12 +7,12 @@ export { answerCard, feedbackButtons, bindFeedback };
 
 export const title = "Research agents";
 
-const TABS = [["briefs", "#/agents", "Briefs &amp; reports"], ["ask", "#/agents/ask", "Ask PIF"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
+const TABS = [["briefs", "#/agents", "Briefs &amp; reports"], ["ask", "#/agents/ask", "Ask PIF"], ["desk", "#/agents/desk", "Research desk"], ["approvals", "#/agents/approvals", "Approvals"], ["activity", "#/agents/activity", "Activity"], ["events", "#/agents/events", "Events"]];
 const WORKFLOW_LABEL = {
   filing_flash: "Filing flash", earnings_flash: "Earnings flash", ask_pif: "Ask PIF", red_team: "Red team", pitch_primer: "Pitch primer",
   earnings_preview: "Earnings preview", thesis_check: "Thesis check", weekly_memo: "Weekly memo", data_qa: "Data check", macro_brief: "Macro brief",
   ownership_watch: "Ownership watch", policy_watch: "Policy watch", filing_brief: "Filing brief (Research)", filing_change_brief: "Change brief (Research)",
-  news_triage: "News triage", today_recap: "Today recap", app: "Other AI",
+  compare: "Compare", what_if: "What-if", meeting_prep: "Meeting prep", ideas: "Idea hunt", news_triage: "News triage", today_recap: "Today recap", app: "Other AI",
 };
 export const workflowLabel = (w) => WORKFLOW_LABEL[w] || w;
 const money = (v) => (v == null ? "—" : v < 0.01 && v > 0 ? `$${v.toFixed(4)}` : fmtUSD(v));
@@ -210,6 +210,8 @@ export async function mount(container, params = {}) {
         run(b.dataset.ask);
       });
       await renderHistory();
+    } else if (tab === "desk") {
+      await (await import("../deskView.js")).mountDesk(body);
     } else if (tab === "approvals") {
       const r = await api("/api/agents/proposals");
       body.innerHTML = proposalsList(r.proposals);

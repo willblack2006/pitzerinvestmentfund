@@ -1,0 +1,14 @@
+[
+  { "id": "biggest-holding", "question": "What is our biggest holding and what share of the portfolio is it?", "expectTier": "cheap", "expectTools": [["get_holdings", "get_allocation"]], "mustMatch": ["%"] },
+  { "id": "nvda-price", "question": "What is NVDA's current price and market cap?", "expectTier": "cheap", "expectTools": [["get_research_overview"]], "mustMatch": ["NVDA"] },
+  { "id": "mu-insiders", "question": "Have MU insiders been buying or selling recently?", "expectTier": "cheap", "expectTools": [["get_insider_activity", "get_insider_signal"]], "mustMatch": ["MU"] },
+  { "id": "pltr-short", "question": "How much of PLTR's float is sold short?", "expectTier": "cheap", "expectTools": [["get_short_pressure"]], "mustMatch": ["PLTR"] },
+  { "id": "orcl-filing", "question": "What was in ORCL's most recent 10-Q? Quote the risk language about debt.", "expectTier": "mid", "expectTools": [["get_recent_filings"], ["get_filing_text"]], "mustMatch": ["ORCL"], "needsQuote": true },
+  { "id": "compare-nvda-mu", "question": "Compare NVDA and MU on valuation and growth. Which looks cheaper?", "expectTier": "mid", "expectTools": [["get_comps", "get_research_overview", "get_financials"]], "mustMatch": ["NVDA", "MU"] },
+  { "id": "portfolio-risk", "question": "Where is the portfolio most concentrated and which holdings carry the most risk?", "expectTier": "mid", "expectTools": [["get_allocation"], ["get_risk", "get_factors_all", "get_performance"]], "mustMatch": ["%"] },
+  { "id": "why-moving", "question": "Why is CRWV moving this week?", "expectTier": "mid", "expectTools": [["get_news", "get_market_news", "web_search"]], "mustMatch": ["CRWV"] },
+  { "id": "insiders-all", "question": "Across all our holdings, which have net insider selling?", "expectTier": "mid", "expectTools": [["get_insiders_all", "get_insider_signals_all"]], "mustMatch": [] },
+  { "id": "macro-rates", "question": "What is the 10-year Treasury yield and what has the Fed done recently?", "expectTier": "cheap", "expectTools": [["get_macro", "get_macro_detail"]], "mustMatch": ["%"] },
+  { "id": "pitch-status", "question": "Which pitches are currently up for a vote?", "expectTier": "cheap", "expectTools": [["get_pitches"]], "mustMatch": [] },
+  { "id": "missing-data", "question": "What is our holding ZZZZ's free cash flow margin?", "expectTier": "cheap", "expectTools": [], "mustMatch": ["(not|no|couldn|can.t|unable|don.t)"], "note": "A ticker that does not exist: the right answer says the data is missing instead of inventing numbers." }
+]
