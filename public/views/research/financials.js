@@ -3,26 +3,29 @@ import { barChart } from "../../charts.js";
 
 const growth = (cur, prev) => (cur !== null && prev ? (cur - prev) / Math.abs(prev) : null);
 
-function annualTable(rows) {
+function annualTable(rows, ttm) {
   const ys = rows.slice(-5);
   const fy = (r) => `FY ${esc(r.end.slice(0, 4))}<span class="sr-only"> (ended ${esc(r.end)})</span>`;
-  const line = (label, f, opts = {}) => `<tr class="${opts.cls || ""}"><th scope="row">${label}${opts.hint ? ` <span class="hint" title="${esc(opts.hint)}" aria-label="${esc(opts.hint)}">?</span>` : ""}</th>${ys.map((r, i) => `<td class="num">${f(r, i)}</td>`).join("")}</tr>`;
+  const line = (label, f, opts = {}) => `<tr class="${opts.cls || ""}"><th scope="row">${label}${opts.hint ? ` <span class="hint" title="${esc(opts.hint)}" aria-label="${esc(opts.hint)}">?</span>` : ""}</th>${ys.map((r, i) => `<td class="num">${f(r, i)}</td>`).join("")}${ttm ? `<td class="num ttm-col">${opts.ttm ? opts.ttm(ttm) : "—"}</td>` : ""}</tr>`;
   const pct = (key) => (r) => fmtRatio(r[key]);
+  const money = (key) => (r) => fmtMoneyCompact(r[key]);
   return `
     <div class="table-scroll">
       <table class="fin-table">
         <caption class="sr-only">Annual financials from 10-K filings, oldest to newest</caption>
-        <thead><tr><th scope="col">Fiscal year</th>${ys.map((r) => `<th scope="col" class="num">${fy(r)}</th>`).join("")}</tr></thead>
+        <thead><tr><th scope="col">Fiscal year</th>${ys.map((r) => `<th scope="col" class="num">${fy(r)}</th>`).join("")}${ttm ? `<th scope="col" class="num ttm-col">TTM<span class="sr-only"> (trailing twelve months to ${esc(ttm.end)})</span></th>` : ""}</tr></thead>
         <tbody>
           <tr class="group"><th colspan="${ys.length + 1}" scope="rowgroup">Growth &amp; profitability</th></tr>
-          ${line("Revenue", (r) => fmtMoneyCompact(r.revenue))}
+          ${line("Revenue", (r) => fmtMoneyCompact(r.revenue), { ttm: money("revenue") })}
           ${line("Revenue growth", (r, i) => { const g = growth(r.revenue, (ys[i - 1] || rows[rows.length - ys.length - 1])?.revenue); return g === null ? "—" : signed(g * 100, fmtPct(g * 100)); })}
-          ${line("Gross margin", pct("grossMargin"))}
-          ${line("Operating margin", pct("operatingMargin"))}
-          ${line("Net margin", pct("netMargin"))}
+          ${line("Gross margin", pct("grossMargin"), { ttm: pct("grossMargin") })}
+          ${line("Operating margin", pct("operatingMargin"), { ttm: pct("operatingMargin") })}
+          ${line("Net margin", pct("netMargin"), { ttm: pct("netMargin") })}
           <tr class="group"><th colspan="${ys.length + 1}" scope="rowgroup">Cash generation</th></tr>
-          ${line("Free cash flow", (r) => fmtMoneyCompact(r.fcf), { hint: "Operating cash flow minus capital expenditures" })}
-          ${line("FCF margin", pct("fcfMargin"))}
+          ${line("Free cash flow", (r) => fmtMoneyCompact(r.fcf), { hint: "Operating cash flow minus capital expenditures. Shows — when the filing has no capex line, rather than guessing.", ttm: money("fcf") })}
+          ${line("FCF margin", pct("fcfMargin"), { ttm: pct("fcfMargin") })}
+          ${line("Stock-based comp", (r) => fmtMoneyCompact(r.stockComp), { hint: "Non-cash pay in shares. It is real dilution, which free cash flow ignores.", ttm: money("stockComp") })}
+          ${line("FCF after stock comp", (r) => fmtMoneyCompact(r.fcfAfterSbc), { hint: "Free cash flow minus stock-based compensation: what is left if the company paid its staff in cash.", ttm: money("fcfAfterSbc") })}
           <tr class="group"><th colspan="${ys.length + 1}" scope="rowgroup">Returns on capital</th></tr>
           ${line("ROE", pct("roe"), { hint: "Net income / shareholders' equity. Inflated when buybacks shrink equity." })}
           ${line("ROIC", pct("roic"), { hint: "After-tax operating income / (debt + equity − cash). Above ~10 to 12% usually beats the cost of capital." })}
@@ -98,12 +101,12 @@ export async function render(c, { symbol, data, isFinancial }) {
   c.innerHTML = `
     <div class="tab-grid">
       <section class="panel span-full" aria-labelledby="fy-h">
-        <div class="panel-head"><h3 id="fy-h">Annual financials</h3><span class="muted small">Source: SEC 10-K filings (XBRL)</span></div>
-        ${annualTable(an.annual)}
+        <div class="panel-head"><h3 id="fy-h">Annual financials</h3><span class="muted small">Source: SEC 10-K and 10-Q filings (XBRL)${an.ttm ? ` · TTM = four quarters to ${esc(an.ttm.end)}` : ""}</span></div>
+        ${annualTable(an.annual, an.ttm)}
         ${isFinancial ? `<p class="notice small">Banks and insurers report revenue and cash flow differently; margins, FCF and ROIC above aren't comparable to industrial companies. Focus on ROE and book value.</p>` : ""}
       </section>
       <section class="panel span-full" aria-labelledby="q-h">
-        <div class="panel-head"><h3 id="q-h">Quarterly revenue &amp; net income</h3><span class="muted small">Last ${qLabels.length} quarters (10-Q; fiscal Q4 is inside the 10-K)</span></div>
+        <div class="panel-head"><h3 id="q-h">Quarterly revenue &amp; net income</h3><span class="muted small">Last ${qLabels.length} quarters (Q4 = full year minus the first three)</span></div>
         <div class="chart-box chart-sm"><canvas id="qChart" role="img" aria-label="${esc(`Quarterly revenue for ${symbol}: ${q.revenue.map((p) => `${p.end} ${fmtMoneyCompact(p.val)}`).join(", ")}`)}"></canvas></div>
       </section>
       ${piotroskiCard(isFinancial ? null : an.piotroski)}
