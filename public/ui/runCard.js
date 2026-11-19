@@ -92,3 +92,22 @@ export function watchRun(runId, h = {}) {
   } else poll();
   return finish;
 }
+
+// Shows run `runId` in `el` as a live run card: steps and answer text while it works, then the
+// finished card. `body(output)` may return html for the finished output. Returns stop().
+export function mountRunCard(el, runId, { body = null, compact = false, label = null } = {}) {
+  const run = { id: Number(runId), status: "running", steps: [], text: "", label };
+  const paint = () => { if (el.isConnected) el.innerHTML = runCard(run, { compact, body: run.status === "done" && body ? body(run.output) : "" }); };
+  paint();
+  api(`/api/agents/runs/${Number(runId)}`).then((r) => {
+    Object.assign(run, { workflow: r.workflow, symbol: r.symbol, createdAt: r.createdAt, costUsd: r.costUsd, label: label || r.workflow });
+    if (r.status !== "running") Object.assign(run, { status: r.status, output: r.output, error: r.error, summary: r.summary || r.output?.answer || r.output?.headline || r.output?.summary || null });
+    paint();
+  }).catch(() => {});
+  return watchRun(runId, {
+    onStep: (s, steps) => { run.steps = steps; paint(); },
+    onText: (t) => { run.text = t; paint(); },
+    onDone: (output, ev) => { Object.assign(run, { status: "done", output, text: "", costUsd: ev?.costUsd ?? run.costUsd, summary: output?.answer || output?.headline || output?.summary || output?.title || (typeof output === "string" ? output : null) }); paint(); },
+    onError: (msg, ev) => { Object.assign(run, { status: ev?.status || "failed", error: msg }); paint(); },
+  });
+}
