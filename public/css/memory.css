@@ -40,7 +40,7 @@
 .mem-ref { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; padding: 0 5px; border-radius: var(--r-full); background: var(--surface-3); text-decoration: none; }
 .mem-dossier-panel h3 { margin-bottom: var(--sp-2); }
 /* Research → Overview card */
-.dossier-card { margin: 0 0 var(--sp-4); }
+.dossier-card { margin: 12px var(--gutter) 0; }
 .dossier-card .panel-head h3 { display: flex; align-items: center; gap: 6px; }
 .dossier-card .mem-list { margin-top: var(--sp-2); }
 .dossier-card details summary { cursor: pointer; }
@@ -52,3 +52,6 @@
   .mem-ticker input { width: 6em; }
   .mem-id { margin-left: 0; }
 }
+.mem-form[hidden] { display: none; }
+.mem-filters .chip[aria-pressed="true"] .muted { color: inherit; opacity: 0.8; }
+.mem-form .field-block > select { display: block; margin-top: 4px; }
