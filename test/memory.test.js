@@ -240,7 +240,7 @@ test("get_memory tool returns ranked items with ids and sources", async () => {
   const r = await tools.callTool("get_memory", { symbol: "pltr", query: "government revenue", kinds: null });
   assert.equal(r.data.items[0].about, "PLTR");
   assert.match(r.data.items[0].id, /^m\d+$/);
-  assert.equal(r.source_url, "#/agents/memory?symbol=PLTR");
+  assert.equal(r.source_url, "#/memory/PLTR");
 });
 
 test("dossier writer: summarises memory with checked ids, stores the card and its open questions", async () => {
