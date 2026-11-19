@@ -1,5 +1,6 @@
 import { el, esc, api, fmtUSD, fmtPct, signed, toast, confirmAction, currentMember, requestSignIn, icon, skeleton, errorState, can, safeUrl } from "../shared.js";
 import { statusPill } from "./pitches.js";
+import { withProgress, aiErrorHtml, sourceLink } from "../ai.js";
 
 export const title = (p) => (p.id ? `Pitch #${p.id}` : "New pitch");
 
@@ -341,27 +342,30 @@ function redTeamHtml(r) {
   return `<p class="small">${esc(r.summary)}</p>
     <ol class="agent-objections">${r.objections.map((o) => `<li><p><span class="badge ${SEV[o.severity] || ""}">${esc(o.severity)}</span> <strong>${esc(o.title)}</strong></p>
       <p class="small">${esc(o.detail)}</p>
-      <p class="muted small">Evidence: ${esc(o.evidence)} ${o.source_url ? `· <a href="${o.source_url.startsWith("#") ? esc(o.source_url) : safeUrl(o.source_url)}">${o.sourced ? "source" : "source (not checked)"}</a>` : ""}</p></li>`).join("")}</ol>
+      <p class="muted small">Evidence: ${esc(o.evidence)} ${o.source_url ? `· ${sourceLink(o.source_url)}${o.sourced === false ? ` <span class="badge badge-warn">not read</span>` : ""}` : ""}</p></li>`).join("")}</ol>
     ${r.bearCase ? `<p class="pf-sub">Strongest bear case</p><p class="small">${esc(r.bearCase)}</p>` : ""}
     ${r.questions?.length ? `<p class="pf-sub">Answer before the vote</p><ul class="small">${r.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}
     ${r.unbackedNumbers?.length ? `<p class="notice small">Check these numbers, no source backs them: ${r.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
     <p class="muted small">AI-written, ${esc((r.createdAt || "").slice(0, 10))}. <a href="#/agents/runs/${r.runId}">How it was made</a></p>`;
 }
 
-async function loadRedTeam(p) {
+async function loadRedTeam(p, { waited = 0 } = {}) {
   const box = el("redTeamBody");
   if (!box) return;
   let r;
   try { r = await api(`/api/pitches/${p.id}/red-team`); } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; return; }
   const runBtn = (label) => `<button type="button" class="btn btn-ghost btn-sm" id="redTeamRun">${label}</button>`;
   box.innerHTML = r.report ? redTeamHtml(r.report) + runBtn("Run again")
-    : r.running ? `<p class="muted small">The red team is reading this pitch now. Refresh in a minute.</p>`
+    : r.running ? `<p class="muted small" role="status"><span class="spinner" aria-hidden="true"></span> The red team is reading this pitch now. It shows up here when it's done.</p>`
     : `<p class="muted small">An AI red team checks the pitch against the app's data and lists the strongest objections, each with evidence. It runs on its own when the vote opens.</p>${runBtn("Run the red team now")}`;
+  // A run started by the vote opening (or another member) shows up without a reload.
+  if (!r.report && r.running && waited < 300) setTimeout(() => { if (box.isConnected) loadRedTeam(p, { waited: waited + 5 }); }, 5000);
   el("redTeamRun")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
-    box.innerHTML = `<p class="muted small" role="status">Checking valuation, filings, insiders and risk… up to two minutes.</p>`;
-    try { const out = await api(`/api/pitches/${p.id}/red-team`, { method: "POST" }); box.innerHTML = redTeamHtml({ ...out.output, runId: out.runId, createdAt: new Date().toISOString() }); }
-    catch (err) { box.innerHTML = `<p class="error small">${esc(err.message)}</p>`; }
+    try {
+      const out = await withProgress(box, api(`/api/pitches/${p.id}/red-team`, { method: "POST" }), { workflow: "red_team", symbol: p.symbol, intro: "Reading the pitch", expect: "Up to two minutes" });
+      box.innerHTML = redTeamHtml({ ...out.output, runId: out.runId, createdAt: new Date().toISOString() });
+    } catch (err) { box.innerHTML = aiErrorHtml(err) + runBtn("Try again"); el("redTeamRun")?.addEventListener("click", () => loadRedTeam(p)); }
   });
 }
 
@@ -370,15 +374,15 @@ async function draftWithAi(form) {
   const note = el("primerNote"), btn = el("primerBtn");
   if (!sym) { form.symbol.focus(); note.textContent = "Type a ticker first."; return; }
   btn.disabled = true;
-  note.textContent = `Reading ${sym}'s valuation, filings and ownership… up to a minute.`;
   try {
-    const { output: d, runId } = await api("/api/agents/primer", { method: "POST", body: JSON.stringify({ symbol: sym }) });
+    const { output: d, runId } = await withProgress(note, api("/api/agents/primer", { method: "POST", body: JSON.stringify({ symbol: sym }) }), { workflow: "pitch_primer", symbol: sym, intro: `Gathering ${sym}'s valuation, filings and ownership`, expect: "Up to a minute" });
     let filled = 0;
     for (const k of ["thesis", "catalysts", "risks", "valuation", "bullCase", "baseCase", "bearCase"]) {
       const f = form.elements[k];
-      if (f && !f.value.trim() && d[k]) { f.value = `[AI draft: rewrite in your own words]\n${d[k]}`; filled++; }
+      if (f && !f.value.trim() && d[k]) { f.value = `[AI draft: rewrite in your own words]\n${d[k]}`; f.classList.add("ai-drafted"); filled++; }
     }
-    note.innerHTML = `${filled} section${filled === 1 ? "" : "s"} drafted. <a href="#/agents/runs/${runId}">See the data it used</a>${d.openQuestions?.length ? `. Still to find out: ${d.openQuestions.map(esc).join("; ")}` : ""}`;
-  } catch (err) { note.textContent = err.message; }
+    note.innerHTML = `${filled ? `${filled} section${filled === 1 ? "" : "s"} drafted (highlighted).` : "Every section already had text, so nothing was changed."} <a href="#/agents/runs/${runId}">See the data it used</a>${d.openQuestions?.length ? `<br>Still to find out: ${d.openQuestions.map(esc).join("; ")}` : ""}`;
+    form.querySelector(".ai-drafted")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  } catch (err) { note.innerHTML = aiErrorHtml(err); }
   finally { btn.disabled = false; }
 }

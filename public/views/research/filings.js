@@ -228,15 +228,15 @@ async function agentBrief(symbol, li, btn) {
   if (existing) { show(existing); btn.textContent = "Hide cited brief"; return; }
   btn.disabled = true;
   btn.textContent = "Reading the filing…";
-  box.innerHTML = loading("An agent is reading the filing and checking every quote. This takes up to a minute.");
+  const { withProgress, aiErrorHtml } = await import("../../ai.js");
   try {
-    const r = await api("/api/agents/brief", { method: "POST", body: JSON.stringify({ symbol, accession: li.dataset.acc }) });
+    const r = await withProgress(box, api("/api/agents/brief", { method: "POST", body: JSON.stringify({ symbol, accession: li.dataset.acc }) }), { symbol, intro: "Opening the filing on SEC EDGAR", expect: "Up to a minute. Every quote gets checked against the filing." });
     const b = { runId: r.runId, brief: r.brief, feedback: {} };
     agentBriefs.set(url, b);
     show(b);
     btn.textContent = "Hide cited brief";
   } catch (err) {
-    box.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    box.innerHTML = aiErrorHtml(err);
     btn.textContent = "Try again";
   } finally { btn.disabled = false; }
 }

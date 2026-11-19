@@ -60,6 +60,21 @@ router.get("/agents/runs/:id", requireAi, (req, res) => {
   res.json({ ...r, event, feedback: feedbackFor([r.id], req.member.id)[r.id] || { useful: 0, wrong: 0, not_useful: 0, mine: null } });
 });
 
+// The member's own run that is working right now (newest, started in the last 10 minutes), with
+// its steps so far. The page polls this while it waits on a POST so it can show what the agent
+// is doing instead of a static "loading" line. ?workflow= narrows it; ?symbol= too.
+router.get("/agents/runs-live", requireAi, (req, res) => {
+  const workflow = req.query.workflow ? String(req.query.workflow).slice(0, 40) : null;
+  const symbol = req.query.symbol ? String(req.query.symbol).toUpperCase().slice(0, 12) : null;
+  const since = new Date(Date.now() - 10 * 60e3).toISOString().replace("T", " ").slice(0, 19);
+  const r = db.prepare(`SELECT id, workflow, symbol, status, steps, costUsd, createdAt FROM agent_runs
+    WHERE memberId = ? AND status = 'running' AND createdAt >= ? ${workflow ? "AND workflow = ?" : ""} ${symbol ? "AND symbol = ?" : ""} ORDER BY id DESC LIMIT 1`)
+    .get(req.member.id, since, ...(workflow ? [workflow] : []), ...(symbol ? [symbol] : []));
+  if (!r) return res.json({ run: null });
+  const steps = JSON.parse(r.steps || "[]").map((s) => ({ at: s.at, kind: s.kind, name: s.name, args: s.args, ok: s.ok, toolCalls: s.toolCalls }));
+  res.json({ run: { id: r.id, workflow: r.workflow, symbol: r.symbol, status: r.status, costUsd: r.costUsd, createdAt: r.createdAt, steps } });
+});
+
 // Briefs (filing and earnings flashes), newest first; ?symbol= for one holding.
 router.get("/agents/briefs", requireAi, (req, res) => {
   const symbol = req.query.symbol ? String(req.query.symbol).toUpperCase().slice(0, 12) : null;

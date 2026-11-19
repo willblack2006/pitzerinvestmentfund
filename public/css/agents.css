@@ -29,7 +29,7 @@
 
 .agent-answer { display: grid; gap: var(--sp-3); }
 .agent-answer .agent-tools { font-size: var(--fs-xs); color: var(--text-2); }
-.agent-ask { display: flex; gap: var(--sp-2); align-items: flex-end; flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.agent-ask { display: flex; gap: var(--sp-2); align-items: flex-end; flex-wrap: wrap; margin: var(--sp-3) 0 var(--sp-4); }
 .agent-ask textarea { flex: 1 1 320px; min-height: 64px; }
 .agent-brief-head h3 { text-transform: none; letter-spacing: 0; color: var(--text); font-size: var(--fs-lg); margin: 2px 0 0; }
 .agent-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 var(--sp-4); font-size: var(--fs-sm); }
@@ -39,3 +39,90 @@
 .agent-objections { margin: 0 0 var(--sp-3); padding-left: 1.2em; display: grid; gap: var(--sp-3); }
 .agent-objections p { margin: 0 0 2px; }
 .agent-objections .badge { margin-left: 0; }
+
+/* ---- AI across the app (public/ai.js) ---- */
+/* Header button: a labeled pill on wide screens, icon only on phones. */
+.ask-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--r-full); background: var(--panel); color: var(--text); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.ask-btn .icon { color: var(--accent); }
+.ask-btn:hover { border-color: var(--accent); background: var(--row-hover); }
+.ask-btn.hidden { display: none; }
+@media (max-width: 720px) { .ask-btn { width: 40px; height: 40px; padding: 0; justify-content: center; border: 0; background: none; } .ask-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+
+/* Side panel (shares .chat-panel geometry; full width on phones, where the chat panel is hidden). */
+.ask-panel { width: min(460px, 100vw); }
+@media (max-width: 720px) { .ask-panel[open] { display: block; width: 100vw; height: 100dvh; max-height: 100dvh; } }
+.ask { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ask .chat-head h2 { display: inline-flex; align-items: center; gap: 6px; }
+.ask .chat-head h2 .icon { color: var(--accent); }
+.ask-list { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3); display: grid; align-content: start; gap: var(--sp-3); }
+.ask-compose { border-top: 1px solid var(--border); padding: 10px 12px; }
+.ask-compose textarea { flex: 1; resize: none; min-height: 44px; max-height: 160px; font: inherit; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--panel-2); color: var(--text); }
+.ask-hint { margin: 6px 0 0; }
+.ask-empty { padding: var(--sp-2); }
+.ask-empty-title { font-weight: 600; margin: 0 0 4px; }
+.ask-suggest { display: grid; gap: 6px; margin-top: var(--sp-3); }
+.ask-suggest .agent-chip { text-align: left; justify-content: flex-start; }
+
+/* Answer card */
+.agent-answer.is-compact { padding: var(--sp-3); gap: var(--sp-2); }
+.agent-q { display: flex; gap: 6px; align-items: baseline; margin: 0; font-weight: 600; }
+.agent-q .icon { flex: none; color: var(--text-2); position: relative; top: 2px; }
+.agent-answer-text p, .agent-answer-text ul { margin: 0 0 var(--sp-2); }
+.agent-answer-text > :last-child { margin-bottom: 0; }
+.agent-checks { display: flex; flex-wrap: wrap; gap: 4px; }
+.agent-checks .badge { margin-left: 0; }
+.agent-sources .pf-sub { margin-top: 0; }
+.agent-src-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); font-size: var(--fs-sm); }
+.agent-src-list li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; }
+.agent-src-list p { margin: 0; }
+.agent-src-n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-2, var(--panel-2)); border: 1px solid var(--border); font-size: var(--fs-xs); font-weight: 600; color: var(--text-2); }
+.agent-src { display: inline-block; padding: 0 6px; border-radius: var(--r-sm); background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.agent-src:hover { text-decoration: underline; }
+.agent-looked summary { color: var(--text-2); cursor: pointer; }
+.agent-looked .chip-list { margin-top: 6px; }
+.agent-looked .chip { padding: 2px 10px; font-size: var(--fs-xs); }
+.agent-looked .chip.is-bad { border-color: var(--negative); }
+.agent-followups { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.agent-followups > .small { display: inline-flex; align-items: center; gap: 4px; margin-right: 2px; }
+.agent-chip { white-space: normal; text-align: left; line-height: 1.3; font-weight: 500; }
+.ask-chips { margin: var(--sp-2) var(--gutter, 0) 0; }
+.panel .ask-chips { margin: var(--sp-3) 0 0; }
+.ask-chips .icon { color: var(--accent); }
+.ask-suggest-page { margin-bottom: var(--sp-2); }
+
+/* Live progress */
+.agent-progress { padding: var(--sp-2) 0; }
+.agent-progress p { margin: 4px 0 0; }
+.agent-progress-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--fs-sm); }
+.agent-progress-list li { display: flex; align-items: center; gap: 8px; }
+.agent-progress-list .is-done { color: var(--text-2); }
+.agent-progress-list .is-done .icon { color: var(--positive); }
+.agent-progress-list .is-bad .icon { color: var(--negative); }
+.agent-progress-list .is-now { font-weight: 600; }
+.agent-progress-list .spinner { width: 14px; height: 14px; flex: none; }
+
+/* Ask history on the Agents page */
+.agent-history { display: grid; gap: var(--sp-2); }
+.agent-hist { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); }
+.agent-hist > summary { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 10px 14px; cursor: pointer; font-weight: 600; }
+.agent-hist > summary .muted { font-weight: 400; white-space: nowrap; }
+.agent-hist[open] > summary { border-bottom: 1px solid var(--border); }
+.agent-hist .agent-answer { border: 0; box-shadow: none; margin: 0; }
+.agent-hist .agent-q { display: none; }
+
+/* "From the research agents" panel (Research overview, Today) */
+.ai-panel h3 { display: inline-flex; align-items: center; gap: 6px; }
+.ai-panel h3 .icon { color: var(--accent); }
+.ai-brief-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.ai-brief-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ai-brief-link { display: grid; gap: 2px; text-decoration: none; color: var(--text); min-width: 0; }
+.ai-brief-link:hover .ai-brief-head { text-decoration: underline; }
+.ai-brief-head { font-weight: 600; font-size: var(--fs-sm); line-height: 1.35; }
+.ai-panel .ask-chips { display: grid; gap: 6px; }
+.ai-panel .ask-chips .agent-chip { justify-content: flex-start; }
+
+/* Pitch fields the AI filled in */
+.ai-drafted { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-soft); }
+.ask-open { display: inline-flex; align-items: center; gap: 6px; }
+.ask-open .icon { color: var(--accent); }
+@media (max-width: 600px) { .ask-open span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
