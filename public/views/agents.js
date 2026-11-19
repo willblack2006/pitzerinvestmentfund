@@ -32,6 +32,8 @@ export function budgetBar(b) {
 const verifiedBadge = (v) => v ? `<span class="badge badge-owned" title="This quote was found word for word in the filing">Verified quote</span>`
   : `<span class="badge badge-warn" title="This quote could not be found in the filing. Check it before relying on it.">Quote not found</span>`;
 
+const repairedBadge = (x) => x?.repaired ? ` <span class="badge" title="The agent paraphrased; the quote shown is the exact filing sentence it matched.">Matched to filing text</span>` : "";
+
 export function briefCard(b, { runId, feedback, showSymbol = true } = {}) {
   if (!b) return "";
   const fb = feedback || {};
@@ -44,9 +46,9 @@ export function briefCard(b, { runId, feedback, showSymbol = true } = {}) {
       ${b.tone ? `<span class="badge ${TONE[b.tone] || ""}">${esc(b.tone)}</span>` : ""}
     </header>
     <p>${esc(b.bottomLine)}</p>
-    ${b.points?.length ? `<ul class="agent-points">${b.points.map((p) => `<li><p>${esc(p.text)}</p><blockquote>“${esc(p.quote)}” ${verifiedBadge(p.verified)}</blockquote></li>`).join("")}</ul>` : ""}
+    ${b.points?.length ? `<ul class="agent-points">${b.points.map((p) => `<li><p>${esc(p.text)}</p><blockquote>“${esc(p.quote)}” ${verifiedBadge(p.verified)}${repairedBadge(p)}</blockquote></li>`).join("")}</ul>` : ""}
     ${b.kpis?.length ? `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Reported figures</caption><thead><tr><th scope="col" class="left">Figure</th><th scope="col" class="num">As filed</th><th scope="col" class="left">Check</th></tr></thead>
-      <tbody>${b.kpis.map((k) => `<tr><th scope="row" class="left">${esc(k.name)}</th><td class="num">${esc(k.value)}</td><td class="left">${verifiedBadge(k.verified)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <tbody>${b.kpis.map((k) => `<tr><th scope="row" class="left">${esc(k.name)}</th><td class="num">${esc(k.value)}</td><td class="left">${verifiedBadge(k.verified)}${repairedBadge(k)}</td></tr>`).join("")}</tbody></table></div>` : ""}
     ${b.questions?.length ? `<p class="pf-sub">Look into next</p><ul class="small">${b.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}
     ${b.unbackedNumbers?.length ? `<p class="notice small">These numbers in the text don't match the filing or the app's data, so check them: ${b.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
     ${b.sourceTruncated ? `<p class="muted small">The filing was long, so only its first part was read.</p>` : ""}

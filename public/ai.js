@@ -58,10 +58,11 @@ export function answerCard(o, runId, { feedback, compact = false } = {}) {
     quotes.length ? `<span class="badge ${verified === quotes.length ? "badge-owned" : "badge-warn"}">${verified} of ${quotes.length} quote${quotes.length === 1 ? "" : "s"} verified</span>` : "",
     unsourced ? `<span class="badge badge-warn">${unsourced} source${unsourced === 1 ? "" : "s"} not read</span>` : "",
     nums.length ? `<span class="badge badge-warn">${nums.length} number${nums.length === 1 ? "" : "s"} to check</span>` : "",
+    o.selfChecked && !nums.length ? `<span class="badge" title="The agent re-checked its numbers against the data once before answering.">Numbers re-checked</span>` : "",
   ].join("");
   const claimLi = (c, i) => `<li><span class="agent-src-n" aria-hidden="true">${i + 1}</span><div>
       <p>${esc(c.text)} ${sourceLink(c.source_url)}${c.sourced ? "" : ` <span class="badge badge-warn" title="The agent named this source but never opened it in this run.">not read</span>`}</p>
-      ${c.quote ? `<blockquote>“${esc(c.quote)}” ${c.verified ? `<span class="badge badge-owned" title="Found word for word in the source">Verified quote</span>` : `<span class="badge badge-warn" title="Not found in the source. Check it before relying on it.">Quote not found</span>`}</blockquote>` : ""}
+      ${c.quote ? `<blockquote>“${esc(c.quote)}” ${c.verified ? `<span class="badge badge-owned" title="Found word for word in the source">Verified quote</span>${c.repaired ? ` <span class="badge" title="The agent paraphrased; this is the exact filing sentence it matched.">Matched to filing text</span>` : ""}` : `<span class="badge badge-warn" title="Not found in the source. Check it before relying on it.">Quote not found</span>`}</blockquote>` : ""}
     </div></li>`;
   const tools = (o.toolsUsed || []);
   return `<article class="panel agent-answer${compact ? " is-compact" : ""}" data-run="${runId}">
