@@ -17,6 +17,8 @@ const health = require("../lib/agents/health");
 const { setSettings } = require("../lib/settings");
 const { createSession } = require("../middleware/auth");
 
+// Built-in agents (WS1 seeds one per workflow) are keyed a<id>; otherwise w<workflow>.
+const keyFor = (w) => { try { const a = db.prepare("SELECT id FROM agents WHERE workflow = ? AND kind = 'builtin'").get(w); if (a) return `a${a.id}`; } catch { /* no agents table */ } return `w${w}`; };
 const iso = (d) => d.toISOString();
 const sql = (d) => d.toISOString().replace("T", " ").slice(0, 19);
 
@@ -109,7 +111,8 @@ test("stats: success rate, latency, cost quantiles, feedback reasons and failure
   assert.equal(s.perDay.length, 8);
 
   const ov = metrics.agentsOverview({ days: 7, now });
-  assert.deepEqual(ov.agents.map((a) => a.key).sort(), ["wfiling_flash", "wmacro_brief"]);
+  assert.deepEqual(ov.agents.filter((a) => a.runs).map((a) => a.key).sort(), [keyFor("filing_flash"), keyFor("macro_brief")].sort());
+  assert.equal(metrics.agentStats(keyFor("filing_flash"), { days: 7, now }).runs, 5, "agent key counts its workflow's runs");
   assert.equal(metrics.agentStats("bad key!"), null);
 });
 
@@ -124,7 +127,7 @@ test("spend: groups by agent, member and tier, projects month end and flags 80%"
   assert.equal(s.spentUsd, 7.5); assert.equal(s.pct, 0.75);
   assert.equal(s.level, "pace", "under 80% but on pace to go over");
   assert.ok(s.projectedUsd > 10);
-  assert.equal(s.byAgent[0].key, "wask_pif");
+  assert.equal(s.byAgent[0].key, keyFor("ask_pif"));
   assert.equal(s.byMember.find((x) => x.key === m).name, "Spender");
   assert.deepEqual(s.byTier.map((t) => t.key).sort(), ["cheap", "mid"]);
   assert.equal(s.byDay.length, 11); assert.equal(s.byDay.at(-1).cumulativeUsd, 7.5);
@@ -148,7 +151,7 @@ test("health: failure streak and fund budget alert once, to admins, with an inbo
   assert.equal(notes.length, 2);
   assert.ok(notes.every((n) => n.type === "agentHealth"));
   assert.ok(notes.some((n) => n.link === "#/ai-spend"));
-  assert.ok(notes.some((n) => n.link === "#/agents/stats/wweekly_memo"));
+  assert.ok(notes.some((n) => n.link === `#/agents/stats/${keyFor("weekly_memo")}`));
 });
 
 test("routes: trace visibility, stats, admin-only spend, feedback reasons", async () => {
@@ -175,8 +178,8 @@ test("routes: trace visibility, stats, admin-only spend, feedback reasons", asyn
 
     assert.equal((await call("/api/admin/ai-spend", a)).status, 403);
     assert.equal((await call("/api/admin/ai-spend", admin)).status, 200);
-    assert.equal((await call("/api/agents/stats", b)).body.agents[0].key, "wask_pif");
-    assert.equal((await call("/api/agents/stats/wask_pif", b)).body.recent.length, 0, "others don't see the private run list");
+    assert.equal((await call("/api/agents/stats", b)).body.agents[0].key, keyFor("ask_pif"));
+    assert.equal((await call(`/api/agents/stats/${keyFor("ask_pif")}`, b)).body.recent.length, 0, "others don't see the private run list");
 
     const rs = await call(`/api/agents/runs/${mine}/reasons`, a, { method: "POST", body: JSON.stringify({ reasons: ["wrong_number", "bogus"] }) });
     assert.deepEqual(rs.body, { verdict: "wrong", reasons: ["wrong_number"] });

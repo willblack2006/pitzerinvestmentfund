@@ -31,14 +31,15 @@ function previewText(p) {
 }
 const link = (u, text) => (u ? (u.startsWith("#") ? `<a href="${esc(u)}">${esc(text)}</a>` : `<a href="${safeUrl(u)}" target="_blank" rel="noopener">${esc(text)}<span class="sr-only"> (opens in a new tab)</span></a>`) : "");
 
+const cap = (t) => String(t || "").replace(/^\w/, (c) => c.toUpperCase());
 function spanTitle(s) {
-  if (s.kind === "tool") return toolLabel(s.name, s.args || {});
+  if (s.kind === "tool") return cap(toolLabel(s.name, s.args || {}).replace(/^the /, ""));
   return s.label || KIND[s.kind] || s.kind;
 }
 
 function spanMeta(s) {
   if (s.kind === "model") return `${num(s.tokens.input)} in${s.tokens.cached ? ` (${num(s.tokens.cached)} cached)` : ""} · ${num(s.tokens.output)} out`;
-  if (s.kind === "tool") return s.ok ? (s.fromCache ? "from cache" : "") : "error";
+  if (s.kind === "tool") return s.ok ? (s.fromCache ? "from cache" : "") : String(s.error || "").slice(0, 120);
   if (s.kind === "source") return `${num(s.chars)} chars${s.truncated ? ", cut to fit" : ""}`;
   return "";
 }
@@ -80,7 +81,7 @@ export function waterfall(spans, totalMs, children = []) {
     ...children.map((c) => ({ kind: "child", start: c.start, ms: c.ms, title: `Sub-run: ${workflowName(c.workflow)}`, childRunId: c.id, costUsd: c.costUsd, ok: c.status !== "failed", detail: { status: c.status } })),
   ].sort((a, b) => a.start - b.start || (a.i ?? 1e9) - (b.i ?? 1e9));
   if (!rows.length) return `<p class="muted">No steps were recorded for this run.</p>`;
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => `<span style="left:${f * 100}%">${dur(total * f)}</span>`).join("");
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => `<span style="left:${f * 100}%">${f ? dur(total * f) : "0"}</span>`).join("");
   return `<div class="trace-legend" aria-hidden="true"><span class="trace-key is-model"></span>Model turn <span class="trace-key is-tool"></span>Tool or source <span class="trace-key is-other"></span>Check, memory, handoff</div>
   <div class="trace-axis" aria-hidden="true"><span class="trace-axis-label"></span><span class="trace-axis-track">${ticks}</span></div>
   <ol class="trace-rows">${rows.map((s) => {
@@ -123,6 +124,10 @@ function statTiles(t, run) {
   </div>`;
 }
 
+async function workflowTitle(w) {
+  try { return (await import("../agents.js")).workflowLabel(w); } catch { return workflowName(w); }
+}
+
 export async function mount(container, params = {}) {
   ensureCss("/css/trace.css");
   if (!can("ai")) { container.innerHTML = pageHead("Agent run") + `<div class="toolbar">${lockedHint("Sign in to see agent runs.", "ai")}</div>`; return; }
@@ -132,13 +137,14 @@ export async function mount(container, params = {}) {
   try { d = await api(`/api/agents/runs/${encodeURIComponent(id)}/trace`); }
   catch (err) { container.querySelector(".page-pad").innerHTML = errorState({ title: "Couldn't load this run.", detail: err.message }); return; }
   const r = d.run;
+  const wfTitle = await workflowTitle(r.workflow);
   const who = [
-    r.agentId ? `<a href="#/agents/stats/a${encodeURIComponent(r.agentId)}">Agent stats</a>` : `<a href="#/agents/stats/w${encodeURIComponent(r.workflow)}">${esc(workflowName(r.workflow))} stats</a>`,
+    r.agentId ? `<a href="#/agents/stats/a${encodeURIComponent(r.agentId)}">Agent stats</a>` : `<a href="#/agents/stats/w${encodeURIComponent(r.workflow)}">${esc(wfTitle)} stats</a>`,
     d.member ? `asked by ${esc(d.member.name)}` : "",
     d.event ? `triggered by ${link(d.event.sourceUrl, d.event.title) || esc(d.event.title)}` : r.trigger ? `trigger: ${esc(r.trigger)}` : "",
     d.parent ? `part of <a href="#/agents/runs/${d.parent.id}">run #${d.parent.id}</a>` : "",
   ].filter(Boolean).join(" · ");
-  container.innerHTML = pageHead(`${esc(workflowName(r.workflow))}${r.symbol ? ` · ${esc(r.symbol)}` : ""}`,
+  container.innerHTML = pageHead(`${esc(wfTitle)}${r.symbol ? ` · ${esc(r.symbol)}` : ""}`,
     `Run #${esc(r.id)}, ${esc(localTime(r.createdAt))}. <span class="badge ${STATUS[r.status] || ""}">${esc(r.status)}</span> ${who}`,
     `<a class="btn btn-ghost btn-sm" href="#/agents/activity">All runs</a>`) + `<div class="page-pad trace-page">
     ${r.error ? `<p class="notice small">${esc(r.error)}</p>` : ""}

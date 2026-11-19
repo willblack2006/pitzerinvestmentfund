@@ -91,3 +91,4 @@ router.post("/agents/runs/:id/reasons", requireAi, (req, res) => {
 });
 
 module.exports = router;
+module.exports.autoMount = true;
