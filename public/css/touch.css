@@ -1,0 +1,36 @@
+/* Touch and home-screen feel: no 300ms tap delay or grey flash, no iOS zoom on focus, 44px
+   targets on touch screens, safe areas around the notch and home bar, and no accidental
+   sideways rubber-banding. Loads last among the base sheets. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overscroll-behavior-x: none; }
+a, button, summary, [role="button"], [role="tab"], label, select, input { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button, .btn, .icon-btn, .nav-link { -webkit-touch-callout: none; }
+
+/* Notch / home-bar insets (the viewport is viewport-fit=cover). */
+.topbar { padding-left: max(var(--gutter), env(safe-area-inset-left)); padding-right: max(var(--gutter), env(safe-area-inset-right)); }
+@media (display-mode: standalone) { .topbar { padding-top: env(safe-area-inset-top); } }
+.toasts { padding-bottom: env(safe-area-inset-bottom, 0); }
+main { padding-bottom: env(safe-area-inset-bottom, 0); }
+
+@media (pointer: coarse) {
+  /* 16px fields: iOS Safari zooms the page on focus below that. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: max(16px, 1em); }
+  .btn, .icon-btn, .nav-link, .tab, .subtabs a, .tabnav a, .account-item, button.chip, .chip { min-height: 44px; }
+  .icon-btn { min-width: 44px; }
+  .btn-sm { min-height: 40px; }
+}
+
+/* Press feedback that feels instant on touch. */
+@media (hover: none) {
+  .btn:active, .icon-btn:active, .nav-link:active, .account-item:active { opacity: 0.7; transition: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+/* Small controls keep their look; their tappable area grows (an invisible halo, so no layout shift). */
+@media (pointer: coarse) {
+  .account-btn { width: 44px; height: 44px; }
+  .brand { min-width: 44px; justify-content: center; }
+  .seg-btn, .ct-seg-btn, .ct-icon-btn { min-height: 44px; }
+  .ct-seg-btn, .ct-icon-btn { min-width: 40px; }
+  a.symbol-cell, .term-btn, .sig-chip, .btn-link, .ct-chip-x { position: relative; }
+  a.symbol-cell::after, .term-btn::after, .sig-chip::after, .btn-link::after, .ct-chip-x::after { content: ""; position: absolute; inset: -12px -6px; }
+}

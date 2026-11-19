@@ -241,3 +241,9 @@ Format:
 ## 2026-11-19 — Claude (data shaping + analytics edge cases)
 - Did: `get_risk` result for agents is reshaped (`riskForAgent` in `lib/agents/tools.js`): the 2-year rebased series and rolling beta/correlation arrays (~3,000 numbers) become 12 evenly spaced points plus the latest value; verdicts untouched. `lib/analytics.js`: `align` drops missing/zero closes and duplicate dates; beta, correlation, Sharpe and information ratio are `null` (not NaN/Infinity) when a series is flat. Tests in `test/dataShaping.test.js`.
 - Gotcha: `test/api.test.js` "daily frames say where the window starts" fails offline (also on main).
+
+## 2026-11-19 — Claude (speed + mobile / home-screen app)
+- Service worker (`lib/serviceWorker.js`, served at `/sw.js` by `server.js`) precaches every file in `public/` under a cache named for a hash of them, so a deploy replaces the set atomically; `/api` is never cached. Add new static files to `public/` and they are picked up automatically. A new deploy shows a "PIF was updated. Refresh" toast (app.js). Warm reload on throttled 3G-ish: ~1.6s -> ~0.25s to a drawn page.
+- `public/boot.js` (classic script, CSP blocks inline) starts `/api/auth/session` (and positions/settings/alerts on `#/`) before modules download; `api()` in shared.js consumes each early request once. Only add read-only endpoints there.
+- app.js warms route modules on pointerdown/hover/focus of `#/` links and for the 4 main tabs when idle.
+- `manifest.webmanifest` + `public/icons/*` (PIF mark, generated PNGs), theme-color / apple meta, `viewport-fit=cover`. `public/css/touch.css` holds the touch rules (44px targets, 16px inputs, safe areas, tap highlight). Sandbox has no external data, so only layouts were checked, not populated pages.

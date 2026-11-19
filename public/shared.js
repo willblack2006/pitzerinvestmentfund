@@ -76,6 +76,13 @@ export function applyTheme() {
   const t = prefs.theme;
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
+  // Browser/status-bar color follows an explicit in-app choice (the meta tags in index.html
+  // follow the device setting otherwise).
+  let m = document.getElementById("themeColorOverride");
+  if (t === "light" || t === "dark") {
+    if (!m) { m = document.createElement("meta"); m.id = "themeColorOverride"; m.name = "theme-color"; document.head.append(m); }
+    m.content = t === "light" ? "#f6f7f9" : "#0b0d12";
+  } else m?.remove();
 }
 // "?benchmark=…" for the comparison pages when you've picked your own (else the fund's).
 export function benchParam(prefix = "?") {
@@ -99,6 +106,9 @@ const inflightGets = new Map();
 export async function api(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   if (method === "GET" && inflightGets.has(path)) return inflightGets.get(path);
+  // boot.js starts the first screen's requests before the modules download; take each one once.
+  const early = method === "GET" && window.__pifEarly?.[path];
+  if (early) { delete window.__pifEarly[path]; return early.catch(() => api(path, options)); }
 
   const promise = (async () => {
     // x-pif-app: proves the request came from this app (session cookies alone don't).

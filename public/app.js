@@ -58,6 +58,40 @@ const router = initRouter({
   "/agents/runs/:id": () => import("./views/agents.js"),
 });
 
+// Instant navigation: start downloading a page's code the moment a finger or pointer lands on its
+// link (it takes ~100ms to finish a tap), and warm the main tabs once the first screen is idle.
+const routeLoaders = Object.fromEntries(Object.entries({
+  today: () => import("./views/today.js"), research: () => import("./views/researchHome.js"),
+  screener: () => import("./views/screener.js"), macro: () => import("./views/macro.js"),
+  performance: () => import("./views/performance.js"), agents: () => import("./views/agents.js"),
+  watchlist: () => import("./views/watchlist.js"), pitches: () => import("./views/pitches.js"),
+}));
+const warmed = new Set();
+function warm(name) {
+  if (warmed.has(name) || !routeLoaders[name]) return;
+  warmed.add(name);
+  routeLoaders[name]().catch(() => warmed.delete(name));
+}
+const warmFromEvent = (e) => {
+  const a = e.target.closest?.('a[href^="#/"]');
+  if (a) warm(a.getAttribute("href").split("/")[1]);
+};
+document.addEventListener("pointerdown", warmFromEvent, { passive: true });
+document.addEventListener("pointerover", (e) => { if (e.pointerType === "mouse") warmFromEvent(e); }, { passive: true });
+document.addEventListener("focusin", warmFromEvent);
+const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+idle(() => { if (!navigator.connection?.saveData) ["today", "research", "screener", "macro"].forEach(warm); }, { timeout: 4000 });
+
+// Home-screen app / offline-first shell. A new deploy installs in the background; say so, so
+// nobody runs half old, half new code for long.
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("/sw.js").catch(() => { /* the app works without it */ });
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) toast("PIF was updated.", { action: { label: "Refresh", onClick: () => location.reload() }, timeout: 15000 });
+  });
+}
+
 // ---- Accounts: sign in, first-admin setup, account menu ----
 
 const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
