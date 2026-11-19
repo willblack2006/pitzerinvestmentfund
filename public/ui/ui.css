@@ -91,3 +91,9 @@
   .ui-pick-row { min-height: 52px; }
   .ui-pick-right button { min-width: 44px; height: 44px; }
 }
+
+/* Pitch fit check */
+.fit-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.fit-table th { text-align: left; font-weight: 500; padding: 4px 0; }
+.fit-table td { text-align: right; padding: 4px 0 4px 8px; }
+.fit-breach { color: var(--negative); }

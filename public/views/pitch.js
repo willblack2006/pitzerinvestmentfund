@@ -339,7 +339,7 @@ export async function mount(container, params) {
 function fitHtml(f) {
   if (!f.ok) return `<p class="muted small">${esc(f.reason)}</p>`;
   const row = (label, a, b, unit = "%") => `<tr><th scope="row">${label}</th><td>${a}${unit}</td><td>→ <strong>${b}${unit}</strong></td></tr>`;
-  const issues = f.issues.map((i) => `<li class="${i.level === "breach" ? "neg" : "muted"}"><strong>${esc(i.rule)}.</strong> ${esc(i.detail)}</li>`).join("");
+  const issues = f.issues.map((i) => `<li class="${i.level === "breach" ? "fit-breach" : "muted"}"><strong>${esc(i.rule)}.</strong> ${esc(i.detail)}</li>`).join("");
   return `<table class="small fit-table"><tbody>
       ${row(`${esc(f.symbol)} weight`, f.before.position, f.after.position)}
       ${row(`${esc(f.sector)}`, f.before.sector, f.after.sector)}
