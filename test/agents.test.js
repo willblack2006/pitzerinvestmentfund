@@ -256,13 +256,30 @@ test("Ask PIF: answers from tool data, marks sources it actually read, flags unb
     claims: [{ text: "NVDA market value is $18,000", source_url: "#/holdings", quote: "" }, { text: "MU is cheap", source_url: "#/research/MU", quote: "" }],
     followUps: ["How has NVDA performed since purchase?"],
   })));
+  // The self-check sends "3x" back; the model's second answer still has it, so it stays flagged.
+  replies.push(msg(JSON.stringify({
+    answer: "NVDA is the largest holding at $18,000 (my calculation: about 3x MU's $6,000).",
+    claims: [{ text: "NVDA market value is $18,000", source_url: "#/holdings", quote: "" }, { text: "MU is cheap", source_url: "#/research/MU", quote: "" }],
+    followUps: ["How has NVDA performed since purchase?"],
+  })));
   const m = Number(db.prepare("INSERT INTO members (name, role, pinHash) VALUES ('Asker', 'Analyst', '')").run().lastInsertRowid);
-  const r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "What's our biggest holding?" }, ctx));
+  const saved = db.prepare("SELECT * FROM positions").all();
+  db.exec("DELETE FROM positions");
+  db.prepare("INSERT INTO positions (symbol, shares, marketValue) VALUES ('NVDA', 100, 18000), ('MU', 50, 6000)").run();
+  let r;
+  try { r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "What's our biggest holding?" }, ctx)); } finally {
+    db.exec("DELETE FROM positions");
+    for (const p of saved) db.prepare(`INSERT INTO positions (${Object.keys(p).join(",")}) VALUES (${Object.keys(p).map(() => "?").join(",")})`).run(...Object.values(p));
+  }
   assert.equal(r.output.claims[0].sourced, true);
   assert.equal(r.output.claims[1].sourced, false, "a source the agent never read is marked");
   assert.deepEqual(r.output.toolsUsed.map((t) => t.name), ["get_holdings"]);
-  assert.deepEqual(r.output.unbackedNumbers, ["3x"], "a computed ratio is flagged for checking");
+  assert.match(JSON.stringify(requests[2].input.at(-1)), /3x/, "the unbacked number went back to the model");
+  assert.equal(requests[2].tools.length > 10, true, "the revision turn may call tools");
+  assert.equal(r.output.revised, true);
+  assert.deepEqual(r.output.unbackedNumbers, ["3x"], "a computed ratio is still flagged for checking");
   assert.equal(requests[0].tools.length > 10, true, "Ask PIF gets the whole read-only catalog");
+  assert.match(requests[0].input[1].content, /Fund holdings \(weight[^\n]*NVDA 75\.0%, MU 25\.0%/, "holdings are in the prompt so the model can route");
   assert.equal(db.prepare("SELECT memberId FROM agent_runs WHERE id = ?").get(r.runId).memberId, m, "billed to the member's daily budget");
 });
 
