@@ -1,5 +1,6 @@
 import { el, esc, api, fmtUSD, fmtMoneyCompact, fmtRatio, signed, fmtPct, icon, skeleton, errorState, bindRetry } from "../../shared.js";
 import { term } from "../../glossary.js";
+import { lineChart } from "../../charts.js";
 
 // ---- Peer comparison ----
 
@@ -225,11 +226,49 @@ export async function render(c, { symbol, data, price, isFinancial }) {
         <div class="panel-head"><h3 id="comps-h">Peer comparison</h3><span class="muted small">Trailing twelve months · Finnhub</span></div>
         <div id="compsBody"></div>
       </section>
+      <section class="panel span-full" aria-labelledby="peh-h">
+        <div class="panel-head"><h3 id="peh-h">P/E against its own history</h3><span class="muted small">Weekly price ÷ trailing 12-month EPS known at the time</span></div>
+        <div id="peHistBody">${skeleton("text", { rows: 3, label: "Loading P/E history" })}</div>
+      </section>
       <section class="panel span-full" aria-labelledby="dcf-h">
         <div class="panel-head"><h3 id="dcf-h">Discounted cash flow</h3><span class="muted small">Prefilled from SEC filings. Change any assumption</span></div>
         ${isFinancial ? `<p class="notice small">DCFs on free cash flow don't work for banks and insurers (deposits and float distort cash flow). Use P/B and ROE from the peer table instead.</p>` : dcfPanel(symbol, data, price)}
       </section>
     </div>`;
   if (!isFinancial) wireDcf(symbol, data, price);
+  loadPeHistory(symbol);
   await loadComps(symbol, data.peers);
+}
+
+async function loadPeHistory(symbol) {
+  const box = el("peHistBody");
+  if (!box) return;
+  let h;
+  try {
+    h = await api(`/api/research/${encodeURIComponent(symbol)}/pe-history`);
+  } catch (err) {
+    box.innerHTML = `<p class="muted">Couldn't load P/E history (${esc(err.message)}).</p>`;
+    return;
+  }
+  if (!el("peHistBody")) return;
+  if (!h.available) { box.innerHTML = `<p class="muted">${esc(h.reason || "No P/E history available.")}</p>`; return; }
+  const s = h.summary;
+  const x = (v) => (v === null || v === undefined ? "—" : `${v.toFixed(1)}×`);
+  const pctile = s.percentile === null ? null : Math.round(s.percentile * 100);
+  const read = s.current === null
+    ? `Trailing earnings are negative right now, so there's no P/E to compare.`
+    : `Trades at <strong>${x(s.current)}</strong> trailing earnings, ${pctile}% of the weeks since ${esc(s.from)} were cheaper. Its median over that time is ${x(s.median)} (middle half: ${x(s.p25)} to ${x(s.p75)}).`;
+  box.innerHTML = `
+    <p>${read}</p>
+    <div class="chart-box chart-sm"><canvas id="peHistChart" role="img" aria-label="${esc(`${symbol} price to earnings ratio since ${s.from}: now ${x(s.current)}, median ${x(s.median)}, low ${x(s.min)}, high ${x(s.max)}.`)}"></canvas></div>
+    <p class="muted small">Uses diluted EPS from SEC filings, counted from about 40 days after each quarter ends. Weeks with negative earnings or P/E above 150× are left out${s.coverage < 0.9 ? ` (${Math.round((1 - s.coverage) * 100)}% of weeks here)` : ""}. A company's own range isn't fair value: a business that changed (growth, margins, rates) can deserve a different multiple.</p>`;
+  const pts = h.points;
+  lineChart(el("peHistChart"), {
+    labels: pts.map((p) => p.date),
+    datasets: [
+      { label: "P/E", data: pts.map((p) => p.pe), color: "--s1" },
+      { label: "Median", data: pts.map(() => s.median), color: "--muted" },
+    ],
+    yFormat: (v) => `${Number(v).toFixed(0)}×`,
+  });
 }
