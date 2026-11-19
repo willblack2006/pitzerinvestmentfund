@@ -35,6 +35,23 @@ function scenarioTable(list, withName) {
   </table></div>`;
 }
 
+function liquidityPanel(q) {
+  const top = q.rows.filter((x) => x.days !== null && x.days >= 0.1).slice(0, 8);
+  return `<section class="panel span-full" aria-labelledby="lq-h">
+    <div class="panel-head"><h3 id="lq-h">How fast we could sell</h3><span class="muted small">Selling at ${Math.round(q.participation * 100)}% of typical daily volume</span></div>
+    <div class="kv-grid kv-4">
+      <div><span class="muted small">Sellable in 1 day</span><strong>${p1(q.withinDay)}</strong></div>
+      <div><span class="muted small">Sellable in 1 week</span><strong>${p1(q.withinWeek)}</strong></div>
+    </div>
+    ${top.length ? "" : `<p class="small">Every position with volume data could be sold in well under a day.</p>`}
+    ${top.length ? `<div class="table-scroll"><table class="data-table">
+      <thead><tr><th scope="col">Slowest to sell</th><th scope="col" class="num">Position</th><th scope="col" class="num">Typical daily $ volume</th><th scope="col" class="num">Days to sell</th></tr></thead>
+      <tbody>${top.map((x) => `<tr><th scope="row"><a href="#/research/${encodeURIComponent(x.symbol)}">${esc(x.symbol)}</a></th><td class="num">${usd(x.value)}</td><td class="num">${usd(x.adv)}</td><td class="num">${x.days < 0.05 ? "<0.1" : x.days.toFixed(1)}</td></tr>`).join("")}</tbody>
+    </table></div>` : ""}
+    <p class="muted small">Uses the median dollar volume of the last ${q.window} sessions. A rough guide: it ignores price impact and doesn't cover the fund's own cash needs.${q.unknown.length ? ` No volume data for ${q.unknown.map(esc).join(", ")}.` : ""}</p>
+  </section>`;
+}
+
 export async function mount(container) {
   destroyAll();
   const head = subTabs(PORTFOLIO_TABS, "#/risk");
@@ -91,9 +108,11 @@ export async function mount(container) {
       <section class="panel span-full" aria-labelledby="sc-h">
         <div class="panel-head"><h3 id="sc-h">If the market falls</h3><span class="muted small">Each holding moves by its beta × the S&amp;P 500's fall</span></div>
         ${scenarioTable(r.shocks, false)}
+        ${r.growthShocks?.length ? `<h4>Growth sell-off (Nasdaq-100 falls, each holding moves by its beta to it; fund beta ${r.growthBeta.toFixed(2)})</h4>${scenarioTable(r.growthShocks, false)}` : ""}
         ${r.episodes.length ? `<h4>Past sell-offs, applied to today's holdings</h4>${scenarioTable(r.episodes, true)}` : ""}
         <p class="muted small">A rough guide, not a forecast: betas come from one year of calm-to-normal data, and in real crashes stocks fall together, so high-beta names often lose more than this shows.</p>
       </section>
+      ${r.liquidity ? liquidityPanel(r.liquidity) : ""}
     </div>`;
 
   if (L) {
