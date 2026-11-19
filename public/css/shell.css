@@ -95,19 +95,7 @@ html { scroll-padding-top: calc(var(--topbar-h) + 56px); -webkit-font-smoothing:
 .page-head h2, .panel h3 { text-wrap: balance; }
 .page-desc, .muted.page-desc, .empty-state-body { text-wrap: pretty; }
 
-.btn, .nav-link, .icon-btn, .list-tab, .tabnav-link, .subtabs a, .subtabs button, .chip, .account-btn {
-  transition: background-color .15s ease, color .15s ease, border-color .15s ease, transform .12s ease, filter .15s ease;
-}
-.btn:active, .icon-btn:active, .account-btn:active { transform: scale(.97); }
-tbody tr { transition: background-color .12s ease; }
-
-@media (prefers-reduced-motion: no-preference) {
-  #view[aria-busy="false"] > * { animation: view-in .22s ease-out backwards; }
-  #view[aria-busy="false"] > *:nth-child(2) { animation-delay: .03s; }
-  #view[aria-busy="false"] > *:nth-child(3) { animation-delay: .06s; }
-  #view[aria-busy="false"] > *:nth-child(n+4) { animation-delay: .09s; }
-}
-@keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.nav-link, .icon-btn, .list-tab, .tabnav-link, .subtabs a, .subtabs button { transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
 
 /* Pages that put a sidebar or grid right under the title get the same breathing room as the rest */
 .page-head + .lists-layout { padding-top: 16px; }
@@ -136,5 +124,13 @@ tbody tr { transition: background-color .12s ease; }
 .palette-empty { padding: 16px 12px; }
 .palette-foot { display: flex; gap: 16px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: var(--fs-xs); color: var(--text-2); }
 .palette-foot kbd { margin-right: 4px; padding: 0 5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); font: inherit; }
-@media (prefers-reduced-motion: no-preference) { .palette { animation: view-in .16s ease-out backwards; } }
+@media (prefers-reduced-motion: no-preference) { .palette { animation: pif-view-in .16s ease-out backwards; } }
 @media (hover: none) { .palette-foot { display: none; } }
+
+/* ---- Tables: the first column names the row, so it reads left-aligned; numbers stay right ---- */
+.data-table thead th:first-child, .data-table tbody th[scope="row"] { text-align: left; }
+.data-table tbody th[scope="row"] a { font-weight: 600; text-decoration: none; }
+.data-table tbody th[scope="row"] a:hover { text-decoration: underline; }
+.takeaways { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--sp-2); }
+.takeaways li { padding-left: var(--sp-3); border-left: 2px solid var(--accent); }
+.page-head + .tabnav, .page-head + .subtabs { margin-top: var(--sp-3); }

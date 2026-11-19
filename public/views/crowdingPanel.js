@@ -29,10 +29,13 @@ export async function loadCrowdingPanel(id, scopeOrSymbols) {
   const spikes = r.rows.filter((x) => x.score >= 30 && !x.error);
   if (!r.rows.length) { box.innerHTML = `<p class="small muted">No stocks to check yet.</p>`; return; }
   if (!spikes.length) { box.innerHTML = `<p class="small muted">No attention spikes across these ${r.rows.length} stocks right now.</p>`; return; }
-  box.innerHTML = `
-    <ul class="link-list small">${spikes.map((x) => `
+  const item = (x) => `
       <li><a class="symbol-cell" href="#/research/${encodeURIComponent(x.symbol)}">${esc(x.symbol)}</a>
         <span class="badge ${x.score >= 60 ? "badge-danger" : "badge-warn"}">${esc(x.label)}</span>
-        <div class="muted">${esc(x.reasons[0])}</div></li>`).join("")}</ul>
+        <div class="muted">${esc(x.reasons[0])}</div></li>`;
+  const SHOW = 6;
+  box.innerHTML = `
+    <ul class="link-list small">${spikes.slice(0, SHOW).map(item).join("")}</ul>
+    ${spikes.length > SHOW ? `<details class="small"><summary>Show the other ${spikes.length - SHOW}</summary><ul class="link-list small">${spikes.slice(SHOW).map(item).join("")}</ul></details>` : ""}
     <p class="muted small">A statistical tendency across many stocks, not a prediction for any one of these.</p>`;
 }

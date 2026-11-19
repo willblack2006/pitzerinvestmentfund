@@ -329,7 +329,7 @@ const ATT_GROUPS = {
   redflag: { head: "Red flags", icon: "flag" },
   activist: { head: "Activist filings", icon: "percent" },
 };
-const ATT_SHOW = 5;
+const ATT_SHOW = 3;
 
 function attentionHtml(alerts) {
   const groups = new Map();
@@ -350,7 +350,7 @@ function attentionHtml(alerts) {
         <span class="sr-only">${a.level === "action" ? "Needs action" : "For awareness"}</span>
       </li>`;
     };
-    return `<details class="att-group"${i < 2 || items.some((a) => a.level === "action") ? " open" : ""}>
+    return `<details class="att-group"${i < 1 || items.some((a) => a.level === "action") ? " open" : ""}>
       <summary><span class="att-head">${esc(g.head)}</span> <span class="count-pill">${items.length}</span></summary>
       ${g.action ? `<p class="att-action small muted">${esc(g.action)}</p>` : ""}
       <ul class="att-list">${items.slice(0, ATT_SHOW).map(line).join("")}</ul>
