@@ -1,2 +1,3 @@
 /* Agent platform stylesheets (plan 3.6). Each workstream adds its own file in public/css/ and
    appends one @import line below (append-only). Never edit public/style.css. */
+@import url("builder.css");
