@@ -196,6 +196,9 @@ addColumn("members", "passwordHash", "TEXT");
 addColumn("members", "isAdmin", "INTEGER NOT NULL DEFAULT 0");
 addColumn("members", "canTrade", "INTEGER NOT NULL DEFAULT 0");
 addColumn("members", "lastSeenAt", "TEXT");
+// AI access (2026-11-17): anything that calls a model or shows agent output needs canUseAi,
+// which only an admin grants. Admins always have it.
+addColumn("members", "canUseAi", "INTEGER NOT NULL DEFAULT 0");
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS members_email ON members (email) WHERE email IS NOT NULL`);
 // Sessions are now cookies; the table stores a SHA-256 of the token, never the token itself.
 addColumn("member_sessions", "expiresAt", "TEXT");
@@ -222,6 +225,11 @@ db.exec(`
 `);
 addColumn("research_notes", "targetPrice", "REAL");
 addColumn("research_notes", "priceAtThesis", "REAL");
+// Thesis status, set only when a member approves an agent's thesis check (lib/agents).
+addColumn("research_notes", "thesisStatus", "TEXT");
+addColumn("research_notes", "thesisStatusNote", "TEXT");
+addColumn("research_notes", "thesisStatusAt", "TEXT");
+addColumn("research_notes", "thesisStatusBy", "TEXT");
 addColumn("positions", "sector", "TEXT NOT NULL DEFAULT ''");
 // Calibration & decision journal (feature 6): a confidence level and time horizon on each
 // pitch, so outcomes can be graded later.
@@ -499,6 +507,74 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS member_alerts_member ON member_alerts (memberId);
 `);
 
+// Research agents (2026-11-17). Every upstream change worth an agent's attention becomes one
+// agent_events row (dedupeKey keeps it to one row per filing / ticker-day); the rules in
+// lib/agents/router.js pick a workflow; each workflow or agent run is one agent_runs row with
+// its steps, tool calls, tokens and cost, which is also the AI cost log the spending cap reads.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS agent_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dedupeKey TEXT NOT NULL UNIQUE,
+    symbol TEXT,
+    type TEXT NOT NULL,
+    items TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    sourceUrl TEXT NOT NULL DEFAULT '',
+    asOf TEXT,
+    payload TEXT NOT NULL DEFAULT '{}',
+    tier TEXT NOT NULL DEFAULT 'digest' CHECK (tier IN ('push','inbox','digest','ignore')),
+    workflow TEXT,
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','routed','done','skipped','failed')),
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS agent_events_status ON agent_events (status, id);
+  CREATE INDEX IF NOT EXISTS agent_events_symbol ON agent_events (symbol, id);
+  CREATE TABLE IF NOT EXISTS agent_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow TEXT NOT NULL,
+    eventId INTEGER REFERENCES agent_events(id) ON DELETE SET NULL,
+    memberId INTEGER REFERENCES members(id) ON DELETE SET NULL,
+    symbol TEXT,
+    status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running','done','failed','refused')),
+    provider TEXT,
+    model TEXT,
+    inputTokens INTEGER NOT NULL DEFAULT 0,
+    outputTokens INTEGER NOT NULL DEFAULT 0,
+    costUsd REAL NOT NULL DEFAULT 0,
+    steps TEXT NOT NULL DEFAULT '[]',
+    output TEXT,
+    error TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    finishedAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS agent_runs_created ON agent_runs (createdAt);
+  CREATE INDEX IF NOT EXISTS agent_runs_member ON agent_runs (memberId, createdAt);
+  CREATE INDEX IF NOT EXISTS agent_runs_event ON agent_runs (eventId);
+  -- Members' verdicts on agent output (the live eval: acceptance rate per workflow).
+  CREATE TABLE IF NOT EXISTS agent_feedback (
+    runId INTEGER NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    verdict TEXT NOT NULL CHECK (verdict IN ('useful','wrong','not_useful')),
+    note TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (runId, memberId)
+  );
+  -- Approval queue: anything an agent wants to change in the app waits here for a member.
+  CREATE TABLE IF NOT EXISTS agent_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    runId INTEGER REFERENCES agent_runs(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL,
+    symbol TEXT,
+    title TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    decidedBy INTEGER REFERENCES members(id) ON DELETE SET NULL,
+    decidedAt TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS agent_proposals_status ON agent_proposals (status, id);
+`);
+
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund
 // enters its own IPS rather than inheriting placeholder numbers.
 const DEFAULT_SETTINGS = {
@@ -511,6 +587,10 @@ const DEFAULT_SETTINGS = {
   benchmark: "SPY",
   voteThresholdPct: "50",
   voteQuorum: "3",
+  // AI spending caps in US dollars (lib/agents/budget.js): the fund-wide monthly cap stops new
+  // agent runs once reached; the per-member daily cap applies to runs a member starts.
+  aiMonthlyCapUsd: "25",
+  aiMemberDailyUsd: "0.5",
 };
 const insertSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
 for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insertSetting.run(k, v);

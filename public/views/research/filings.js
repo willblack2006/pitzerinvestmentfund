@@ -101,7 +101,7 @@ async function loadFilingDiff(symbol) {
   const aiBox = document.getElementById("diffAiBody");
   if (d.aiEnabled === false) {
     aiBox.innerHTML = `<p class="muted small">AI summary of these changes: coming soon.</p>`;
-  } else if (can("member")) {
+  } else if (can("ai")) {
     aiBox.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="diffSummarizeBtn">Summarize the change with AI</button>`;
     document.getElementById("diffSummarizeBtn").addEventListener("click", async (e) => {
       e.target.disabled = true;
@@ -131,7 +131,7 @@ export async function render(c, { symbol }) {
     c.innerHTML = `<p class="muted page-pad">No 10-K, 10-Q or 8-K filings found for ${esc(symbol)} on SEC EDGAR${data.error ? ` (${esc(data.error)})` : ""}.</p>`;
     return;
   }
-  const unlocked = can("member");
+  const unlocked = can("ai");
   c.innerHTML = `
     <section class="panel page-pad-panel" aria-labelledby="flags-h">
       <div class="panel-head"><h3 id="flags-h">Red-flag scan</h3><span class="muted small">SEC filings from the last two years, read and sorted by how serious they are</span></div>
@@ -144,7 +144,7 @@ export async function render(c, { symbol }) {
     <section class="panel page-pad-panel" aria-labelledby="fil-h">
       <div class="panel-head"><h3 id="fil-h">Recent SEC filings</h3><span class="muted small">From EDGAR</span></div>
       ${!data.aiEnabled ? `<p class="notice small">AI filing briefs aren't available yet (coming soon). Filings are still linked below.</p>`
-        : !unlocked ? lockedHint("Sign in to generate AI briefs (each costs a few cents of API credit; existing briefs are free to read).") : ""}
+        : !unlocked ? lockedHint("Sign in to generate AI briefs (each costs a few cents of API credit; existing briefs are free to read).", "ai") : ""}
       <ol class="filing-list">
         ${data.filings.map((f) => `
           <li class="filing" data-acc="${esc(f.accession)}">
@@ -157,9 +157,11 @@ export async function render(c, { symbol }) {
               <div class="filing-actions">
                 ${f.summary ? `<button type="button" class="btn btn-ghost btn-sm" data-toggle aria-expanded="false">Show AI brief</button>`
                   : data.aiEnabled && unlocked ? `<button type="button" class="btn btn-ghost btn-sm" data-summarize>Summarize with AI</button>` : ""}
+                ${data.aiEnabled && unlocked ? `<button type="button" class="btn btn-ghost btn-sm" data-agentbrief>Cited brief</button>` : ""}
               </div>
             </div>
             <div class="filing-body" hidden>${f.summary ? summaryBlock(f.summary) : ""}</div>
+            <div class="filing-agent" hidden></div>
           </li>`).join("")}
       </ol>
     </section>`;
@@ -176,6 +178,8 @@ export async function render(c, { symbol }) {
       btn.textContent = open ? "Hide AI brief" : "Show AI brief";
       return;
     }
+    const ab = e.target.closest("[data-agentbrief]");
+    if (ab) { agentBrief(symbol, li, ab); return; }
     const btn = e.target.closest("[data-summarize]");
     if (!btn) return;
     btn.disabled = true;
@@ -195,4 +199,44 @@ export async function render(c, { symbol }) {
   });
   loadRedFlags(symbol);
   loadFilingDiff(symbol);
+  if (data.aiEnabled && unlocked) markExistingAgentBriefs(symbol, c, data.filings);
+}
+
+// ---- Research agents: cited filing briefs (quotes checked against the filing) ----
+const agentBriefs = new Map(); // sourceUrl -> { runId, brief, feedback }
+
+async function markExistingAgentBriefs(symbol, c, filings) {
+  try {
+    const r = await api(`/api/agents/briefs?symbol=${encodeURIComponent(symbol)}&limit=50`);
+    for (const b of r.briefs) if (b.brief?.sourceUrl && !agentBriefs.has(b.brief.sourceUrl)) agentBriefs.set(b.brief.sourceUrl, b);
+    for (const f of filings) {
+      if (!agentBriefs.has(f.url)) continue;
+      const btn = c.querySelector(`.filing[data-acc="${CSS.escape(f.accession)}"] [data-agentbrief]`);
+      if (btn) btn.textContent = "Show cited brief";
+    }
+  } catch { /* briefs are optional on this page */ }
+}
+
+async function agentBrief(symbol, li, btn) {
+  const box = li.querySelector(".filing-agent");
+  const url = li.querySelector(".filing-head a")?.href;
+  const { briefCard, bindFeedback } = await import("../agents.js");
+  const show = (b) => { box.innerHTML = briefCard(b.brief, { runId: b.runId, feedback: b.feedback, showSymbol: false }); if (!box.dataset.bound) { bindFeedback(box); box.dataset.bound = "1"; } };
+  if (!box.hidden) { box.hidden = true; btn.textContent = "Show cited brief"; return; }
+  const existing = agentBriefs.get(url);
+  box.hidden = false;
+  if (existing) { show(existing); btn.textContent = "Hide cited brief"; return; }
+  btn.disabled = true;
+  btn.textContent = "Reading the filing…";
+  box.innerHTML = loading("An agent is reading the filing and checking every quote. This takes up to a minute.");
+  try {
+    const r = await api("/api/agents/brief", { method: "POST", body: JSON.stringify({ symbol, accession: li.dataset.acc }) });
+    const b = { runId: r.runId, brief: r.brief, feedback: {} };
+    agentBriefs.set(url, b);
+    show(b);
+    btn.textContent = "Hide cited brief";
+  } catch (err) {
+    box.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    btn.textContent = "Try again";
+  } finally { btn.disabled = false; }
 }
