@@ -64,7 +64,7 @@ export async function mount(container) {
   }
   const r = d.risk;
   if (!r) {
-    container.innerHTML = head + pageHead("Risk", "Where the fund's risk comes from and what a sell-off would cost.") + `<p class="muted">${esc(d.reason || "No data.")}</p>`;
+    container.innerHTML = head + pageHead("Risk", "Where the fund's risk comes from and what a sell-off would cost.") + `<p class="muted page-pad">${esc(d.reason || "No data.")}</p>`;
     return;
   }
   const L = r.loss, dd = r.drawdown;

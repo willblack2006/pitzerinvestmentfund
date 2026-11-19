@@ -1003,7 +1003,8 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: var(-
 
 /* Phone layout overrides (kept last so they win over the base component rules above) */
 @media (max-width: 600px) {
-  .summary { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .summary .stat { min-width: 0; overflow-wrap: anywhere; }
   .hide-sm { display: none; }
   .jump-form { flex: 1 1 120px; min-width: 0; }
   .icon-btn { width: 36px; }
