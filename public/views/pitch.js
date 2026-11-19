@@ -113,7 +113,14 @@ function readView(p) {
   const checklist = parseChecklist(p.bearChecklist);
   const rd = p.status === "draft" && p.readiness && !p.readiness.ready
     ? `<section class="pitch-section notice" role="note"><h3>Before this can go to a vote</h3><ul class="link-list small">${p.readiness.items.map((i) => `<li>${i.done ? "✓" : i.required ? "○ <strong>Needed:</strong>" : "○ Suggested:"} ${esc(i.label)}</li>`).join("")}</ul></section>` : "";
-  return `${rd}${blocks || `<p class="muted">No write-up yet.</p>`}
+  const rv = p.review;
+  const STATE = { hit: ["Base target reached", "tone-good"], on_track: ["On track", "tone-good"], behind: ["Behind schedule", "tone-warn"], missed: ["Horizon passed without reaching the target", "tone-bad"], unknown: ["Not enough data yet", "muted"] };
+  const rvHtml = rv ? `<section class="pitch-section notice" role="note"><h3>How this call is going</h3>
+      <p class="small"><strong class="${STATE[rv.state][1]}">${STATE[rv.state][0]}.</strong>
+        ${rv.sinceReturn != null ? ` ${fmtPct(rv.sinceReturn * 100)} since the pitch` : ""}${rv.progressPct != null ? `, ${Math.round(rv.progressPct)}% of the way to the base target` : ""}${rv.horizonDate ? `. Horizon ${esc(rv.horizonDate)} (${rv.daysLeft >= 0 ? `${rv.daysLeft} days left` : `${-rv.daysLeft} days ago`})` : ""}.</p>
+      ${rv.tripped.length ? `<p class="small tone-bad">Tripped: ${rv.tripped.map(esc).join("; ")}. Decide whether to trim, sell or re-arm on the <a href="#/research/${encodeURIComponent(p.symbol)}/thesis">thesis tab</a>.</p>` : ""}
+      <p class="small muted">Compare with what was written down: the pre-mortem and kill criteria below. ${p.status === "executed" ? "Exit tripwires for this pitch were set up on the thesis tab when it was executed." : ""}</p></section>` : "";
+  return `${rd}${rvHtml}${blocks || `<p class="muted">No write-up yet.</p>`}
     ${cases.length ? `<section class="pitch-section"><h3>Scenarios</h3><div class="case-grid">${cases.map(([l, t, v]) => `<div class="case case-${l.toLowerCase()}"><strong>${l}${v ? ` · ${fmtUSD(v)}` : ""}</strong><p class="small">${esc(t || "")}</p></div>`).join("")}</div></section>` : ""}
     ${p.preMortem?.trim() ? `<section class="pitch-section"><h3>Pre-mortem</h3><p class="prose">${esc(p.preMortem)}</p></section>` : ""}
     ${checklist.length ? `<section class="pitch-section"><h3>Bear-case checklist</h3><ul class="link-list small">${BEAR_CHECKLIST.map((label, i) => checklist.includes(i) ? `<li>✓ ${esc(label)}</li>` : "").join("")}</ul></section>` : ""}`;

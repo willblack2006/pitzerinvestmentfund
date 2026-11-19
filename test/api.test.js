@@ -278,6 +278,9 @@ test("pitches: lifecycle, quorum, threshold, permissions", async () => {
   assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", member: tokens.Ben, body: { vote: "no" } })).status, 409);
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "executed" } })).status, 403, "only a portfolio manager executes");
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ben, body: { action: "executed" } })).body.status, "executed");
+  const seeded = (await s.api("/api/tripwires?symbol=ZZP")).body;
+  assert.ok(seeded.some((x) => x.kind === "custom" && x.note.startsWith("Kill criteria:")), "executing seeds a tripwire from the kill criteria");
+  assert.ok("review" in (await s.api(`/api/pitches/${id}`)).body, "review is null without a pitch-time price, never an error");
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).status, 409);
 
   // Authorship comes from the account (a typed "author" is ignored); admins can delete others' drafts.
