@@ -1527,3 +1527,25 @@ body.ct-max-open { overflow: hidden; }
   .ct-stage { height: 340px; }
   .ct-legend { right: 8px; }
 }
+
+/* Start here (learning path) */
+.learn { display: grid; gap: var(--sp-3); }
+.learn-progress { display: grid; gap: var(--sp-2); }
+.learn-bar { height: 8px; border-radius: var(--r-full); background: var(--border); overflow: hidden; }
+.learn-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.learn-lesson > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.learn-lesson > summary::-webkit-details-marker { display: none; }
+.learn-title { font-weight: 700; flex: 1 1 12rem; }
+.learn-check { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border-strong); color: #fff; flex: none; }
+.learn-check.small { width: 16px; height: 16px; border-width: 1.5px; }
+.learn-check.is-done { background: var(--accent); border-color: var(--accent); }
+.learn-bullet { display: inline-block; width: 16px; text-align: center; color: var(--muted); }
+.learn-body { margin-top: var(--sp-3); max-width: 70ch; }
+.learn-points { padding-left: 1.2em; }
+.learn-points li { margin: 4px 0; }
+.learn-actions { list-style: none; padding: 0; margin: var(--sp-3) 0; display: grid; gap: 6px; }
+.learn-actions li { display: flex; align-items: center; gap: 8px; }
+.learn-foot { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.learn-term { white-space: nowrap; margin-right: 8px; }
+.learn-nudge { display: flex; justify-content: space-between; gap: var(--sp-3); align-items: center; margin: 0 0 var(--sp-3); }
+.glossary-search { display: grid; gap: 4px; max-width: 360px; margin-bottom: var(--sp-3); font-weight: 600; }

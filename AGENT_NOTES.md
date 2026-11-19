@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-19, Claude (member onboarding: Start here path, beginner glossary)
+- Did: `#/learn` "Start here": 7 short lessons (`public/learnContent.js`), each tied to the page where the idea lives, with glossary "?" terms, an optional Ask PIF button, and a checklist that fills in from what the member actually did (`lib/learnProgress.js`, `GET /api/learn/progress`: watchlist/follow, note, paper order, paper order with reason plus target or stop, pitch, vote). Lessons marked read are the pref `learnRead`; the quiet one-line reminder on Today is hidden for good by `learnHidden` (no notifications, no alerts). 21 beginner glossary terms (market cap, weight, cost basis, EPS, free cash flow, thesis, catalyst...), and the Glossary page now has search. Account menu has "Start here". `test/learn.test.js`.
+- Not done / ideas: a first-pitch wizard, quizzes, and the paper page explaining each rule inline.
+- Gotchas: `learnSummary` counts lessons read plus auto-detected actions (13 steps); add an action key in `learnProgress.js` and the lesson together (the test checks the keys).
+
 ## 2026-11-19, Claude (merged the AI PRs #10-#15 to main, integration test)
 - Did: merged #11 → #12 → #10 → #13 → #14 → #15 locally (conflicts in AGENT_NOTES, tools.js exports, runs.js tool memo/agent loop, ask.js prompt, .env.example), pushed main @ 3511d56 with Will's OK. #13-#15 were stacked, so they were closed as merged-by-push. Fixes found while testing: `analytics.align()` crashed on an empty map (Performance 500 whenever Yahoo is down), plain-English tool names in `public/aiFormat.js`, Ask PIF hint mentions the web, clearer `get_dcf` error.
 - Tested offline on a DB copy with a fake OpenAI preloaded via `node -r` (scripted tool calls, schema-shaped answers): Ask PIF through the UI panel, primer, red team, all 7 scheduled workflows, every page at 1280px and 375px (no JS errors, no sideways scroll). Only network-backed tools failed, as expected.

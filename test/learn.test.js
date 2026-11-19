@@ -1,0 +1,51 @@
+// "Start here" learning path: milestones come from what the member did, lessons point at real
+// glossary terms and routes, and the new prefs validate.
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { startServer } = require("./helpers");
+
+test("Learn content: every lesson term is in the glossary and every link is a real route", async () => {
+  const { LESSONS, ACTION_KEYS, learnSummary } = await import("../public/learnContent.js");
+  const { GLOSSARY } = await import("../public/glossary.js");
+  const app = fs.readFileSync(path.join(__dirname, "../public/app.js"), "utf8");
+  for (const l of LESSONS) {
+    for (const t of l.terms) assert.ok(GLOSSARY[t], `${l.id}: glossary has no "${t}"`);
+    for (const a of l.actions) {
+      const first = a.href.replace(/^#/, "").split("/").filter(Boolean)[0];
+      assert.ok(a.href === "#/" || app.includes(`"/${first}`), `${l.id}: no route for ${a.href}`);
+    }
+  }
+  assert.deepEqual(ACTION_KEYS.sort(), ["note", "paperThesis", "paperTrade", "pitch", "vote", "watchlist"]);
+  const none = learnSummary({}, []);
+  assert.equal(none.count, 0);
+  assert.equal(none.next.id, LESSONS[0].id);
+  const all = learnSummary(Object.fromEntries(ACTION_KEYS.map((k) => [k, true])), LESSONS.map((l) => l.id));
+  assert.equal(all.finished, true);
+  assert.equal(all.pct, 100);
+  // A lesson read but with an undone action stays "next".
+  assert.equal(learnSummary({}, LESSONS.map((l) => l.id)).next.id, "company");
+});
+
+test("API: learn progress follows what the member did; prefs validate", async () => {
+  const s = await startServer();
+  try {
+    assert.equal((await s.api("/api/learn/progress")).status, 401);
+    const empty = await s.api("/api/learn/progress", { auth: true });
+    assert.deepEqual(Object.values(empty.body.done), [false, false, false, false, false, false]);
+
+    const note = await s.api("/api/notes", { method: "POST", auth: true, body: { symbol: "NVDA", body: "Sells the chips behind most AI training." } });
+    assert.ok(note.status < 300, JSON.stringify(note.body));
+    const list = await s.api("/api/watchlists", { method: "POST", auth: true, body: { name: "Mine" } });
+    assert.ok(list.status < 300, JSON.stringify(list.body));
+    const after = (await s.api("/api/learn/progress", { auth: true })).body.done;
+    assert.equal(after.note, true);
+    assert.equal(after.paperTrade, false);
+
+    const ok = await s.api("/api/prefs", { method: "PUT", auth: true, body: { learnRead: ["fund", "fund", "Bad Id!"], learnHidden: true } });
+    assert.deepEqual(ok.body.learnRead, ["fund"]);
+    assert.equal(ok.body.learnHidden, true);
+    assert.equal((await s.api("/api/prefs", { method: "PUT", auth: true, body: { learnHidden: "yes" } })).status, 400);
+  } finally { await s.stop(); }
+});

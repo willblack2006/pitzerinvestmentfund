@@ -50,6 +50,7 @@ const router = initRouter({
   "/members/:id": () => import("./views/profile.js"),
   "/welcome/:token": () => import("./views/welcome.js"),
   "/join/:token": () => import("./views/join.js"),
+  "/learn": () => import("./views/learn.js"),
   "/glossary": () => import("./views/glossary.js"),
   "/agents": () => import("./views/agents.js"),
   "/agents/:tab": () => import("./views/agents.js"),
@@ -88,6 +89,7 @@ function accountMenuHtml() {
     ${m ? link("user", "My profile", "#/members/me") + link("doc", "My notes", "#/notes") + link("inbox", "Notifications", "#/inbox") : ""}
     ${m && (m.canUseAi || m.isAdmin) ? link("flask", "Research agents", "#/agents") : ""}
     ${act("chat", "Club chat", "chat")}
+    ${m ? link("flag", "Start here", "#/learn") : ""}
     ${link("help", "Glossary", "#/glossary")}
     ${link("gear", "Settings", "#/settings")}
     ${m ? link("sliders", "Account &amp; preferences", "#/account") + `<hr class="account-sep" />` + act("x", "Sign out", "signout") : `<hr class="account-sep" />` + act("user", "Sign in", "signin")}
