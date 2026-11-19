@@ -1,0 +1,67 @@
+{
+  "slug": "earnings-watcher",
+  "name": "Earnings watcher",
+  "icon": "calendar",
+  "description": "A week before a holding reports, writes what to watch: consensus, recent revisions, last quarter's surprise and the questions that matter for the thesis.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "event",
+        "on": "earnings_soon",
+        "days": 7
+      },
+      {
+        "type": "manual"
+      }
+    ],
+    "steps": [
+      {
+        "id": "d1",
+        "type": "tool",
+        "tool": "get_research_overview",
+        "args": {
+          "symbol": "$symbol"
+        }
+      },
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "cheap",
+        "output": "brief",
+        "maxSteps": 4,
+        "tools": [
+          "get_estimate_revisions",
+          "get_earnings_call"
+        ],
+        "recall": true,
+        "instructions": "Write an earnings preview: date, consensus EPS and revenue, how estimates moved in the last 90 days, last quarter's surprise, and the two or three things in this report that would confirm or hurt the fund's thesis."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "always"
+      },
+      {
+        "type": "notify",
+        "who": "followers",
+        "tier": "digest",
+        "when": "always"
+      },
+      {
+        "type": "memory",
+        "scope": "symbol",
+        "kind": "open_question",
+        "when": "always"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.05,
+      "perMonthUsd": 2
+    }
+  }
+}
