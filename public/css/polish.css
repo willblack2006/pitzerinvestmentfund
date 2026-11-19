@@ -92,3 +92,44 @@ h1, h2 { letter-spacing: -0.02em; line-height: var(--lh-tight); }
 
 /* ---- Theme switch: smooth crossfade on colors ---- */
 html.theme-fade, html.theme-fade * { transition: background-color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out) !important; }
+
+/* ======== Round 2: tabs, chips, badges, segmented controls, loading text ======== */
+/* Tabs: quiet hover pill, underline eases in */
+.subtab, .tabnav-link {
+  position: relative; border-bottom-color: transparent !important; border-radius: var(--r-md) var(--r-md) 0 0;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.subtab::after, .tabnav-link::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px; border-radius: 2px;
+  background: var(--accent); transform: scaleX(0); transform-origin: center;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.subtab:hover, .tabnav-link:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+.subtab[aria-current], .tabnav-link[aria-current] { color: var(--text); }
+.subtab[aria-current]::after, .tabnav-link[aria-current]::after { transform: scaleX(1); }
+
+/* Chips: lift, tighter ring */
+.chip:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
+
+/* Badges: hairline ring gives definition on both themes */
+.badge, .count-pill, .code-pill { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent); }
+.badge { line-height: 1.5; }
+
+/* Segmented controls: smooth pressed state */
+.seg { border-radius: var(--r-md); }
+.seg-btn { transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.seg-btn:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface-3); color: var(--text); }
+
+/* Light mode: borders and elevation a touch crisper on the off-white page */
+:root[data-theme="light"] .panel, :root[data-theme="light"] .stat { border-color: color-mix(in srgb, var(--border) 70%, var(--border-strong)); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .panel, :root:not([data-theme="dark"]) .stat { border-color: color-mix(in srgb, var(--border) 70%, var(--border-strong)); }
+}
+
+/* Empty-state: breathe a little */
+.empty-state { padding: var(--sp-7) var(--sp-4); }
+.empty-state-icon { opacity: 0.55; transform: scale(1.25); margin-bottom: var(--sp-2); }
+
+/* Links: underline offset reads cleaner */
+a { text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
