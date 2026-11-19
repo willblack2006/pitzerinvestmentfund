@@ -195,3 +195,13 @@ Format:
 - Unfinished: agent tool results still report `cached: null` and `as_of: now()`; surfacing the real cache age would let agents see stale data.
 - Follow-up (same day): API responses now carry `x-pif-data-as-of` (oldest cached row used, via AsyncLocalStorage in `lib/cache.js` + middleware in `server.js`). Agent tools built on `getApi` return that as `as_of` and `cached: true/false` (see `freshness()` in `lib/agents/tools.js`). Tools that don't go through `getApi` (SEC filing text, FRED, gov data) still say `as_of: now`/`cached: null`.
 - Follow-up 2: `callTool` now also stamps `as_of`/`cached` from the cache rows a direct-source tool (SEC text, FRED, gov data) read. DCF returns "not meaningful" for non-positive starting FCF instead of a negative value. New indexes `transactions(symbol,date)` and `transactions(type,date)`. Not reviewed: compact shaping beyond the existing `fit.js`, price-series edge cases in `lib/analytics.js` (zero-variance benchmark).
+
+## 2026-11-19, Claude (pitch fit check, cloud session)
+- New `lib/pitchFit.js` (pure) + `GET /api/pitches/:id/fit` + "Fit with the fund" panel on the pitch page: before/after position, sector, cash and holdings count, and only the policy limits the trade itself would break. `sizePct` is read as percent of the fund traded; a sell exits the whole position.
+- Tests: `test/pitchFit.test.js`. Pre-existing failure: test 86 (symbol search degrade) fails offline with or without this change.
+- Next on the shortlist: exit tripwires per holding, then a meeting agenda page.
+
+## 2026-11-19, Claude (exit tripwires, cloud session)
+- New `tripwires` table, `lib/tripwires.js` (pure `evaluate` + `check`), `routes/tripwires.js`, panel on Research > Thesis. Kinds: price below/above, review-by date, custom (marked by hand). `check()` runs every 5 min in the scheduler quick loop and on `/api/alerts` and `/api/tripwires`; a trip notifies all members once (type `tripwire`) and shows under "Exit tripwires" in Needs attention until someone re-arms or removes it.
+- Meeting brief already existed (Alerts page), so no separate agenda page was built.
+- Price tripwires could not be seen tripping in the sandbox (no Yahoo access); date ones are covered by an API test.

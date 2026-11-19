@@ -580,6 +580,22 @@ db.exec(`
     createdAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS agent_proposals_status ON agent_proposals (status, id);
+  -- Exit tripwires: conditions written down in advance that mean "revisit or sell this holding".
+  CREATE TABLE IF NOT EXISTS tripwires (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('price_below','price_above','review_by','custom')),
+    value REAL,
+    dueDate TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    authorId INTEGER REFERENCES members(id) ON DELETE SET NULL,
+    author TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','tripped','resolved')),
+    trippedAt TEXT,
+    trippedDetail TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS tripwires_symbol ON tripwires (symbol, status);
 `);
 
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund

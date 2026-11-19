@@ -286,6 +286,13 @@ router.get("/alerts", async (req, res) => {
   }
 
   try {
+    await require("../lib/tripwires").check();
+    for (const t of db.prepare("SELECT * FROM tripwires WHERE status = 'tripped' ORDER BY trippedAt").all()) {
+      alerts.push({ type: "tripwire", level: "action", symbol: t.symbol, title: `${t.symbol} tripwire: ${require("../lib/tripwires").describe(t)}`, detail: `${t.trippedDetail}${t.note ? ` Why we set it: ${t.note}` : ""} Decide whether to trim, sell or reset it.` });
+    }
+  } catch { /* best-effort */ }
+
+  try {
     const alloc = await portfolio.allocation();
     for (const c of alloc.checks.filter((x) => x.level === "breach")) alerts.push({ type: "policy", level: "action", symbol: c.symbol, title: c.rule, detail: c.detail });
   } catch { /* allocation is best-effort */ }
