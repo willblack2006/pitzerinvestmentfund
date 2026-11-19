@@ -74,3 +74,27 @@ test("scenarios scale by beta; episodes only when history covers them", () => {
 test("not enough history returns null", () => {
   assert.equal(r.portfolioRisk({ histories: { A: walk(2, 20, 0.02) }, spy: [], values: { A: 1 } }), null);
 });
+
+test("liquidity: days to sell uses median dollar volume and flags thin names", () => {
+  const mk = (vol) => Array.from({ length: 40 }, (_, i) => ({ date: `2025-01-${String(i + 1).padStart(2, "0")}`, close: 10, volume: vol }));
+  const q = r.liquidity({ BIG: mk(1_000_000), THIN: mk(1_000), NONE: [] }, { BIG: 10_000, THIN: 10_000, NONE: 5_000 });
+  const thin = q.rows.find((x) => x.symbol === "THIN");
+  assert.ok(Math.abs(thin.days - 10_000 / (0.2 * 10_000)) < 1e-9);
+  assert.equal(q.rows.find((x) => x.symbol === "NONE").days, null);
+  assert.equal(q.withinDay, 0.5);
+  assert.equal(q.slowest[0].symbol, "THIN");
+  assert.deepEqual(q.unknown, ["NONE"]);
+});
+
+test("growth shocks and policy note appear when inputs allow", () => {
+  const spy = walk(1, 260, 0.01), m = rets(spy);
+  const growth = walk(7, 260, 0.014, 0, m, 0.5);
+  const hist = { A: walk(2, 260, 0.03, 0, m, 0.8), B: walk(3, 260, 0.004) };
+  const out = r.portfolioRisk({ histories: hist, spy, growth, values: { A: 5000, B: 5000 }, cash: 0, limits: { maxPositionPct: 10 } });
+  assert.equal(out.growthShocks.length, 2);
+  assert.ok(out.growthShocks[1].change < out.growthShocks[0].change);
+  assert.ok(out.policy.length >= 1 && /single-position limit/.test(out.notes[0]));
+  const none = r.portfolioRisk({ histories: hist, spy, values: { A: 5000, B: 5000 }, cash: 0 });
+  assert.deepEqual(none.growthShocks, []);
+  assert.deepEqual(none.policy, []);
+});

@@ -162,14 +162,16 @@ router.get("/portfolio/risk", async (req, res) => {
     const stored = db.prepare("SELECT symbol, shares, marketValue FROM positions").all();
     if (!stored.length) return res.json({ risk: null, reason: "No holdings yet." });
     const symbols = stored.map((p) => p.symbol);
-    const [hist, live, spy, spyLong] = await Promise.all([
+    const [hist, live, spy, spyLong, growth] = await Promise.all([
       histories(symbols, "1y"),
       latestPrices(symbols).catch(() => ({})),
       yahooSrc.getChart("SPY", "1y", "1d").catch(() => []),
       yahooSrc.getChart("SPY", "10y", "1d").catch(() => null),
+      yahooSrc.getChart("QQQ", "1y", "1d").catch(() => null),
     ]);
     const values = Object.fromEntries(stored.map((p) => [p.symbol, live[p.symbol]?.price ? live[p.symbol].price * p.shares : p.marketValue]));
-    const risk = portfolioRisk({ histories: hist, spy, spyLong, values, cash: getSettings().cash || 0 });
+    const st = getSettings();
+    const risk = portfolioRisk({ histories: hist, spy, spyLong, growth, values, cash: st.cash || 0, limits: { maxPositionPct: st.maxPositionPct } });
     res.json({ risk, reason: risk ? null : "Not enough overlapping price history yet." });
   } catch (e) {
     res.status(502).json({ error: `Risk is unavailable: ${e.message}` });
