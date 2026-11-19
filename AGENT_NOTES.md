@@ -174,3 +174,10 @@ Format:
 - `/healthz` (no external calls) replaces `/api/positions` as the Render health check; SIGTERM/SIGINT now drain and checkpoint the WAL.
 - HSTS + Permissions-Policy headers; login-limiter map is swept; first-admin setup refuses to run on Render/production with the default EDIT_PASSWORD.
 - Not done: CSP (the pages use inline scripts/styles), per-route rate limits on AI endpoints (the AI spending cap already bounds cost), moving scrypt off the event loop.
+
+## 2026-11-19 — Claude (data pipeline: cache)
+- Did: `lib/cache.js` `cached()` now shares one in-flight fetch per key, falls back to an expired copy (up to 3 days old) when the source errors, never stores `undefined`, and has `purgeExpired()` (run each scheduler tick) plus an `expires_at` index so `api_cache` stops growing. Tests in `test/cache.test.js`.
+- Gotcha: `test/api.test.js` "daily frames say where the window starts" fails without network (also on main).
+- Unfinished: agent tool results still report `cached: null` and `as_of: now()`; surfacing the real cache age would let agents see stale data.
+- Follow-up (same day): API responses now carry `x-pif-data-as-of` (oldest cached row used, via AsyncLocalStorage in `lib/cache.js` + middleware in `server.js`). Agent tools built on `getApi` return that as `as_of` and `cached: true/false` (see `freshness()` in `lib/agents/tools.js`). Tools that don't go through `getApi` (SEC filing text, FRED, gov data) still say `as_of: now`/`cached: null`.
+- Follow-up 2: `callTool` now also stamps `as_of`/`cached` from the cache rows a direct-source tool (SEC text, FRED, gov data) read. DCF returns "not meaningful" for non-positive starting FCF instead of a negative value. New indexes `transactions(symbol,date)` and `transactions(type,date)`. Not reviewed: compact shaping beyond the existing `fit.js`, price-series edge cases in `lib/analytics.js` (zero-variance benchmark).

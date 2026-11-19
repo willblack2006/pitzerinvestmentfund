@@ -71,6 +71,14 @@ app.use(express.static(path.join(__dirname, "public"), {
 
 // Session cookies ride along on cross-site requests, so every API change must carry the app's
 // own header (see middleware/auth.js requireAppHeader).
+// Tell API callers how old the cached data behind a response is (oldest row used). Agent tools
+// read this so they can report real freshness instead of "now".
+app.use("/api", (req, res, next) => {
+  const store = {};
+  const json = res.json.bind(res);
+  res.json = (body) => { if (store.oldest && !res.headersSent) res.set("x-pif-data-as-of", store.oldest); return json(body); };
+  require("./lib/cache").requestAge.run(store, next);
+});
 app.use("/api", requireAppHeader);
 app.use("/api", authRouter);
 app.use("/api", eventsRouter);
