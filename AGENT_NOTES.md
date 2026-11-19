@@ -232,3 +232,7 @@ Format:
 - Password hashing/verification in `routes/auth.js` is async (`hashSecretAsync`/`verifySecretAsync`); setup, join and invite re-check state after hashing so concurrent requests can't both win.
 - `requireAi` caps AI POSTs at 60/member/hour (`AI_RATE_PER_HOUR`), via `consume()` in `middleware/rateLimit.js`.
 - Content-Security-Policy in `server.js`: scripts only from self + cdn.jsdelivr.net, no inline scripts. Don't add inline `<script>` or `onclick=` attributes (use listeners); a new external host needs adding to the CSP. Inline styles are still allowed.
+
+## 2026-11-19 — Claude (data shaping + analytics edge cases)
+- Did: `get_risk` result for agents is reshaped (`riskForAgent` in `lib/agents/tools.js`): the 2-year rebased series and rolling beta/correlation arrays (~3,000 numbers) become 12 evenly spaced points plus the latest value; verdicts untouched. `lib/analytics.js`: `align` drops missing/zero closes and duplicate dates; beta, correlation, Sharpe and information ratio are `null` (not NaN/Infinity) when a series is flat. Tests in `test/dataShaping.test.js`.
+- Gotcha: `test/api.test.js` "daily frames say where the window starts" fails offline (also on main).
