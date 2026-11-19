@@ -241,3 +241,7 @@ Format:
 ## 2026-11-19 — Claude (data shaping + analytics edge cases)
 - Did: `get_risk` result for agents is reshaped (`riskForAgent` in `lib/agents/tools.js`): the 2-year rebased series and rolling beta/correlation arrays (~3,000 numbers) become 12 evenly spaced points plus the latest value; verdicts untouched. `lib/analytics.js`: `align` drops missing/zero closes and duplicate dates; beta, correlation, Sharpe and information ratio are `null` (not NaN/Infinity) when a series is flat. Tests in `test/dataShaping.test.js`.
 - Gotcha: `test/api.test.js` "daily frames say where the window starts" fails offline (also on main).
+
+## 2026-11-19 — Claude (feel pass: core pages and navigation)
+- Did: Cmd/Ctrl+K command palette (`public/commandPalette.js`: pages, holdings, any ticker); quiet view fade-in, press feedback and transitions plus a settings two-column grid and watchlist spacing (end of `public/css/shell.css`); real empty states for Risk and Today headlines; calmer "last saved prices" line on Portfolio.
+- Gotcha: the fade-in uses `animation-fill-mode: backwards` on purpose (a forwards fill can break sticky bars).
