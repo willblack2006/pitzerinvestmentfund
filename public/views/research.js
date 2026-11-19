@@ -376,6 +376,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
             <div id="thesisRead" class="thesis-read">${t?.thesis ? "" : `<p class="muted">No thesis yet.</p>`}</div>
             ${lockedHint("Sign in to write or edit the thesis.")}`}
         </section>
+        ${unlocked ? `<div id="thesisTimelineBox"></div>` : ""}
       </div>
       <aside class="research-side">
         <section class="panel" aria-labelledby="pitch-h">
@@ -412,6 +413,7 @@ function renderThesisTab(c, { symbol, data, price, unlocked }) {
     </div>`;
 
   mountTripwires(el("tripwireBox"), { symbol });
+  if (unlocked) import("./research/thesisTimeline.js").then((m) => m.mountThesisTimeline(el("thesisTimelineBox"), { symbol })).catch((e) => console.warn("[thesis] timeline failed", e)); // WS4
   if (unlocked) {
     let draft = null;
     try { draft = localStorage.getItem(`pif_draft_${symbol}`); } catch { /* ignore */ }
