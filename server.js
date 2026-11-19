@@ -140,6 +140,14 @@ app.use("/api", require("./routes/agents"));
 app.use("/api", require("./routes/tripwires"));
 app.use("/api", require("./routes/agentDesk"));
 app.use("/api", require("./routes/learn"));
+// Auto-mount (agent platform, 2026-11-19): every routes/*.js that sets
+// `module.exports.autoMount = true` is mounted under /api here, in file-name order, so new
+// features add a router file instead of editing this one. The explicit list above has no such
+// flag and keeps its order.
+for (const f of require("fs").readdirSync(path.join(__dirname, "routes")).filter((n) => n.endsWith(".js")).sort()) {
+  const r = require(`./routes/${f}`);
+  if (r && r.autoMount === true) app.use("/api", r);
+}
 
 app.use("/api", (req, res) => res.status(404).json({ error: "No such API endpoint." }));
 

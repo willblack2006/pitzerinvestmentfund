@@ -190,12 +190,11 @@ test("@agent: unknown agents are refused before any spend; a real one shapes the
   assert.equal(requests.length, 0);
   assert.deepEqual(threads.parseMention("@Earnings-Watch, what changed?"), { slug: "earnings-watch", rest: "what changed?" });
   assert.equal(threads.parseMention("email a@b.com"), null);
-  // The agents table comes from the platform foundation; create a minimal one if it isn't there.
-  db.exec(`CREATE TABLE IF NOT EXISTS agents (id INTEGER PRIMARY KEY, slug TEXT UNIQUE, name TEXT, description TEXT DEFAULT '', icon TEXT DEFAULT 'bot', kind TEXT, workflow TEXT, ownerId INTEGER, visibility TEXT DEFAULT 'team', status TEXT DEFAULT 'active', spec TEXT DEFAULT '{}')`);
   db.prepare("INSERT INTO agents (slug, name, kind, ownerId, visibility, spec) VALUES ('chip-watch', 'Chip watch', 'custom', ?, 'team', ?)")
     .run(a.id, JSON.stringify({ scope: { universe: "symbols", symbols: ["NVDA", "MU"] }, steps: [{ type: "ai", instructions: "Focus on memory pricing." }] }));
-  db.prepare("INSERT INTO agents (slug, name, kind, ownerId, visibility) VALUES ('secret', 'Secret', 'custom', 999, 'private')").run();
-  assert.deepEqual(threads.addressableAgents(a).map((x) => x.slug), ["chip-watch"]);
+  db.prepare("INSERT INTO agents (slug, name, kind, ownerId, visibility) VALUES ('secret', 'Secret', 'custom', ?, 'private')").run(member("Other").id);
+  assert.ok(threads.addressableAgents(a).some((x) => x.slug === "chip-watch"));
+  assert.equal(threads.addressableAgents(a).some((x) => x.slug === "secret"), false);
   assert.equal(threads.personaFor("secret", a), null);
   replies.push(final(answerJson("DRAM prices rose.")));
   const t = await threads.createThread(a, { question: "@chip-watch how is memory pricing?" });
@@ -207,6 +206,9 @@ test("@agent: unknown agents are refused before any spend; a real one shapes the
   assert.match(sys, /team agent "Chip watch"/);
   assert.match(sys, /Focus on memory pricing/);
   assert.match(sys, /NVDA, MU/);
-  const out = JSON.parse(db.prepare("SELECT output FROM agent_runs WHERE id = ?").get(t.runId).output);
+  const row = db.prepare("SELECT output, agentId, \"trigger\" AS trig FROM agent_runs WHERE id = ?").get(t.runId);
+  assert.equal(row.trig, "mention");
+  assert.equal(row.agentId, db.prepare("SELECT id FROM agents WHERE slug = 'chip-watch'").get().id);
+  const out = JSON.parse(row.output);
   assert.deepEqual(out.agent, { slug: "chip-watch", name: "Chip watch" });
 });

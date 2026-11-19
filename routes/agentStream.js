@@ -96,3 +96,4 @@ router.delete("/ask/threads/:id", requireAi, (req, res) => {
 });
 
 module.exports = router;
+module.exports.autoMount = true;
