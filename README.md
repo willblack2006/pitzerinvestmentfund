@@ -118,7 +118,9 @@ The preset catalogue lives in `lib/benchmarks.js`; adding one is a single line.
 - **Viewing:** open to everyone.
 - **Members** (signed in with email + password): personal notes, the club chat, preferences
   (benchmark to compare with, theme, start page, followed tickers), pitches and votes, theses,
-  watchlist, price alerts, paper trading and AI briefs.
+  watchlist, price alerts and paper trading.
+- **AI access** ("Can use AI", set by an admin; admins always have it): AI filing briefs, news
+  scoring, Ask PIF, the research agents page, red team and AI pitch drafts.
 - **Portfolio managers** ("Can trade", set by an admin): positions, transactions, cash and
   dividends. Their changes show up live on everyone's open pages.
 - **Admins:** members and invites, fund settings (policy limits, voting rules, official benchmark),
@@ -134,8 +136,31 @@ Filings), news scoring (Research news and the Alerts page), and the Today page r
   structured brief: bottom line, what changed, key risks, outlook, red flags, and questions to
   ask.
 - Each brief is generated once per filing and cached for 30 days.
-- Generating one requires a member sign-in, so the API credit spend stays with the club.
+- Generating one requires AI access, so the API credit spend stays with the club.
 - Each brief shows its estimated cost (from the API's token counts) next to the model name.
+
+## Research agents (`#/agents`, members with AI access)
+Design and evidence: `docs/feature-research/reports/PIF pro tools and AI agents.md`, section 8.
+Code: `lib/agents/` (events, router, runs, tools, verification, budget, approval queue) and
+`lib/agents/workflows/`.
+- **How it runs:** every 10 minutes new 8-K/10-Q/10-K filings on holdings become events; plain
+  rules (8-K item codes) tier them push/inbox/digest and pick an agent. Scheduled reports are
+  events too. Each run is logged with its steps, tool calls, tokens and cost (Agents → Activity).
+- **Agents:** filing and earnings flash (cited brief per material filing), earnings preview (7 days
+  before a holding reports), thesis check (after a flash, proposes intact/watch/weakened/broken),
+  red team (when a pitch opens for a vote), pitch primer (drafts empty pitch sections), Ask PIF
+  (questions answered from the app's data with the tools shown), and weekly reports: macro
+  (Mon), ownership (Wed), policy (Thu, internal only), the editor memo (Fri, needs approval);
+  plus a nightly SEC-vs-Yahoo data check (code only).
+- **Trust rules:** agents only read (tools wrap the app's own GET endpoints and SEC filing text);
+  every quote is checked word for word against its source and numbers no source backs are
+  flagged; anything that would change the app (thesis status, the weekly memo) waits in Agents →
+  Approvals for a member.
+- **Cost:** a fund-wide monthly cap (default $25) and a per-member daily cap (default $0.50),
+  both in Settings, are checked before every model call, including the older AI features.
+  Model tiers: cheap `gpt-6-luna`, mid `gpt-6.1-sol`, top `gpt-6-astra`
+  (override with `AGENT_MODEL_CHEAP/MID/TOP`).
+- Finviz Elite is not used yet.
 
 Accessibility: the app targets WCAG 2.2 AA:
 - keyboard-sortable tables and focus management on navigation;

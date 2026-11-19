@@ -225,6 +225,11 @@ db.exec(`
 `);
 addColumn("research_notes", "targetPrice", "REAL");
 addColumn("research_notes", "priceAtThesis", "REAL");
+// Thesis status, set only when a member approves an agent's thesis check (lib/agents).
+addColumn("research_notes", "thesisStatus", "TEXT");
+addColumn("research_notes", "thesisStatusNote", "TEXT");
+addColumn("research_notes", "thesisStatusAt", "TEXT");
+addColumn("research_notes", "thesisStatusBy", "TEXT");
 addColumn("positions", "sector", "TEXT NOT NULL DEFAULT ''");
 // Calibration & decision journal (feature 6): a confidence level and time horizon on each
 // pitch, so outcomes can be graded later.
@@ -545,6 +550,29 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS agent_runs_created ON agent_runs (createdAt);
   CREATE INDEX IF NOT EXISTS agent_runs_member ON agent_runs (memberId, createdAt);
   CREATE INDEX IF NOT EXISTS agent_runs_event ON agent_runs (eventId);
+  -- Members' verdicts on agent output (the live eval: acceptance rate per workflow).
+  CREATE TABLE IF NOT EXISTS agent_feedback (
+    runId INTEGER NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+    memberId INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    verdict TEXT NOT NULL CHECK (verdict IN ('useful','wrong','not_useful')),
+    note TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (runId, memberId)
+  );
+  -- Approval queue: anything an agent wants to change in the app waits here for a member.
+  CREATE TABLE IF NOT EXISTS agent_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    runId INTEGER REFERENCES agent_runs(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL,
+    symbol TEXT,
+    title TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    decidedBy INTEGER REFERENCES members(id) ON DELETE SET NULL,
+    decidedAt TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS agent_proposals_status ON agent_proposals (status, id);
 `);
 
 // Defaults (editable on the Settings page). Policy limits start unset ("") so the fund

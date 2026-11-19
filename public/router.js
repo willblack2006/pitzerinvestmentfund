@@ -55,6 +55,7 @@ const SECTION_OF = {
   chat: "settings",
   inbox: "settings",
   members: "settings",
+  agents: "agents",
 };
 
 const SITE = "Pitzer Investment Fund";
