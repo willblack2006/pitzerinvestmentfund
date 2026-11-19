@@ -406,8 +406,8 @@ async function loadRedTeam(p, { waited = 0 } = {}) {
   try { r = await api(`/api/pitches/${p.id}/red-team`); } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; return; }
   const runBtn = (label) => `<button type="button" class="btn btn-ghost btn-sm" id="redTeamRun">${label}</button>`;
   box.innerHTML = r.report ? redTeamHtml(r.report) + runBtn("Run again")
-    : r.running ? `<p class="muted small" role="status"><span class="spinner" aria-hidden="true"></span> The red team is reading this pitch now. It shows up here when it's done.</p>`
-    : `<p class="muted small">An AI red team checks the pitch against the app's data and lists the strongest objections, each with evidence. It runs on its own when the vote opens.</p>${runBtn("Run the red team now")}`;
+    : r.running ? `<p class="agent-waiting small" role="status"><span class="agent-pulse" aria-hidden="true"></span> The red team is reading this pitch. Its objections will appear here, no need to refresh.</p>`
+    : `<p class="muted small">A red team argues against the pitch using the app's data and lists the strongest objections, each with evidence. It runs on its own when the vote opens.</p>${runBtn("Run the red team now")}`;
   // A run started by the vote opening (or another member) shows up without a reload.
   if (!r.report && r.running && waited < 300) setTimeout(() => { if (box.isConnected) loadRedTeam(p, { waited: waited + 5 }); }, 5000);
   el("redTeamRun")?.addEventListener("click", async (e) => {

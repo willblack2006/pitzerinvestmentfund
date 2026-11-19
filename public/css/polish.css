@@ -1,0 +1,135 @@
+/* Design-system polish layer. Loaded last. Adds motion + elevation tokens and shared
+   interaction states (buttons, inputs, cards, rows, chips). Everything respects
+   prefers-reduced-motion via the global rule in style.css. No component markup changes. */
+:root {
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);       /* decelerate: things arriving */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);  /* slight overshoot for press-release */
+  --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
+  /* Elevation (Apple-style soft, layered) */
+  --shadow-1: 0 1px 2px var(--shadow-color);
+  --shadow-2: 0 1px 2px var(--shadow-color), 0 6px 20px var(--shadow-color);
+  --shadow-3: 0 2px 4px var(--shadow-color), 0 16px 40px var(--shadow-color);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--focus) 35%, transparent);
+  /* Extra type + radius steps */
+  --fs-display: 40px;
+  --lh-tight: 1.2; --lh-body: 1.5;
+  --r-xl: 16px;
+}
+
+/* ---- Page enter ---- */
+@keyframes pif-view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+#view[aria-busy="false"] > * { animation: pif-view-in var(--dur-slow) var(--ease-out) both; }
+#view[aria-busy="false"] > *:nth-child(2) { animation-delay: 30ms; }
+#view[aria-busy="false"] > *:nth-child(3) { animation-delay: 60ms; }
+#view[aria-busy="false"] > *:nth-child(n+4) { animation-delay: 90ms; }
+
+/* ---- Buttons: lift on hover, press on active ---- */
+.btn, .btn-link, .chip, .seg-btn, .account-btn, .sort-btn {
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out), box-shadow var(--dur-base) var(--ease-out),
+              transform var(--dur-fast) var(--ease-spring);
+}
+.btn:hover:not(:disabled) { box-shadow: var(--shadow-1); }
+.btn:active:not(:disabled) { transform: scale(0.97); box-shadow: none; }
+.btn-primary:hover:not(:disabled) { box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-bg) 40%, transparent); }
+.chip:active { transform: scale(0.97); }
+
+/* ---- Focus: ring + outline, never a hard jump ---- */
+:focus-visible { outline-offset: 2px; transition: outline-offset var(--dur-fast) var(--ease-out); }
+.btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: var(--ring); }
+
+/* ---- Inputs ---- */
+input, select, textarea {
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-base) var(--ease-out),
+              background-color var(--dur-fast) var(--ease-out);
+}
+input:hover:not(:disabled):not(:focus), select:hover:not(:disabled):not(:focus), textarea:hover:not(:disabled):not(:focus) {
+  border-color: color-mix(in srgb, var(--border-strong) 60%, var(--accent));
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: var(--accent); outline-offset: 0; }
+input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ---- Cards / panels ---- */
+.panel { border-radius: var(--r-xl); box-shadow: var(--shadow-1); }
+.stat { border-radius: var(--r-xl); }
+a.stat, a.panel, .panel[role="button"], .stat[role="button"], .panel.is-link {
+  transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), border-color var(--dur-fast);
+}
+a.stat:hover, a.panel:hover, .panel[role="button"]:hover, .panel.is-link:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); border-color: var(--border-strong); }
+
+/* ---- Tables: soft row hover ---- */
+tbody tr { transition: background-color var(--dur-fast) var(--ease-out); }
+tbody tr:hover { background: var(--row-hover); }
+
+/* ---- Popovers / sheets: softer, springier ---- */
+.ui-pop { box-shadow: var(--shadow-3); border-radius: var(--r-xl); animation-duration: var(--dur-base); animation-timing-function: var(--ease-out); }
+.ui-pop.is-sheet { animation-duration: var(--dur-slow); border-radius: var(--r-xl) var(--r-xl) 0 0; }
+.ui-pick-row { transition: background-color var(--dur-fast) var(--ease-out); }
+.ui-pick-row:hover { background: var(--surface-2); }
+
+/* ---- Toasts, dialogs ---- */
+dialog { border-radius: var(--r-xl); box-shadow: var(--shadow-3); }
+dialog[open] { animation: pif-view-in var(--dur-base) var(--ease-out); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+/* ---- Sticky top bar: frosted glass ---- */
+@supports (backdrop-filter: blur(1px)) {
+  .topbar { background: color-mix(in srgb, var(--surface-1) 78%, transparent); backdrop-filter: saturate(180%) blur(16px); -webkit-backdrop-filter: saturate(180%) blur(16px); }
+}
+
+/* ---- Skeleton: calmer shimmer, rounder shapes ---- */
+.skeleton-bar, .skeleton-block { border-radius: var(--r-md); background: var(--surface-3); }
+
+/* ---- Typography finish ---- */
+body { text-rendering: optimizeLegibility; -moz-osx-font-smoothing: grayscale; }
+h1, h2 { letter-spacing: -0.02em; line-height: var(--lh-tight); }
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* ---- Scrollbars: thin, quiet ---- */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+/* ---- Theme switch: smooth crossfade on colors ---- */
+html.theme-fade, html.theme-fade * { transition: background-color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out) !important; }
+
+/* ======== Round 2: tabs, chips, badges, segmented controls, loading text ======== */
+/* Tabs: quiet hover pill, underline eases in */
+.subtab, .tabnav-link {
+  position: relative; border-bottom-color: transparent !important; border-radius: var(--r-md) var(--r-md) 0 0;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.subtab::after, .tabnav-link::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px; border-radius: 2px;
+  background: var(--accent); transform: scaleX(0); transform-origin: center;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.subtab:hover, .tabnav-link:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+.subtab[aria-current], .tabnav-link[aria-current] { color: var(--text); }
+.subtab[aria-current]::after, .tabnav-link[aria-current]::after { transform: scaleX(1); }
+
+/* Chips: lift, tighter ring */
+.chip:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
+
+/* Badges: hairline ring gives definition on both themes */
+.badge, .count-pill, .code-pill { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent); }
+.badge { line-height: 1.5; }
+
+/* Segmented controls: smooth pressed state */
+.seg { border-radius: var(--r-md); }
+.seg-btn { transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.seg-btn:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface-3); color: var(--text); }
+
+/* Light mode: borders and elevation a touch crisper on the off-white page */
+:root[data-theme="light"] .panel, :root[data-theme="light"] .stat { border-color: color-mix(in srgb, var(--border) 70%, var(--border-strong)); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .panel, :root:not([data-theme="dark"]) .stat { border-color: color-mix(in srgb, var(--border) 70%, var(--border-strong)); }
+}
+
+/* Empty-state: breathe a little */
+.empty-state { padding: var(--sp-7) var(--sp-4); }
+.empty-state-icon { opacity: 0.55; transform: scale(1.25); margin-bottom: var(--sp-2); }
+
+/* Links: underline offset reads cleaner */
+a { text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }

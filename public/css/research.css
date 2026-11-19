@@ -21,7 +21,7 @@
 
 /* ---- Key stats strip ---- */
 .keystats {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin: var(--sp-3) var(--gutter) 0; overflow: hidden;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg);
   gap: 0; /* dividers are drawn per cell, so an unfilled last row stays the panel color */

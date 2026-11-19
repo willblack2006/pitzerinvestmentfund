@@ -87,3 +87,50 @@
   mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
 }
 .subtabs, .tabnav { overscroll-behavior-x: contain; }
+
+/* ============ Feel: motion, press feedback, rhythm ============
+   Everything here is quiet on purpose: short ease-out transitions, no bounce, off under reduced motion. */
+html { scroll-padding-top: calc(var(--topbar-h) + 56px); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.page-head h2, .panel h3 { text-wrap: balance; }
+.page-desc, .muted.page-desc, .empty-state-body { text-wrap: pretty; }
+
+.nav-link, .icon-btn, .list-tab, .tabnav-link, .subtabs a, .subtabs button { transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+
+/* Pages that put a sidebar or grid right under the title get the same breathing room as the rest */
+.page-head + .lists-layout { padding-top: 16px; }
+.page-head + .toolbar, .page-head + .summary { margin-top: 4px; }
+.page-head .page-desc { color: var(--text-2); }
+.market-line .live-dot { margin-right: 6px; vertical-align: 1px; }
+.empty-state { padding: 48px 16px; }
+.panel .empty-state { padding: 24px 12px; }
+
+/* Settings: two equal cards on top instead of two uneven ones in a three-column grid */
+.tab-grid.settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+@media (max-width: 720px) { .tab-grid.settings-grid { grid-template-columns: 1fr; } }
+
+/* ---- Command palette (Cmd/Ctrl+K) ---- */
+.palette-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; justify-content: center; align-items: flex-start; padding: 14vh var(--sp-4) var(--sp-4);
+  background: color-mix(in srgb, #000 45%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.palette { width: min(560px, 100%); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .45); overflow: hidden; }
+.palette-input { width: 100%; box-sizing: border-box; padding: 16px 18px; font: inherit; font-size: var(--fs-lg); color: var(--text);
+  background: transparent; border: 0; border-bottom: 1px solid var(--border); outline: 0; border-radius: 0; min-height: 0; }
+.palette-list { list-style: none; margin: 0; padding: 6px; max-height: min(52vh, 420px); overflow-y: auto; }
+.palette-list li[role="option"] { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--r-md); cursor: pointer; }
+.palette-list li[aria-selected="true"] { background: var(--accent-soft); color: var(--text); }
+.palette-group { padding: 8px 12px 4px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-2); }
+.palette-hint, .palette-empty { color: var(--text-2); font-size: var(--fs-sm); }
+.palette-empty { padding: 16px 12px; }
+.palette-foot { display: flex; gap: 16px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: var(--fs-xs); color: var(--text-2); }
+.palette-foot kbd { margin-right: 4px; padding: 0 5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); font: inherit; }
+@media (prefers-reduced-motion: no-preference) { .palette { animation: pif-view-in .16s ease-out backwards; } }
+@media (hover: none) { .palette-foot { display: none; } }
+
+/* ---- Tables: the first column names the row, so it reads left-aligned; numbers stay right ---- */
+.data-table thead th:first-child, .data-table tbody th[scope="row"] { text-align: left; }
+.data-table tbody th[scope="row"] a { font-weight: 600; text-decoration: none; }
+.data-table tbody th[scope="row"] a:hover { text-decoration: underline; }
+.takeaways { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--sp-2); }
+.takeaways li { padding-left: var(--sp-3); border-left: 2px solid var(--accent); }
+.page-head + .tabnav, .page-head + .subtabs { margin-top: var(--sp-3); }

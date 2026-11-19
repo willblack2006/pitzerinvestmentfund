@@ -126,3 +126,155 @@
 .ask-open { display: inline-flex; align-items: center; gap: 6px; }
 .ask-open .icon { color: var(--accent); }
 @media (max-width: 600px) { .ask-open span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+
+/* ============ Polish: motion, rhythm and quiet controls for every AI surface ============ */
+:root { --ease-std: var(--ease-in-out); }
+
+/* Side panel glides in; the controls inside it stay calm. */
+@media (prefers-reduced-motion: no-preference) {
+  .ask-panel[open] { animation: ask-in 260ms var(--ease-out); }
+  @keyframes ask-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+  @keyframes ask-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes ask-pulse { 0%, 100% { transform: scale(0.8); opacity: 0.55; } 50% { transform: scale(1.15); opacity: 1; } }
+  @keyframes ask-shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+  .agent-answer.is-new { animation: ask-rise 320ms var(--ease-out) both; }
+  .agent-answer.is-new .agent-answer-text > * { animation: ask-rise 380ms var(--ease-out) both; }
+  .agent-answer.is-new .agent-answer-text > :nth-child(2) { animation-delay: 90ms; }
+  .agent-answer.is-new .agent-answer-text > :nth-child(3) { animation-delay: 180ms; }
+  .agent-answer.is-new .agent-answer-text > :nth-child(n+4) { animation-delay: 260ms; }
+  .agent-answer.is-new .agent-checks, .agent-answer.is-new .agent-sources, .agent-answer.is-new .agent-followups { animation: ask-rise 400ms var(--ease-out) 320ms both; }
+  .agent-progress-list li { animation: ask-rise 220ms var(--ease-out) both; }
+  .agent-pulse { animation: ask-pulse 1.4s var(--ease-std) infinite; }
+  .agent-shimmer { animation: ask-shimmer 1.8s linear infinite; }
+  .agent-chip, .ask-send, .ask-btn { transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-spring), opacity var(--dur-fast); }
+  .agent-chip:active, .ask-send:active { transform: scale(0.97); }
+}
+
+/* Header controls */
+.ask-head-actions { display: flex; align-items: center; gap: var(--sp-3); }
+.ask-head-actions .btn-link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: var(--fs-sm); }
+.ask-head-actions .hidden { display: none; }
+.ask-head-actions a { color: var(--text-2); text-decoration: none; }
+.ask-head-actions a:hover { color: var(--text); }
+
+/* Conversation */
+.ask-list { padding: var(--sp-4); gap: var(--sp-4); scroll-behavior: smooth; overscroll-behavior: contain; }
+@media (prefers-reduced-motion: reduce) { .ask-list { scroll-behavior: auto; } }
+.ask-list .agent-answer.is-compact { padding: var(--sp-4); gap: var(--sp-3); }
+.agent-q { font-size: var(--fs-md); color: var(--text-2); font-weight: 500; }
+.agent-answer-text { font-size: 15px; line-height: 1.6; color: var(--text); }
+.agent-answer-text p, .agent-answer-text ul { margin: 0 0 var(--sp-3); }
+.agent-answer-text ul { padding-left: 1.2em; display: grid; gap: 4px; }
+.agent-answer-text { text-wrap: pretty; font-variant-numeric: tabular-nums; }
+.agent-checks .badge { font-weight: 500; }
+.agent-sources { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+.agent-src-list li { line-height: 1.45; }
+.agent-looked summary, .agent-answer details > summary { list-style: none; cursor: pointer; }
+.agent-looked summary::-webkit-details-marker, .agent-answer details > summary::-webkit-details-marker { display: none; }
+.agent-looked summary::before { content: "›"; display: inline-block; margin-right: 6px; transition: transform 150ms var(--ease-out); }
+.agent-looked[open] summary::before { transform: rotate(90deg); }
+
+/* Quiet footer: feedback fades until the card is hovered or focused, always visible on touch */
+.agent-answer .agent-brief-foot { border-top: 0; padding-top: 0; }
+@media (hover: hover) {
+  .agent-answer .agent-feedback { opacity: 0.55; transition: opacity 150ms; }
+  .agent-answer:hover .agent-feedback, .agent-answer:focus-within .agent-feedback { opacity: 1; }
+}
+
+/* Empty state */
+.ask-empty { padding: var(--sp-5) var(--sp-2); display: grid; justify-items: start; gap: var(--sp-2); }
+.ask-empty-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-lg); background: var(--accent-soft); color: var(--accent); margin-bottom: var(--sp-2); }
+.ask-empty-title { font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+.ask-empty .muted { margin: 0; max-width: 34ch; line-height: 1.5; }
+.ask-suggest { width: 100%; margin-top: var(--sp-3); }
+.ask-suggest .agent-chip { padding: 10px 14px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--surface-1); width: 100%; }
+.ask-suggest .agent-chip:hover { background: var(--surface-2); border-color: var(--border-strong); }
+
+/* Composer: one rounded field with a round send button inside it */
+.ask-compose { padding: var(--sp-3) var(--sp-4) var(--sp-3); }
+.ask-field { display: flex; align-items: flex-end; gap: var(--sp-2); padding: 6px 6px 6px 14px; border: 1px solid var(--border-strong); border-radius: 22px; background: var(--surface-2); transition: border-color 150ms, box-shadow 150ms; }
+.ask-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ask-field textarea { flex: 1; border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; padding: 6px 0 !important; min-height: 24px; line-height: 1.4; }
+.ask-send { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--accent-bg); color: var(--on-accent); cursor: pointer; }
+.ask-send:disabled { opacity: 0.3; cursor: default; }
+.ask-send:not(:disabled):hover { background: var(--accent-bg-hover); }
+.ask-hint { display: flex; justify-content: space-between; gap: var(--sp-3); margin: 8px 6px 0; font-size: var(--fs-xs); }
+
+/* Progress: a calm status line with a soft pulse, older steps fold away */
+.agent-progress { padding: var(--sp-1) 0; }
+.agent-progress-list li { min-height: 22px; }
+.agent-progress-list .is-earlier { color: var(--text-2); font-size: var(--fs-xs); padding-left: 22px; }
+.agent-pulse { flex: none; width: 10px; height: 10px; margin: 0 2px; border-radius: 50%; background: var(--accent); }
+.agent-shimmer { height: 3px; margin-top: var(--sp-3); border-radius: var(--r-full); background: linear-gradient(90deg, var(--surface-3) 30%, var(--accent-soft) 50%, var(--surface-3) 70%) 150% 0 / 300% 100%; }
+.agent-progress-meta { font-variant-numeric: tabular-nums; min-height: 1.2em; }
+
+/* Brief and report cards share the same rhythm */
+.agent-brief { padding: var(--sp-5); gap: var(--sp-4); box-shadow: var(--shadow-1); }
+.agent-brief-head h3 { font-size: var(--fs-xl); letter-spacing: -0.01em; line-height: 1.25; }
+.agent-brief > p { line-height: 1.6; font-size: 15px; text-wrap: pretty; }
+@media (prefers-reduced-motion: no-preference) { .agent-brief { animation: ask-rise 300ms var(--ease-out) both; } }
+
+/* Desk and agents page */
+.agent-ask textarea { border-radius: var(--r-lg); }
+.agent-hist { transition: border-color 150ms; }
+.agent-hist:hover { border-color: var(--border-strong); }
+.ai-brief-link { padding: 2px 0; }
+.ai-panel .panel-head a { color: var(--text-2); text-decoration: none; }
+.ai-panel .panel-head a:hover { color: var(--accent); }
+.ask-compose .ask-field textarea { min-height: 24px; height: 24px; }
+.agent-answer .notice { margin: 0; }
+.ask-hint { flex-wrap: wrap; }
+.ask-hint span { white-space: nowrap; }
+.ask-hint span:first-child { display: none; }
+@media (hover: hover) { .ask-hint span:first-child { display: inline; } }
+
+/* ---- Agents page: budget, tabs' content, ask form ---- */
+.agent-meter { height: 6px; }
+.agent-meter > span { transition: width var(--dur-slow) var(--ease-out); }
+.agent-ask { align-items: stretch; margin: var(--sp-4) 0; padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); border: 1px solid var(--border-strong); border-radius: var(--r-xl); background: var(--surface-1); box-shadow: var(--shadow-1); transition: border-color var(--dur-fast), box-shadow var(--dur-base); flex-wrap: nowrap; }
+.agent-ask:focus-within { border-color: var(--accent); box-shadow: var(--ring); }
+.agent-ask .field-block { flex: 1; margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
+.agent-ask textarea { border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; min-height: 56px; padding: 6px 0 !important; font-size: 15px; color: var(--text); resize: none; }
+.agent-ask > .btn { align-self: flex-end; border-radius: var(--r-full); padding-inline: var(--sp-5); }
+@media (max-width: 560px) { .agent-ask { flex-wrap: wrap; } .agent-ask > .btn { width: 100%; } }
+.ask-suggest-page { margin-bottom: var(--sp-3); }
+.agent-hist > summary { padding: 12px 16px; transition: background-color var(--dur-fast) var(--ease-out); border-radius: var(--r-lg); }
+.agent-hist > summary:hover { background: var(--surface-2); }
+.agent-hist { border-radius: var(--r-lg); }
+.agent-proposals li.panel { padding: var(--sp-4); }
+.agent-proposals .row-actions { margin-top: var(--sp-3); display: flex; gap: var(--sp-2); }
+
+/* ---- Research desk: one segmented control, tidy form ---- */
+.desk-tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; margin: var(--sp-3) 0 var(--sp-4); background: var(--surface-3); border-radius: var(--r-full); }
+.desk-tabs .agent-chip { border: 0; border-radius: var(--r-full); background: transparent; color: var(--text-2); font-weight: 600; padding: 6px 14px; }
+.desk-tabs .agent-chip:hover { color: var(--text); background: transparent; }
+.desk-tabs [aria-selected="true"] { background: var(--surface-1); color: var(--text); box-shadow: var(--shadow-1); }
+.desk-form { max-width: 680px; gap: var(--sp-3); padding: var(--sp-5); }
+.desk-form .desk-lead { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-2); }
+.desk-form .desk-lead strong { display: block; font-size: var(--fs-lg); color: var(--text); letter-spacing: -0.01em; margin-bottom: 2px; }
+.desk-form .btn-primary { justify-self: start; border-radius: var(--r-full); padding-inline: var(--sp-5); }
+#deskOut:not(:empty) { max-width: 760px; margin-bottom: var(--sp-4); }
+
+/* ---- Red team: each objection is its own quiet card ---- */
+.agent-objections { list-style: none; padding: 0; gap: var(--sp-3); counter-reset: obj; }
+.agent-objections li { position: relative; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface-1); }
+.agent-objections li:has(.badge-danger) { border-left-color: var(--negative); }
+.agent-objections li:has(.badge-warn) { border-left-color: var(--caution); }
+.agent-objections li > p:first-child { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: 4px; }
+.agent-objections li p.small { line-height: 1.5; font-size: var(--fs-md); }
+.agent-objections li p.muted { margin-top: var(--sp-2); }
+#redTeamBody > p.small:first-child { font-size: 15px; line-height: 1.55; color: var(--text); text-wrap: pretty; }
+#redTeamBody .pf-sub { margin-top: var(--sp-4); }
+#redTeamBody > .btn { margin-top: var(--sp-3); }
+@media (prefers-reduced-motion: no-preference) { .agent-objections li { animation: ask-rise 340ms var(--ease-out) both; } .agent-objections li:nth-child(2) { animation-delay: 70ms; } .agent-objections li:nth-child(3) { animation-delay: 140ms; } .agent-objections li:nth-child(n+4) { animation-delay: 200ms; } }
+.agent-waiting { display: flex; align-items: center; gap: var(--sp-3); color: var(--text-2); }
+
+/* ---- Briefs and reports ---- */
+.agent-brief-head p.small { text-transform: none; letter-spacing: 0; }
+.agent-points { gap: var(--sp-4); }
+.agent-points li > p { line-height: 1.55; font-size: 15px; }
+.agent-points blockquote { border-left-color: var(--accent); background: var(--accent-soft); border-radius: 0 var(--r-md) var(--r-md) 0; padding: var(--sp-2) var(--sp-3); color: var(--text); }
+.agent-brief .pf-sub { margin: 0 0 var(--sp-2); }
+.agent-brief .mini-table { font-variant-numeric: tabular-nums; }
+.agent-brief + .agent-brief { margin-top: 0; }
+.desk-form #addTrade { justify-self: start; }

@@ -271,7 +271,7 @@ const STATE_LABEL = { REGULAR: "Market open", PRE: "Pre-market", POST: "After ho
 function marketLine() {
   const m = state.market;
   if (!m) return "Loading live prices…";
-  if (m.error) return `Live prices unavailable. Showing last saved prices. <button type="button" class="btn-link" id="retryQuotes">Retry</button>`;
+  if (m.error) return `<span class="live-dot" aria-hidden="true"></span>Showing last saved prices (live feed unavailable). <button type="button" class="btn-link" id="retryQuotes">Retry</button>`;
   const t = m.asOf ? new Date(m.asOf).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }) : null;
   const live = LIVE_STATES.has(m.marketState);
   return `<span class="live-dot ${live ? "on" : ""}" aria-hidden="true"></span>${STATE_LABEL[m.marketState] || "Live prices"}${t ? ` · prices as of ${t} ET` : ""}${live ? " · updates every minute" : ""}`;
@@ -329,7 +329,7 @@ const ATT_GROUPS = {
   redflag: { head: "Red flags", icon: "flag" },
   activist: { head: "Activist filings", icon: "percent" },
 };
-const ATT_SHOW = 5;
+const ATT_SHOW = 3;
 
 function attentionHtml(alerts) {
   const groups = new Map();
@@ -350,7 +350,7 @@ function attentionHtml(alerts) {
         <span class="sr-only">${a.level === "action" ? "Needs action" : "For awareness"}</span>
       </li>`;
     };
-    return `<details class="att-group"${i < 2 || items.some((a) => a.level === "action") ? " open" : ""}>
+    return `<details class="att-group"${i < 1 || items.some((a) => a.level === "action") ? " open" : ""}>
       <summary><span class="att-head">${esc(g.head)}</span> <span class="count-pill">${items.length}</span></summary>
       ${g.action ? `<p class="att-action small muted">${esc(g.action)}</p>` : ""}
       <ul class="att-list">${items.slice(0, ATT_SHOW).map(line).join("")}</ul>

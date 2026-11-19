@@ -1,4 +1,4 @@
-import { el, esc, api, pageHead, loading, subTabs, errorState, bindRetry, signed } from "../shared.js";
+import { el, esc, api, pageHead, loading, subTabs, errorState, bindRetry, signed, emptyState } from "../shared.js";
 import { lineChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { term } from "../glossary.js";
@@ -64,7 +64,7 @@ export async function mount(container) {
   }
   const r = d.risk;
   if (!r) {
-    container.innerHTML = head + pageHead("Risk", "Where the fund's risk comes from and what a sell-off would cost.") + `<p class="muted page-pad">${esc(d.reason || "No data.")}</p>`;
+    container.innerHTML = head + pageHead("Risk", "Where the fund's risk comes from and what a sell-off would cost.") + `<div class="page-pad">${emptyState({ icon: "trending-up", title: "Risk appears once there is price history", body: d.reason || "No data yet." })}</div>`;
     return;
   }
   const L = r.loss, dd = r.drawdown;
@@ -72,7 +72,7 @@ export async function mount(container) {
     ${head}
     ${pageHead("Risk", `Where the fund's risk actually comes from, how bad bad days have been, and what a market sell-off would cost. Based on what we own today over ${r.days} trading days to ${esc(r.asOf)}.`)}
 
-    ${r.notes.length ? `<section class="panel" style="margin-bottom:16px" aria-label="What stands out"><ul class="link-list">${r.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></section>` : ""}
+    ${r.notes.length ? `<section class="panel page-pad-panel" aria-label="What stands out"><ul class="link-list takeaways">${r.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></section>` : ""}
 
     <section class="summary" aria-label="Risk summary">
       ${L ? `<div class="stat"><div class="label">${term("var", "Bad-day loss")}</div><div class="value">${loss(L.oneDayVar)}</div><div class="sub">about ${usd(L.oneDayVarUsd)} on 1 day in 20</div></div>
