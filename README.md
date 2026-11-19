@@ -80,6 +80,11 @@ Works for any ticker. Every tab has its own link.
   draft → investment committee vote → approved or rejected → executed. Signed-in members vote,
   and the threshold and quorum are set in Settings.
 
+- **Track record** (`#/track-record`): grades decided pitches against stated confidence. Besides hit rate and
+  Brier score it shows plausible ranges (so 3 of 4 isn't read as 75%), whether miscalibration or
+  poor discrimination drives the score, wins versus losses against the benchmark, approved versus
+  rejected calls, and early versus recent accuracy. Marked provisional below 30 calls.
+
 ### Market
 - **Macro** (`#/macro`) and **Insiders** (`#/insiders`).
 
