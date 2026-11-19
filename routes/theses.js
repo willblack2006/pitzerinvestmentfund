@@ -67,7 +67,7 @@ router.get("/theses/:symbol", requireSignedIn, async (req, res) => {
   if (showAi) {
     pending = require("../lib/agents/proposals").list({ status: "pending" }).filter((p) => p.symbol === s && ["thesis_pillars", "pillar_status", "scenario_update", "thesis_status"].includes(p.kind));
   }
-  res.json({ ...summary, checks, versions, marks, catalysts, tripwires, priceHistory, healthHistory: health, original: orig ? { from: orig.from, at: orig.at, text: orig.text.slice(0, 6000) } : null, pending, canUseAi: showAi });
+  res.json({ ...summary, catalystStats: summary.catalysts.stats, checks, versions, marks, catalysts, tripwires, priceHistory, healthHistory: health, original: orig ? { from: orig.from, at: orig.at, text: orig.text.slice(0, 6000) } : null, pending, canUseAi: showAi });
 });
 
 router.post("/theses/:symbol/pillars", requireSignedIn, (req, res) => {

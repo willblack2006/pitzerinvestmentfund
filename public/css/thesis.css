@@ -44,23 +44,28 @@
 .th-form label { display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-xs, 12px); color: var(--muted); }
 .th-form input, .th-form select, .th-form textarea { font: inherit; font-size: 14px; color: var(--text); min-width: 0; }
 .th-form .th-full { grid-column: 1 / -1; }
-.th-inline-form { grid-template-columns: repeat(auto-fit, minmax(90px, max-content)); }
-.th-inline-form .th-grow { min-width: 200px; flex: 1; }
+.th-inline-form { display: flex; flex-wrap: wrap; }
+.th-inline-form label { flex: 0 1 90px; }
+.th-inline-form .th-grow { flex: 1 1 200px; min-width: 0; }
 .th-form [hidden] { display: none; }
 
 .th-tl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .th-tl { display: block; width: 100%; min-width: 620px; height: auto; }
 .th-tl .th-grid { stroke: var(--grid, var(--border)); stroke-width: 1; }
 .th-tl .th-now { stroke: var(--accent); stroke-dasharray: 3 3; }
-.th-tl .th-axis { font-size: 10px; fill: var(--muted); }
+.th-tl .th-axis { font-size: 11px; fill: var(--muted); }
 .th-tl .th-price { fill: none; stroke: var(--chart-line, var(--accent)); stroke-width: 1.5; }
 .th-tl .th-bearline { stroke: var(--negative); stroke-dasharray: 4 3; opacity: .7; }
 .th-tl .th-baseline { stroke: var(--muted); stroke-dasharray: 4 3; opacity: .7; }
 .th-tl .th-healthline { fill: none; stroke: var(--text-2, var(--text)); stroke-width: 1.5; }
 .th-tl .th-healthdot { fill: var(--text-2, var(--text)); }
 .th-tl .th-mark { font-size: 11px; fill: var(--text-2, var(--muted)); cursor: default; }
-.th-tl .th-mark-bad, .th-tl .th-cat-miss, .th-tl .th-cat-late { fill: var(--negative); }
+.th-tl .th-mark-shape { fill: var(--text-2, var(--muted)); }
+.th-tl .th-mark-x { stroke: var(--negative); stroke-width: 2; }
+.th-tl .th-cat-pending { fill: var(--accent); }
+.th-tl .th-cat-miss, .th-tl .th-cat-late { fill: var(--negative); }
 .th-tl .th-cat-hit { fill: var(--positive); }
+.th-tl .th-cat-dropped { fill: var(--muted); }
 .th-tl .th-lane { opacity: .55; }
 .th-tl .th-dot { stroke: var(--panel); stroke-width: 1; }
 .th-tl .th-ring { fill: var(--panel); stroke-width: 2; }
@@ -76,7 +81,7 @@
 .th-odds rect.th-bear, .th-key.th-bear { fill: var(--negative); background: var(--negative); }
 .th-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-left: 6px; }
 
-.th-table td { vertical-align: top; }
+.th-table td, .th-table th { vertical-align: top; text-align: left; }
 .th-moved td { background: var(--row-hover, transparent); }
 .th-diff { margin-top: 4px; }
 .th-diff p { margin: 2px 0; padding: 2px 6px; border-radius: 4px; white-space: pre-wrap; }
@@ -92,6 +97,12 @@
 
 @media (max-width: 640px) {
   .th-summary { grid-template-columns: 1fr 1fr; }
-  .th-inline-form { grid-template-columns: 1fr 1fr; }
-  .th-inline-form .th-grow { grid-column: 1 / -1; min-width: 0; }
 }
+
+/* Grid and flex parents size to content by default; keep the wide chart and tables inside their
+   own scrollers instead of widening the page on phones. */
+#thesisTimelineBox, .th-wrap, .th-wrap > *, .th-grid > * { min-width: 0; max-width: 100%; }
+.th-panel .table-wrap { overflow-x: auto; }
+.th-panel .panel-head label { max-width: 100%; min-width: 0; }
+.th-panel select { max-width: 100%; }
+#thFilter { width: 14em; }

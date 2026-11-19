@@ -26,7 +26,7 @@ export async function mountThesisTimeline(box, { symbol }) {
     state.metrics = await metricCatalog();
     render();
   };
-  const render = () => { box.innerHTML = view(state); };
+  const render = () => { if (state.data) state.data._w = box.clientWidth - 34; box.innerHTML = view(state); };
 
   box.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-th]");
@@ -130,7 +130,7 @@ function view(state) {
         <div class="panel-head"><h3 id="thTlH">Thesis over time</h3> <a class="small" href="#/theses">All holdings</a>
           <span class="th-legend small muted" aria-hidden="true">${Object.entries(STATUS).map(([k, s]) => `<span class="th-chip ${s.cls}">${s.glyph} ${s.label}</span>`).join(" ")} · dot = rule check, ring = AI, square = member</span></div>
         ${timelineSvg(d)}
-        <p class="muted small">Price (top), health score, then one lane per pillar. Marks on the price line: ✎ thesis edited, ✕ tripwire tripped, ◇ catalyst date. The full record is in the evidence log below.</p>
+        <p class="muted small">Price (top), health score, then one lane per pillar. Marks on the price band: triangle = thesis edited, X = tripwire tripped, diamond = catalyst date (green happened, red missed or overdue). The full record is in the evidence log below.</p>
       </section>
       <section class="panel th-panel" aria-labelledby="thPilH">
         <div class="panel-head"><h3 id="thPilH">Pillars</h3>
@@ -155,13 +155,13 @@ function view(state) {
 function summaryRow(d) {
   const h = d.health || {};
   const ev = d.scenario?.expected;
-  const cs = d.catalysts?.stats || {};
+  const cs = d.catalystStats || {};
   return `<div class="th-summary">
     <div><span class="muted small">Health</span>${healthBadge(h)}${h.unknown || h.overdue ? `<div class="muted small">${h.unknown + h.overdue} pillar${h.unknown + h.overdue > 1 ? "s" : ""} unchecked or overdue, left out</div>` : ""}</div>
     <div><span class="muted small">Overall</span>${statusChip(d.status)}${d.thesis?.approvedStatus ? `<div class="muted small">Last approved status: ${esc(d.thesis.approvedStatus)}</div>` : ""}</div>
     <div><span class="muted small">Health, last 6 months</span>${sparkline(d.healthHistory)}</div>
     <div><span class="muted small">Probability-weighted value</span>${ev ? `<strong>${fmtUSD(ev.value)}</strong> <span class="small">${ev.upsidePct != null ? signed(ev.upsidePct * 100, fmtPct(ev.upsidePct * 100), { neutral: true }) : ""}</span>` : `<span class="muted">—</span>`}</div>
-    <div><span class="muted small">Catalysts on time</span>${cs.due ? `<strong>${cs.onTime}/${cs.due}</strong>${cs.late ? ` <span class="badge badge-warn">${cs.late} late</span>` : ""}` : `<span class="muted">none due yet</span>`}</div>
+    <div><span class="muted small">Catalysts on time</span>${cs.due ? `<strong>${cs.onTime}/${cs.due}</strong>${cs.lateHit ? ` <span class="muted small">${cs.lateHit} happened late</span>` : ""}${cs.late ? ` <span class="badge badge-warn">${cs.late} overdue</span>` : ""}` : `<span class="muted">none due yet</span>`}</div>
     ${d.drift?.drifted ? `<div class="th-drift"><span class="badge badge-warn" title="Word overlap with ${esc(d.drift.from)}: ${Math.round(d.drift.similarity * 100)}%">Drift</span>
       <span class="small">The written thesis has moved away from ${esc(d.drift.from)}${d.drift.added.length ? `: now talks about <em>${esc(d.drift.added.slice(0, 5).join(", "))}</em>` : ""}${d.drift.dropped.length ? `; no longer mentions <em>${esc(d.drift.dropped.slice(0, 5).join(", "))}</em>` : ""}. Legitimate updates drift too: decide if this needs a new pitch.</span></div>` : ""}
   </div>`;
@@ -324,7 +324,7 @@ function timelineSvg(d) {
   if (price.length) t0 = Math.min(t0, price[0].t);
   const catDates = (d.catalysts || []).filter((c) => c.dueDate).map((c) => ts(c.dueDate));
   const t1 = Math.max(now, ...catDates.filter((t) => t < now + 120 * DAY));
-  const W = 860, L = 44, R = 12, PH = 110, HH = 34, LANE = 20, gap = 10;
+  const W = Math.max(620, Math.min(1100, Math.round(d._w || 860))), L = 44, R = 12, PH = 110, HH = 34, LANE = 20, gap = 10;
   const lanesTop = PH + gap + HH + gap;
   const H = lanesTop + Math.max(1, pillars.length) * LANE + 22;
   const x = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
@@ -354,9 +354,9 @@ function timelineSvg(d) {
     out.push(`<text class="th-axis" x="${L}" y="${PH / 2}">Price history unavailable</text>`);
   }
   // Markers on the price band.
-  for (const v of d.versions || []) out.push(`<text class="th-mark" x="${x(ts(v.createdAt)) - 4}" y="${PH - 2}">✎<title>Thesis edited ${esc(day(v.createdAt))}${v.editedByName ? ` by ${esc(v.editedByName)}` : ""}</title></text>`);
-  for (const t of d.tripwires || []) if (t.trippedAt) out.push(`<text class="th-mark th-mark-bad" x="${x(ts(t.trippedAt)) - 4}" y="12">✕<title>Tripwire tripped ${esc(day(t.trippedAt))}: ${esc(t.trippedDetail || "")}</title></text>`);
-  for (const c of d.catalysts || []) if (c.dueDate) out.push(`<text class="th-mark th-cat-${esc(c.state)}" x="${x(ts(c.dueDate)) - 4}" y="${PH - 14}">◇<title>Catalyst ${esc(c.dueDate)} (${esc(c.state)}): ${esc(c.text)}</title></text>`);
+  for (const v of d.versions || []) out.push(`<path class="th-mark-shape th-mark-edit" d="M${x(ts(v.createdAt)) - 4},${PH} l4,-7 l4,7 z"><title>Thesis edited ${esc(day(v.createdAt))}${v.editedByName ? ` by ${esc(v.editedByName)}` : ""}</title></path>`);
+  for (const t of d.tripwires || []) if (t.trippedAt) { const tx = x(ts(t.trippedAt)); out.push(`<path class="th-mark-x" d="M${tx - 4},4 l8,8 M${tx + 4},4 l-8,8"><title>Tripwire tripped ${esc(day(t.trippedAt))}: ${esc(t.trippedDetail || "")}</title></path>`); }
+  for (const c of d.catalysts || []) if (c.dueDate) out.push(`<path class="th-mark-shape th-cat-${esc(c.state)}" d="M${x(ts(c.dueDate))},${PH - 22} l5,5 l-5,5 l-5,-5 z"><title>Catalyst ${esc(c.dueDate)} (${esc(c.state)}): ${esc(c.text)}</title></path>`);
   // Health band.
   const hy = (v) => PH + gap + (1 - v / 100) * HH;
   out.push(`<text class="th-axis" x="2" y="${PH + gap + HH / 2 + 4}">Health</text>`);
