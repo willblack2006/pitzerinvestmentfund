@@ -1,0 +1,66 @@
+{
+  "slug": "insider-cluster-alert",
+  "name": "Insider cluster alert",
+  "icon": "users",
+  "description": "When several insiders buy a holding or watchlist name with their own money, explains who bought, how much and how unusual it is.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "watchlist"
+    },
+    "triggers": [
+      {
+        "type": "event",
+        "on": "insider_buy",
+        "minScore": 25
+      },
+      {
+        "type": "manual"
+      }
+    ],
+    "steps": [
+      {
+        "id": "d1",
+        "type": "tool",
+        "tool": "get_insider_signal",
+        "args": {
+          "symbol": "$symbol"
+        }
+      },
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "cheap",
+        "output": "score",
+        "maxSteps": 3,
+        "tools": [
+          "get_insider_activity",
+          "get_research_overview"
+        ],
+        "instructions": "Explain the insider buying: who (roles), how much relative to their holdings, whether it is open-market and clustered, and how unusual it is for this company. Score from -100 to 100 for how meaningful it is."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "always"
+      },
+      {
+        "type": "notify",
+        "who": "followers",
+        "tier": "inbox",
+        "when": "score_gt:40"
+      },
+      {
+        "type": "memory",
+        "scope": "symbol",
+        "kind": "fact",
+        "when": "always"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.04,
+      "perMonthUsd": 1
+    }
+  }
+}
