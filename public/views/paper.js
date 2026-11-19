@@ -1,5 +1,6 @@
 import { el, esc, api, fmtUSD, fmtPct, signed, pageHead, subTabs, toast, currentMember, can, requestSignIn, confirmAction, skeleton, errorState, bindRetry } from "../shared.js";
 import { lineChart } from "../charts.js";
+import { rulesExplainerHtml } from "../paperExplain.js";
 import { IDEAS_TABS } from "./screener.js";
 
 export const title = "Paper trading";
@@ -136,6 +137,7 @@ async function load(container) {
       <span class="muted small">Started ${esc(r.season.startedAt.slice(0, 10))} with ${fmtUSD(r.season.startingCash)} each${r.benchmark ? ` · ${esc(r.benchmark.label)} since then ${pct(r.benchmark.returnPct)}` : ""}</span>
     </div>
     <p class="muted small page-pad rules-line">Rules: ${esc(rulesText(r.rules))}.</p>
+    <div class="page-pad">${rulesExplainerHtml(r.rules, esc)}</div>
     ${can("admin") && r.isOpen ? `<div class="page-pad">${newSeasonForm(r)}</div>` : ""}
     <div class="tab-grid">
       <section class="panel span-full" aria-labelledby="mine-h">

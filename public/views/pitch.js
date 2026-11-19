@@ -1,4 +1,5 @@
 import { el, esc, api, fmtUSD, fmtPct, signed, toast, confirmAction, currentMember, requestSignIn, icon, skeleton, errorState, can, safeUrl } from "../shared.js";
+import { FIRST_PITCH } from "../learnContent.js";
 import { statusPill } from "./pitches.js";
 import { withProgress, aiErrorHtml, sourceLink } from "../ai.js";
 
@@ -55,6 +56,9 @@ function editor(p, isNew, current) {
     </label>`;
   return `
     <form id="pitchForm" class="pitch-form" novalidate>
+      ${isNew ? `<details class="explainer small first-pitch"><summary>First pitch? A six-step guide</summary>
+        <ol class="first-pitch-list">${FIRST_PITCH.map(([t, d]) => `<li><strong>${esc(t)}.</strong> ${esc(d)}</li>`).join("")}</ol>
+        <p class="muted">A draft doesn't open voting until you decide it is ready. More in <a href="#/learn">Start here</a>.</p></details>` : ""}
       ${can("ai") ? `<div class="agent-primer"><button type="button" class="btn btn-ghost btn-sm" id="primerBtn">Draft empty sections with AI</button><span class="muted small" id="primerNote">Fills only empty sections from the app's data, marked as an AI draft for you to rewrite.</span></div>` : ""}
       <div class="form-row">
         <label>Ticker <input name="symbol" data-ticker value="${esc(p.symbol || "")}" required maxlength="10" autocapitalize="characters" ${isNew ? "" : "readonly"} /></label>
