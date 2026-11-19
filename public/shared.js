@@ -284,9 +284,15 @@ export function loading(text) {
   return `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>${esc(text)}</div>`;
 }
 
+// "Try again" buttons re-run the current page. One delegated listener, because the page's
+// content-security-policy doesn't allow inline onclick attributes.
+if (typeof document !== "undefined") document.addEventListener("click", (e) => {
+  if (e.target.closest?.("[data-retry-page]")) window.dispatchEvent(new HashChangeEvent("hashchange"));
+});
+
 export function errorBox(text, retry = true) {
   return `<div class="error-box" role="alert"><p>${esc(text)}</p>
-    ${retry ? `<button type="button" class="btn btn-ghost btn-sm" onclick="window.dispatchEvent(new HashChangeEvent('hashchange'))">Try again</button>` : ""}</div>`;
+    ${retry ? `<button type="button" class="btn btn-ghost btn-sm" data-retry-page>Try again</button>` : ""}</div>`;
 }
 
 // ---- State helpers: skeleton, empty, error, icon. Styles are in ui/states.css. ----

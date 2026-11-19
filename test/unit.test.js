@@ -1178,3 +1178,17 @@ test("backup: daily snapshot, newest few kept, hand-made backups untouched", () 
   assert.equal(copy.prepare("SELECT x FROM a").get().x, 1);
   delete process.env.BACKUP_DIR; delete process.env.BACKUP_KEEP;
 });
+
+test("rate limit: consume allows up to max per window, then refuses", () => {
+  const { consume } = require("../middleware/rateLimit");
+  const key = `t|${Math.random()}`;
+  assert.deepEqual([1, 2, 3, 4].map(() => consume(key, 3, 60000)), [true, true, true, false]);
+  assert.equal(consume(`${key}x`, 3, 60000), true, "other keys are independent");
+});
+
+test("async password hashing matches the sync format both ways", async () => {
+  const a = require("../middleware/auth");
+  assert.equal(a.verifySecret("correct horse battery", await a.hashSecretAsync("correct horse battery")), true);
+  assert.equal(await a.verifySecretAsync("correct horse battery", a.hashSecret("correct horse battery")), true);
+  assert.equal(await a.verifySecretAsync("wrong", a.hashSecret("right")), false);
+});

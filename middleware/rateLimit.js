@@ -41,4 +41,15 @@ function loginLimiter(scope, extraKey = () => "") {
   };
 }
 
-module.exports = { loginLimiter, _failures: failures };
+// Fixed-window counter for ordinary request caps. Returns false once `max` is used up.
+const counters = new Map(); // key -> { count, resetAt }
+function consume(key, max, windowMs) {
+  const now = Date.now();
+  let c = counters.get(key);
+  if (!c || now > c.resetAt) { c = { count: 0, resetAt: now + windowMs }; counters.set(key, c); }
+  c.count++;
+  return c.count <= max;
+}
+setInterval(() => { const now = Date.now(); for (const [k, c] of counters) if (now > c.resetAt) counters.delete(k); }, 10 * 60 * 1000).unref();
+
+module.exports = { loginLimiter, consume, _failures: failures };

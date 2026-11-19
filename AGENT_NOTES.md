@@ -173,4 +173,9 @@ Format:
 - Scheduler jobs skip a round if the previous run is still going; expired sessions are purged daily.
 - `/healthz` (no external calls) replaces `/api/positions` as the Render health check; SIGTERM/SIGINT now drain and checkpoint the WAL.
 - HSTS + Permissions-Policy headers; login-limiter map is swept; first-admin setup refuses to run on Render/production with the default EDIT_PASSWORD.
-- Not done: CSP (the pages use inline scripts/styles), per-route rate limits on AI endpoints (the AI spending cap already bounds cost), moving scrypt off the event loop.
+- Not done at the time: CSP, AI rate limits, async scrypt (all added below).
+
+### Follow-up (same day)
+- Password hashing/verification in `routes/auth.js` is async (`hashSecretAsync`/`verifySecretAsync`); setup, join and invite re-check state after hashing so concurrent requests can't both win.
+- `requireAi` caps AI POSTs at 60/member/hour (`AI_RATE_PER_HOUR`), via `consume()` in `middleware/rateLimit.js`.
+- Content-Security-Policy in `server.js`: scripts only from self + cdn.jsdelivr.net, no inline scripts. Don't add inline `<script>` or `onclick=` attributes (use listeners); a new external host needs adding to the CSP. Inline styles are still allowed.
