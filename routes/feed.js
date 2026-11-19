@@ -10,6 +10,7 @@ const agentsInfo = require("../lib/feed/agents");
 const { db, ensure } = require("../lib/feed/store");
 
 const router = express.Router();
+require("../lib/feed/jobs").register();
 
 const fail = (res, err) => res.status(err.status || 500).json({ error: err.expose || err.status ? err.message : "Something went wrong on the server." });
 const q = (req) => ({
