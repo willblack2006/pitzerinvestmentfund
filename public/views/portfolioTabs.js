@@ -2,6 +2,7 @@
 export const PORTFOLIO_TABS = [
   ["#/", "Holdings"],
   ["#/performance", "Performance"],
+  ["#/risk", "Risk"],
   ["#/allocation", "Allocation & policy"],
   ["#/factors", "Factors"],
   ["#/dividends", "Dividends"],

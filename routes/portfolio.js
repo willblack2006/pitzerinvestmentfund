@@ -11,6 +11,7 @@ const { latestPrices, histories } = require("../lib/prices");
 const { basesFor, PERIODS } = require("../lib/periods");
 const { getSettings } = require("../lib/settings");
 const benchmarks = require("../lib/benchmarks");
+const { portfolioRisk } = require("../lib/portfolioRisk");
 const { benchmarkFor } = require("../lib/prefs");
 
 const router = express.Router();
@@ -152,6 +153,27 @@ router.get("/portfolio/performance", async (req, res) => {
     correlation: corr,
     ledger: { twr: portfolio.twr(navHistory, bench2y), snapshots: navHistory.filter((h) => h.totalValue > 0).length, realizedGains: realized, dividends },
   });
+});
+
+// ---- Portfolio risk: risk contribution, loss measures, drawdown, stress scenarios ----
+
+router.get("/portfolio/risk", async (req, res) => {
+  try {
+    const stored = db.prepare("SELECT symbol, shares, marketValue FROM positions").all();
+    if (!stored.length) return res.json({ risk: null, reason: "No holdings yet." });
+    const symbols = stored.map((p) => p.symbol);
+    const [hist, live, spy, spyLong] = await Promise.all([
+      histories(symbols, "1y"),
+      latestPrices(symbols).catch(() => ({})),
+      yahooSrc.getChart("SPY", "1y", "1d").catch(() => []),
+      yahooSrc.getChart("SPY", "10y", "1d").catch(() => null),
+    ]);
+    const values = Object.fromEntries(stored.map((p) => [p.symbol, live[p.symbol]?.price ? live[p.symbol].price * p.shares : p.marketValue]));
+    const risk = portfolioRisk({ histories: hist, spy, spyLong, values, cash: getSettings().cash || 0 });
+    res.json({ risk, reason: risk ? null : "Not enough overlapping price history yet." });
+  } catch (e) {
+    res.status(502).json({ error: `Risk is unavailable: ${e.message}` });
+  }
 });
 
 // ---- Time-frame starting prices for the Holdings table ----

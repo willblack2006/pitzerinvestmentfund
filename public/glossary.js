@@ -17,6 +17,11 @@ export const GLOSSARY = {
   rollingBeta: ["Rolling beta", "Beta measured over a moving window (the last 3 or 6 months of daily returns) instead of all two years, so you can see whether the stock has started to swing more or less with the market."],
   rollingCorrelation: ["Rolling correlation", "Correlation with the benchmark over a moving window (the last 3 or 6 months of daily returns). A rising line means the stock moves more in step with the market, so it diversifies the fund less."],
   contribution: ["Contribution", "A holding's return times its starting weight, in percentage points: how much it added to or took away from the portfolio's return."],
+  var: ["Bad-day loss (VaR)", "The loss the fund's current holdings suffered or exceeded on only 1 trading day in 20 over the past year (95% historical value at risk). It is not a limit: 1 day in 20 was worse."],
+  expectedShortfall: ["Average of the worst days", "The average loss on those worst 1-in-20 days (expected shortfall). Always bigger than the bad-day loss, and a better picture of how bad the tail is."],
+  currentDrawdown: ["Below peak", "How far today's holdings are under their highest value of the past year."],
+  effectiveBets: ["Independent bets", "How many equal, unrelated positions would carry the same risk. Fewer than the number of holdings means volatile or highly correlated names are doing most of the work."],
+  riskContribution: ["Share of risk", "How much of the fund's total variance a holding is responsible for, counting its size, its volatility and how it moves with everything else. Shares add to 100%."],
   twr: ["Time-weighted return", "Return with deposits and withdrawals stripped out, so adding cash doesn't look like performance. The standard way funds report returns."],
   // Markets (Today page)
   vix: ["VIX", "The Cboe Volatility Index: the volatility S&P 500 options prices imply for the next 30 days, as an annual %. It usually rises when stocks fall, so it's often called the market's fear gauge."],
