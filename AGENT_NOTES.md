@@ -10,6 +10,10 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-19, Claude (AI polish round 2: Agents tabs, desk, red team, briefs)
+- Did: adopted `polish.css` tokens (`--ease-out`, `--dur-*`, `--shadow-*`, `--ring`, `--r-xl`) in `public/css/agents.css`. Agents Ask tab has a rounded composer with a round-pill Ask button; Research desk uses a segmented control, per-tool run labels and focus on the first field; red team objections are individual cards with a severity edge and a pulse while waiting; briefs get a highlighted quote style. Removed my earlier `.desk-trade` flex override, which broke the grid in `style.css`.
+- Checked: screenshots in `/mnt/project-files/ai-polish/round2-*.png` with a fake OpenAI.
+
 ## 2026-11-19, Claude (AI experience polish, cloud session)
 - Did: Ask PIF panel and every AI card. Panel glides in, answers fade in paragraph by paragraph (once, `is-new`), progress shows the last 3 steps with a soft pulse and folds older ones, composer is one rounded field with a round send button that grows with the text and stays quiet until there is text, Up arrow recalls the last question, "New chat" clears the panel, empty state is friendlier, feedback buttons fade until hover. Brief/report cards got the same type rhythm. All in `public/ai.js` and the end of `public/css/agents.css`; all motion is off under `prefers-reduced-motion`. New `arrow-up` icon.
 - Checked: screenshots at 1280 and 390 against a fake OpenAI (scripted tool call plus canned answer) in `/mnt/project-files/ai-polish/`. `npm test` 232 pass; one `features.test.js` Senate eFD test failed once in the full run and passes alone.

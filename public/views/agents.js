@@ -175,7 +175,7 @@ export async function mount(container, params = {}) {
           <textarea name="q" maxlength="1000" placeholder="e.g. Which holdings have the most insider selling this quarter? What did MU say about guidance in its last 10-Q?"></textarea></label>
         <button class="btn btn-primary">Ask</button></form>
         <div class="agent-followups ask-suggest-page"><span class="small muted">Try</span>${suggestionsFor(null).map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>
-        <p class="muted small">Answers come only from the app's data and SEC filings, with the sources and every lookup shown. Each question costs a few cents from your daily AI budget. Press <kbd>A</kbd> on any page to ask from a side panel.</p>
+        <p class="muted small">Answers come from the app's data and SEC filings, with every source shown. Each question costs a few cents of your daily budget. <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to ask, or press <kbd>A</kbd> on any page for the side panel.</p>
         <div id="askOut"></div><div id="askHistory"></div>`;
       const form = container.querySelector("#askForm"), out = container.querySelector("#askOut");
       const renderHistory = async () => {
@@ -218,7 +218,7 @@ export async function mount(container, params = {}) {
     } else {
       const r = await api("/api/agents/briefs");
       body.innerHTML = r.briefs.length ? r.briefs.map((x) => outputCard(x.brief, x.runId, x.feedback)).join("")
-        : emptyState({ icon: "doc", title: "No briefs yet", body: "When a holding files an 8-K, 10-Q or 10-K, a brief appears here. You can also brief any filing from a stock's Research → Filings tab." });
+        : emptyState({ icon: "doc", title: "No briefs yet", body: "When a holding files an 8-K, 10-Q or 10-K, its brief appears here. You can also brief any filing from a stock's Filings tab." });
     }
   };
   await load();
