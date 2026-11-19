@@ -233,11 +233,13 @@ export async function mount(container, params) {
         <section class="panel">${editing ? editor(p, isNew, current) : `${scenarioBar(p, current)}${readView(p)}`}</section>
       </div>
       ${!isNew ? `<aside class="research-side">${votePanel(p)}
+        ${["draft", "voting", "approved"].includes(p.status) ? `<section class="panel" aria-labelledby="fit-h"><div class="panel-head"><h3 id="fit-h">Fit with the fund</h3></div><div id="fitBody">${skeleton("text", { rows: 2, label: "Checking fit" })}</div></section>` : ""}
         ${can("ai") ? `<section class="panel" aria-labelledby="rt-h"><div class="panel-head"><h3 id="rt-h">Red team</h3></div><div id="redTeamBody">${skeleton("text", { rows: 3, label: "Loading the red team report" })}</div></section>` : ""}
         ${p.status === "approved" ? `<section class="panel"><h3>Next step</h3><p class="small">Place the trade, then record it under <a href="#/transactions">Transactions</a> and mark this pitch executed.</p></section>` : ""}
       </aside>` : ""}
     </div>`;
 
+  if (!isNew && el("fitBody")) loadFit(p);
   if (!isNew && can("ai")) loadRedTeam(p);
   el("primerBtn")?.addEventListener("click", () => draftWithAi(el("pitchForm")));
   el("editBtn")?.addEventListener("click", () => { container.dataset.editing = String(p.id); mount(container, params); });
@@ -332,6 +334,25 @@ export async function mount(container, params) {
       toast(err.message, { type: "error" });
     }
   });
+}
+
+function fitHtml(f) {
+  if (!f.ok) return `<p class="muted small">${esc(f.reason)}</p>`;
+  const row = (label, a, b, unit = "%") => `<tr><th scope="row">${label}</th><td>${a}${unit}</td><td>→ <strong>${b}${unit}</strong></td></tr>`;
+  const issues = f.issues.map((i) => `<li class="${i.level === "breach" ? "neg" : "muted"}"><strong>${esc(i.rule)}.</strong> ${esc(i.detail)}</li>`).join("");
+  return `<table class="small fit-table"><tbody>
+      ${row(`${esc(f.symbol)} weight`, f.before.position, f.after.position)}
+      ${row(`${esc(f.sector)}`, f.before.sector, f.after.sector)}
+      ${row("Cash", f.before.cash, f.after.cash)}
+      ${row("Holdings", f.before.positions, f.after.positions, "")}
+    </tbody></table>
+    ${issues ? `<ul class="link-list small">${issues}</ul>` : `<p class="small">Within every policy limit.</p>`}`;
+}
+
+async function loadFit(p) {
+  const box = el("fitBody");
+  try { box.innerHTML = fitHtml(await api(`/api/pitches/${p.id}/fit`)); }
+  catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; }
 }
 
 // ---- Research agents: red team and pitch primer (members with AI access) ----

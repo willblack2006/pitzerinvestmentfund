@@ -166,3 +166,8 @@ Format:
 - Did: added `CLAUDE.md`, `AGENTS.md`, this file. No git changes — repo already had ~45 uncommitted files before this.
 - In progress / unfinished: those ~45 pre-existing uncommitted changes (congressTrades, govContracts, paperTrading features and related test/public/route files) are still uncommitted — review and commit before heavy multi-agent use. `codex-output/` folder mentioned in CLAUDE.md/AGENTS.md was not created — create it when Codex first needs it.
 - Gotchas: repo has both `render.yaml` (live deploy, Render) and a leftover `.vercel/` folder (not current) — don't treat `.vercel/` as live.
+
+## 2026-11-19, Claude (pitch fit check, cloud session)
+- New `lib/pitchFit.js` (pure) + `GET /api/pitches/:id/fit` + "Fit with the fund" panel on the pitch page: before/after position, sector, cash and holdings count, and only the policy limits the trade itself would break. `sizePct` is read as percent of the fund traded; a sell exits the whole position.
+- Tests: `test/pitchFit.test.js`. Pre-existing failure: test 86 (symbol search degrade) fails offline with or without this change.
+- Next on the shortlist: exit tripwires per holding, then a meeting agenda page.

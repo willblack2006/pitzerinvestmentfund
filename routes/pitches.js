@@ -4,6 +4,9 @@ const { requireSignedIn } = require("../middleware/auth");
 const { getSettings } = require("../lib/settings");
 const { latestPrices } = require("../lib/prices");
 const { notify } = require("../lib/notify");
+const { fitCheck } = require("../lib/pitchFit");
+const portfolio = require("../lib/portfolio");
+const yahoo = require("../lib/sources/yahoo");
 
 const router = express.Router();
 
@@ -79,6 +82,17 @@ router.get("/pitches/:id", async (req, res) => {
   if (!p) return res.status(404).json({ error: "Pitch not found." });
   const prices = await latestPrices([p.symbol]);
   res.json({ ...p, tally: tally(p.id), currentPrice: prices[p.symbol]?.price ?? null });
+});
+
+// What this trade would do to position, sector and cash weights and the policy limits.
+router.get("/pitches/:id/fit", async (req, res) => {
+  const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
+  if (!p) return res.status(404).json({ error: "Pitch not found." });
+  try {
+    const alloc = await portfolio.allocation();
+    const sector = await yahoo.getSector(p.symbol).then((x) => x.sector || "").catch(() => "");
+    res.json(fitCheck(alloc, p, sector));
+  } catch (e) { res.status(502).json({ error: "Couldn't load the fund's weights right now." }); }
 });
 
 router.post("/pitches", requireSignedIn, async (req, res) => {
