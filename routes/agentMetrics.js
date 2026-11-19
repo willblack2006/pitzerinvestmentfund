@@ -10,6 +10,7 @@ const schema = require("../lib/schema/observability");
 
 const router = express.Router();
 health.register();
+require("../lib/agents/evalAgents").registerNightly();
 
 const daysParam = (q) => Math.min(90, Math.max(1, Number(q) || 30));
 

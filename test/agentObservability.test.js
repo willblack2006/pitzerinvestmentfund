@@ -188,3 +188,33 @@ test("routes: trace visibility, stats, admin-only spend, feedback reasons", asyn
     assert.equal((await call(`/api/agents/runs/${mine}/reasons`, b, { method: "POST", body: JSON.stringify({ reasons: ["great_catch"] }) })).status, 404);
   } finally { server.close(); }
 });
+
+test("evals: golden cases lint clean and pass offline with scripted replies", async () => {
+  const evals = require("../lib/agents/evalAgents");
+  require("../lib/agents/workflows");
+  const files = evals.loadCaseFiles();
+  assert.ok(files.length >= 2);
+  assert.deepEqual(files.flatMap((f) => evals.lint(f, require("../lib/agents").registered())), []);
+  setSettings({ aiMonthlyCapUsd: 100, aiMemberDailyUsd: 100 });
+  const results = await evals.runAll({ mode: "fake" });
+  assert.ok(results.length >= 3);
+  for (const r of results) assert.equal(r.pass, true, `${r.agent}/${r.id}: ${r.notes.join("; ")}`);
+  evals.save(db, results, "fake");
+  const ff = metrics.agentStats(keyFor("filing_flash"), { days: 2 });
+  assert.equal(ff.lastEval.cases, 2); assert.equal(ff.lastEval.passed, 2);
+});
+
+test("evals: a made-up quote and a wrong headline fail their checks", async () => {
+  const evals = require("../lib/agents/evalAgents");
+  const file = evals.loadCaseFiles(undefined, ["filing_flash"])[0];
+  const c = JSON.parse(JSON.stringify(file.cases[0]));
+  const j = c.fakeModel[0].json;
+  j.headline = "Quarterly dividend raised";
+  j.points = j.points.map((p) => ({ ...p, quote: "The company is thrilled with its record quarter." }));
+  const r = await evals.runCase(file, c, { mode: "fake" });
+  assert.equal(r.pass, false);
+  assert.equal(r.checks.match, false);
+  assert.equal(r.checks.verified, false);
+  const s = evals.score({ id: "x", expect: { status: "done", maxCostUsd: 0.01, toolsUsed: ["get_holdings"] } }, { status: "failed", error: "boom", output: null, steps: [], costUsd: 0.02 });
+  assert.deepEqual(s.checks, { status: false, cost: false, tools: false });
+});
