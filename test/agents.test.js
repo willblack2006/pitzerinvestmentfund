@@ -216,7 +216,13 @@ test("flash: an earnings 8-K gets a brief from the press-release exhibit, with q
   const today = new Date().toISOString().slice(0, 10);
   agents.recordEvent({ dedupeKey: "filing:NV1", symbol: "NVDA", type: "8-K", items: "2.02,9.01", asOf: today, sourceUrl: `${folder}/nvda-8k.htm` });
   agents.routeNew();
-  const d = await agents.dispatch();
+  // A big holding's earnings go out on their own (smaller ones wait for the daily digest).
+  const before = db.prepare("SELECT * FROM positions WHERE symbol = 'NVDA'").get();
+  db.prepare("INSERT INTO positions (symbol, shares, marketValue) VALUES ('NVDA', 1, 1e12) ON CONFLICT(symbol) DO UPDATE SET marketValue = 1e12").run();
+  let d;
+  try { d = await agents.dispatch(); } finally {
+    if (before) db.prepare("UPDATE positions SET marketValue = ? WHERE symbol = 'NVDA'").run(before.marketValue); else db.prepare("DELETE FROM positions WHERE symbol = 'NVDA'").run();
+  }
   assert.deepEqual(d, { ran: 1, failed: 0 });
   const run = db.prepare("SELECT * FROM agent_runs WHERE workflow = 'earnings_flash'").get();
   const brief = JSON.parse(run.output);
@@ -229,6 +235,7 @@ test("flash: an earnings 8-K gets a brief from the press-release exhibit, with q
   const notes = db.prepare("SELECT memberId, type, link FROM notifications WHERE type = 'agentBrief'").all();
   assert.deepEqual(notes.map((n) => n.memberId), [Number(admin)], "only members with AI access are notified");
   assert.equal(notes[0].link, `#/agents/runs/${run.id}`);
+  assert.match(brief.alerted, /earnings on a \d+% holding/);
   assert.ok(Number(plain));
 });
 

@@ -74,11 +74,12 @@ export async function mount(container) {
   });
 }
 
-const NOTIFY_TYPES = [["pitchVoting", "A pitch opens for voting"], ["pitchResult", "Results of pitches you wrote or voted on"], ["fundTrade", "Trades in the real fund"], ["priceAlert", "Your price alerts"], ["paperOrder", "Your paper orders filling or being cancelled"], ["thirteenF", "New 13F filings from managers the fund follows"], ["mention", "Mentions in the club chat"], ["memberJoined", "Someone joins with the sign-up link (admins)"]];
+const NOTIFY_TYPES = [["pitchVoting", "A pitch opens for voting"], ["pitchResult", "Results of pitches you wrote or voted on"], ["fundTrade", "Trades in the real fund"], ["priceAlert", "Your price alerts"], ["paperOrder", "Your paper orders filling or being cancelled"], ["thirteenF", "New 13F filings from managers the fund follows"], ["mention", "Mentions in the club chat"], ["memberJoined", "Someone joins with the sign-up link (admins)"],
+  ["agentBrief", "Important AI research alerts: big filings, earnings on large holdings, thesis warnings"], ["agentDigest", "Daily AI research digest (one a weekday, everything else the agents wrote)"]];
 function renderNotifyPrefs() {
   const box = el("notifyPrefs");
   const off = getPref("notifyOff", []);
-  box.innerHTML = NOTIFY_TYPES.filter(([k]) => k !== "memberJoined" || currentMember()?.isAdmin).map(([k, l]) => `<label class="check"><input type="checkbox" data-notify="${k}" ${off.includes(k) ? "" : "checked"} /> ${esc(l)}</label>`).join("");
+  box.innerHTML = NOTIFY_TYPES.filter(([k]) => (k !== "memberJoined" || currentMember()?.isAdmin) && (!k.startsWith("agent") || currentMember()?.isAdmin || currentMember()?.canUseAi)).map(([k, l]) => `<label class="check"><input type="checkbox" data-notify="${k}" ${off.includes(k) ? "" : "checked"} /> ${esc(l)}</label>`).join("");
   box.addEventListener("change", () => setPref("notifyOff", [...box.querySelectorAll("[data-notify]")].filter((x) => !x.checked).map((x) => x.dataset.notify)));
 }
 

@@ -111,6 +111,12 @@ export function initInbox() {
     const { type, data } = e.detail;
     if (type === "hello" && can("member")) { load(); return; }
     if (type !== "notify") return;
+    // A running summary (e.g. today's 13F filings) replaces its unread earlier version.
+    if (data.replaces?.length) {
+      const gone = new Set(data.replaces);
+      state.unread = Math.max(0, state.unread - state.items.filter((n) => gone.has(n.id) && !n.readAt).length);
+      state.items = state.items.filter((n) => !gone.has(n.id));
+    }
     state.items.unshift(data);
     state.unread += 1;
     updateBadge();
