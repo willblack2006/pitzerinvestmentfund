@@ -20,6 +20,7 @@ const triggers = require("../lib/agents/triggers");
 const bus = require("../lib/platform/bus");
 const { dryRun } = require("../lib/agents/dryRun");
 const tools = require("../lib/agents/tools");
+triggers.install();
 
 // A controllable metric so tests don't depend on Yahoo.
 const testValues = {};
@@ -330,6 +331,7 @@ test("dry run replays a price-move trigger and conditions over stored closes wit
 // ---- API ----
 
 test("API: templates, validate, create, run, version, fork, follow, permissions", async () => {
+  global.fetch = realFetch;
   const { startServer } = require("./helpers");
   const s = await startServer();
   try {
