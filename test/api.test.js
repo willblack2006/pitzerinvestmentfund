@@ -732,3 +732,17 @@ test("symbol search, chart bars and red-flag endpoints degrade cleanly", async (
   assert.deepEqual(saved.body.chartSettings, { frame: "1Y", type: "candles", log: false, marks: true, indicators: [{ id: "rsi", params: { n: 400 } }] });
   assert.deepEqual(saved.body.chartDrawings, { HSY: [{ t: "trend", p: [{ time: 1, price: 2 }, { time: 3, price: 4 }] }] });
 });
+
+test("tripwires: members add, review-date ones trip once, others can't be added by visitors", async () => {
+  assert.equal((await s.api("/api/tripwires", { method: "POST", body: { symbol: "ZZT", kind: "review_by", dueDate: "2020-01-01" } })).status, 401);
+  assert.equal((await s.api("/api/tripwires", { method: "POST", member: tokens.Ana, body: { symbol: "ZZT", kind: "price_below", value: -1 } })).status, 400);
+  assert.equal((await s.api("/api/tripwires", { method: "POST", member: tokens.Ana, body: { symbol: "ZZT", kind: "custom" } })).status, 400, "custom needs a description");
+  const tw = await s.api("/api/tripwires", { method: "POST", member: tokens.Ana, body: { symbol: "zzt", kind: "review_by", dueDate: "2020-01-01", note: "check margins" } });
+  assert.equal(tw.status, 201);
+  const list = (await s.api("/api/tripwires?symbol=ZZT")).body;
+  assert.equal(list[0].status, "tripped", "an overdue review date trips on the next check");
+  assert.equal((await s.api("/api/tripwires?symbol=ZZT")).body.length, 1, "and only once");
+  assert.equal((await s.api(`/api/tripwires/${tw.body.id}/reset`, { method: "POST", member: tokens.Ana, body: {} })).body.status, "active");
+  assert.equal((await s.api(`/api/tripwires/${tw.body.id}/resolve`, { method: "POST", member: tokens.Ana, body: {} })).body.status, "resolved");
+  assert.equal((await s.api("/api/tripwires?symbol=ZZT")).body.length, 0);
+});

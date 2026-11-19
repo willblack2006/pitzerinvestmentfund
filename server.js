@@ -103,6 +103,7 @@ app.use("/api", dividendsRouter);
 app.use("/api", pitchesRouter);
 app.use("/api", membersRouter);
 app.use("/api", require("./routes/agents"));
+app.use("/api", require("./routes/tripwires"));
 
 app.use("/api", (req, res) => res.status(404).json({ error: "No such API endpoint." }));
 

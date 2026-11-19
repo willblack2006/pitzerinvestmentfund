@@ -171,3 +171,8 @@ Format:
 - New `lib/pitchFit.js` (pure) + `GET /api/pitches/:id/fit` + "Fit with the fund" panel on the pitch page: before/after position, sector, cash and holdings count, and only the policy limits the trade itself would break. `sizePct` is read as percent of the fund traded; a sell exits the whole position.
 - Tests: `test/pitchFit.test.js`. Pre-existing failure: test 86 (symbol search degrade) fails offline with or without this change.
 - Next on the shortlist: exit tripwires per holding, then a meeting agenda page.
+
+## 2026-11-19, Claude (exit tripwires, cloud session)
+- New `tripwires` table, `lib/tripwires.js` (pure `evaluate` + `check`), `routes/tripwires.js`, panel on Research > Thesis. Kinds: price below/above, review-by date, custom (marked by hand). `check()` runs every 5 min in the scheduler quick loop and on `/api/alerts` and `/api/tripwires`; a trip notifies all members once (type `tripwire`) and shows under "Exit tripwires" in Needs attention until someone re-arms or removes it.
+- Meeting brief already existed (Alerts page), so no separate agenda page was built.
+- Price tripwires could not be seen tripping in the sandbox (no Yahoo access); date ones are covered by an API test.

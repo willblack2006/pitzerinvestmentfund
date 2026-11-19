@@ -97,3 +97,8 @@
 .fit-table th { text-align: left; font-weight: 500; padding: 4px 0; }
 .fit-table td { text-align: right; padding: 4px 0 4px 8px; }
 .fit-breach { color: var(--negative); }
+
+/* Exit tripwires */
+.tripwire.tripped { border-left: 3px solid var(--negative); padding-left: 8px; }
+.tripwire .btn-link { padding: 0; }
+.alert-form #twNote { flex: 1 1 100%; }
