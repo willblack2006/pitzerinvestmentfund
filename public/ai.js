@@ -160,7 +160,7 @@ function panelHtml() {
       <label for="askPanelInput" class="sr-only">Your question</label>
       <div class="chat-input-row"><textarea id="askPanelInput" rows="2" maxlength="1000" placeholder="Ask about the fund, a holding or any ticker"></textarea>
       <button class="btn btn-primary" id="askPanelSend">Ask</button></div>
-      <p class="muted small ask-hint">Answers use only the app's data and SEC filings. Enter to ask, Shift+Enter for a new line. <span id="askBudget"></span></p>
+      <p class="muted small ask-hint">Answers use the app's data and SEC filings, and the web only when those don't cover it. Enter to ask, Shift+Enter for a new line. <span id="askBudget"></span></p>
     </form>
   </div>`;
 }
