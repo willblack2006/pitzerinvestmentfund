@@ -303,7 +303,8 @@ router.get("/cockpit/position/:symbol", async (req, res) => {
     if (t.type === "buy") { shares -= t.shares; cost -= t.shares * t.price + (t.amount || 0); }
     else if (t.type === "sell") { shares += t.shares; cost += t.costBasis || 0; }
     else continue;
-    steps.unshift({ date: t.date, shares: Math.max(0, shares), avgCost: shares > 1e-9 ? Math.max(0, cost) / shares : null });
+    // Tiny leftovers (a broker sync adjusting fractional shares) are not a real earlier position.
+    steps.unshift({ date: t.date, shares: Math.max(0, shares), avgCost: shares > 1e-6 && cost > 0.01 ? cost / shares : null });
   }
   // steps[i] holds the state BEFORE trade i; turn into dated segments after each trade.
   const trades = txns.filter((t) => t.type === "buy" || t.type === "sell");
@@ -314,7 +315,7 @@ router.get("/cockpit/position/:symbol", async (req, res) => {
     symbol, shares: pos?.shares || 0, avgCost: pos?.avgCost ?? null, history: history.map((p) => ({ date: p.date, close: p.close })),
     trades: trades.map((t) => ({ id: t.id, date: t.date, type: t.type, shares: t.shares, price: t.price, realizedGain: t.realizedGain, note: t.note })),
     dividends: txns.filter((t) => t.type === "dividend").map((t) => ({ date: t.date, amount: t.amount })),
-    costPath, ledgerStarts: txns[0]?.date || null,
+    costPath, ledgerStarts: txns[0]?.date || null, heldBeforeLedger: steps[0].avgCost !== null,
   });
 });
 

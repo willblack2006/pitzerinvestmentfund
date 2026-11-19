@@ -1,5 +1,6 @@
 import { el, esc, api, fmtUSD, can, toast, confirmAction, lockedHint, pageHead, subTabs, invalidateContext, signed, errorState, bindRetry, skeleton, emptyState } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
+import { mountTransactionsViz } from "./transactionsViz.js";
 
 export const title = "Transactions";
 
@@ -76,7 +77,8 @@ export async function mount(container) {
       <p class="muted small">Sells use average cost basis. Deleting an entry reverses its effect on holdings and cash.</p>
     </section>` : `<section class="toolbar">${lockedHint("Sign in to record trades, dividends and cash movements.", "trade")}</section>`}
 
-    <section class="table-wrap">
+    <div id="txViz"></div>
+    <section class="table-wrap" id="txTableSection">
       ${rows.length ? `
       <table>
         <caption class="sr-only">Transaction ledger, newest first</caption>
@@ -100,6 +102,7 @@ export async function mount(container) {
       </table>` : emptyState({ icon: "briefcase", title: "No transactions yet", body: "Start with a deposit for the fund's current cash, then record trades as they happen. Existing holdings stay as they are.", action: unlocked ? { label: "Record a deposit", id: "txEmptyStart" } : null })}
     </section>`;
 
+  mountTransactionsViz(el("txViz"), el("txTableSection"), rows);
   if (!unlocked) return;
   el("txEmptyStart")?.addEventListener("click", () => { const t = el("txType"); t.value = "deposit"; t.dispatchEvent(new Event("change")); t.focus(); });
 
