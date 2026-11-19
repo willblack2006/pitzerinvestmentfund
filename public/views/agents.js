@@ -1,6 +1,9 @@
 // Research agents: briefs, the approval queue, every run with its cost, and the event feed the
 // rules router saw. Members with AI access only (an admin grants it in Settings).
-import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, bindRetry, tabNav, toast, safeUrl, fmtUSD } from "../shared.js";
+import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, bindRetry, tabNav, toast, safeUrl, fmtUSD, icon } from "../shared.js";
+import { answerCard, feedbackButtons, bindFeedback, sourceLink, withProgress, aiErrorHtml, suggestionsFor, localTime } from "../ai.js";
+
+export { answerCard, feedbackButtons, bindFeedback };
 
 export const title = "Research agents";
 
@@ -29,6 +32,8 @@ export function budgetBar(b) {
 const verifiedBadge = (v) => v ? `<span class="badge badge-owned" title="This quote was found word for word in the filing">Verified quote</span>`
   : `<span class="badge badge-warn" title="This quote could not be found in the filing. Check it before relying on it.">Quote not found</span>`;
 
+const repairedBadge = (x) => x?.repaired ? ` <span class="badge" title="The agent paraphrased; the quote shown is the exact filing sentence it matched.">Matched to filing text</span>` : "";
+
 export function briefCard(b, { runId, feedback, showSymbol = true } = {}) {
   if (!b) return "";
   const fb = feedback || {};
@@ -41,9 +46,9 @@ export function briefCard(b, { runId, feedback, showSymbol = true } = {}) {
       ${b.tone ? `<span class="badge ${TONE[b.tone] || ""}">${esc(b.tone)}</span>` : ""}
     </header>
     <p>${esc(b.bottomLine)}</p>
-    ${b.points?.length ? `<ul class="agent-points">${b.points.map((p) => `<li><p>${esc(p.text)}</p><blockquote>“${esc(p.quote)}” ${verifiedBadge(p.verified)}</blockquote></li>`).join("")}</ul>` : ""}
+    ${b.points?.length ? `<ul class="agent-points">${b.points.map((p) => `<li><p>${esc(p.text)}</p><blockquote>“${esc(p.quote)}” ${verifiedBadge(p.verified)}${repairedBadge(p)}</blockquote></li>`).join("")}</ul>` : ""}
     ${b.kpis?.length ? `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Reported figures</caption><thead><tr><th scope="col" class="left">Figure</th><th scope="col" class="num">As filed</th><th scope="col" class="left">Check</th></tr></thead>
-      <tbody>${b.kpis.map((k) => `<tr><th scope="row" class="left">${esc(k.name)}</th><td class="num">${esc(k.value)}</td><td class="left">${verifiedBadge(k.verified)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <tbody>${b.kpis.map((k) => `<tr><th scope="row" class="left">${esc(k.name)}</th><td class="num">${esc(k.value)}</td><td class="left">${verifiedBadge(k.verified)}${repairedBadge(k)}</td></tr>`).join("")}</tbody></table></div>` : ""}
     ${b.questions?.length ? `<p class="pf-sub">Look into next</p><ul class="small">${b.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}
     ${b.unbackedNumbers?.length ? `<p class="notice small">These numbers in the text don't match the filing or the app's data, so check them: ${b.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
     ${b.sourceTruncated ? `<p class="muted small">The filing was long, so only its first part was read.</p>` : ""}
@@ -54,37 +59,7 @@ export function briefCard(b, { runId, feedback, showSymbol = true } = {}) {
   </article>`;
 }
 
-export function feedbackButtons(runId, fb = {}) {
-  const btn = (v, label) => `<button type="button" class="btn btn-ghost btn-sm" data-feedback="${v}" data-run="${runId}" aria-pressed="${fb.mine === v}">${label}${fb[v] ? ` <span class="muted">${fb[v]}</span>` : ""}</button>`;
-  return `<span class="agent-feedback" role="group" aria-label="Was this useful?">${btn("useful", "Useful")}${btn("not_useful", "Not useful")}${btn("wrong", "Wrong")}</span>`;
-}
-
-export function bindFeedback(container) {
-  container.addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-feedback]");
-    if (!b) return;
-    const verdict = b.dataset.feedback;
-    try {
-      const fb = await api(`/api/agents/runs/${b.dataset.run}/feedback`, { method: "POST", body: JSON.stringify({ verdict }) });
-      b.closest(".agent-feedback").outerHTML = feedbackButtons(b.dataset.run, fb);
-      toast("Thanks, noted.", { type: "success" });
-    } catch (err) { toast(err.message, { type: "error" }); }
-  });
-}
-
-const srcLink = (u) => (!u ? "" : u.startsWith("#") ? `<a href="${esc(u)}">${esc(u.replace(/^#\//, ""))}</a>` : `<a href="${safeUrl(u)}" target="_blank" rel="noopener">sec.gov</a>`);
-
-export function answerCard(o, runId) {
-  return `<article class="panel agent-answer">
-    <p class="muted small">You asked: ${esc(o.question)}</p>
-    <div>${o.answer.split(/\n{2,}/).map((para) => /^\s*- /m.test(para) ? `<ul>${para.split(/\n/).filter(Boolean).map((l) => `<li>${esc(l.replace(/^\s*- /, ""))}</li>`).join("")}</ul>` : `<p>${esc(para)}</p>`).join("")}</div>
-    ${o.claims?.length ? `<details><summary class="small">Sources (${o.claims.length})</summary><ul class="small">${o.claims.map((c) => `<li>${esc(c.text)} ${srcLink(c.source_url)}${c.sourced ? "" : ` <span class="badge badge-warn">source not read</span>`}${c.quote ? `<blockquote>“${esc(c.quote)}” ${c.verified ? `<span class="badge badge-owned">Verified quote</span>` : `<span class="badge badge-warn">Quote not found</span>`}</blockquote>` : ""}</li>`).join("")}</ul></details>` : ""}
-    ${o.unbackedNumbers?.length ? `<p class="notice small">Check these numbers, no tool result backs them: ${o.unbackedNumbers.map(esc).join(", ")}</p>` : ""}
-    <p class="agent-tools">Looked at: ${o.toolsUsed?.length ? o.toolsUsed.map((t) => esc(t.name.replace(/^get_/, "").replace(/_/g, " ")) + (t.args?.symbol ? ` ${esc(t.args.symbol)}` : "")).join(", ") : "nothing"}</p>
-    ${o.followUps?.length ? `<p class="small muted">Try next: ${o.followUps.map(esc).join(" · ")}</p>` : ""}
-    <footer class="agent-brief-foot"><span class="muted small">AI-written research aid, not advice. <a href="#/agents/runs/${runId}">How it was made</a></span>${feedbackButtons(runId)}</footer>
-  </article>`;
-}
+const srcLink = (u) => sourceLink(u);
 
 export function reportCard(o, runId, fb) {
   const dataQa = o.kind === "data_qa";
@@ -105,7 +80,7 @@ export function reportCard(o, runId, fb) {
 export function outputCard(o, runId, fb) {
   if (!o) return "";
   if (o.headline) return briefCard(o, { runId, feedback: fb });
-  if (o.kind === "ask_pif") return answerCard(o, runId);
+  if (o.kind === "ask_pif") return answerCard(o, runId, { feedback: fb });
   if (o.sections || o.kind === "data_qa") return reportCard(o, runId, fb);
   return "";
 }
@@ -199,21 +174,42 @@ export async function mount(container, params = {}) {
       body.innerHTML = `<form class="agent-ask" id="askForm"><label class="field-block" style="flex:1 1 320px">Ask about the fund, a holding or any ticker
           <textarea name="q" maxlength="1000" placeholder="e.g. Which holdings have the most insider selling this quarter? What did MU say about guidance in its last 10-Q?"></textarea></label>
         <button class="btn btn-primary">Ask</button></form>
-        <p class="muted small">Answers come only from the app's data and SEC filings, with the sources and every tool call shown. Each question costs a few cents from your daily AI budget.</p>
+        <div class="agent-followups ask-suggest-page"><span class="small muted">Try</span>${suggestionsFor(null).map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+        <p class="muted small">Answers come only from the app's data and SEC filings, with the sources and every lookup shown. Each question costs a few cents from your daily AI budget. Press <kbd>A</kbd> on any page to ask from a side panel.</p>
         <div id="askOut"></div><div id="askHistory"></div>`;
-      const hist = await api("/api/agents/asks");
-      container.querySelector("#askHistory").innerHTML = hist.asks.length ? `<p class="pf-sub">Your recent questions</p>${hist.asks.map((a) => a.output ? answerCard(a.output, a.runId) : `<p class="muted small">${esc(a.createdAt)}: ${esc(a.error || a.status)}</p>`).join("")}` : "";
-      container.querySelector("#askForm").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const q = e.target.q.value.trim();
+      const form = container.querySelector("#askForm"), out = container.querySelector("#askOut");
+      const renderHistory = async () => {
+        const hist = await api("/api/agents/asks");
+        const past = hist.asks.filter((a) => a.output || a.error);
+        container.querySelector("#askHistory").innerHTML = past.length ? `<p class="pf-sub">Your recent questions</p><div class="agent-history">${past.map((a, i) => `<details class="agent-hist"${i === 0 ? " open" : ""}>
+            <summary><span>${esc(a.output?.question || "Question that failed")}</span><span class="muted small">${esc(localTime(a.createdAt))}${a.output ? "" : " · failed"}</span></summary>
+            ${a.output ? answerCard(a.output, a.runId) : `<p class="muted small">${esc(a.error || a.status)}</p>`}</details>`).join("")}</div>` : "";
+      };
+      const run = async (q) => {
+        q = String(q || "").trim();
         if (!q) return;
-        const out = container.querySelector("#askOut"), btn = e.target.querySelector("button");
+        const btn = form.querySelector("button");
         btn.disabled = true;
-        out.innerHTML = `<p class="muted small" role="status">Looking it up in the app's data…</p>`;
-        try { const r = await api("/api/agents/ask", { method: "POST", body: JSON.stringify({ question: q }) }); out.innerHTML = answerCard(r.output, r.runId); e.target.q.value = ""; }
-        catch (err) { out.innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+        form.q.value = q;
+        try {
+          const r = await withProgress(out, api("/api/agents/ask", { method: "POST", body: JSON.stringify({ question: q }) }), { workflow: "ask_pif", intro: "Reading your question", expect: "Usually 10 to 40 seconds" });
+          out.innerHTML = answerCard(r.output, r.runId);
+          form.q.value = "";
+          renderHistory().catch(() => {});
+        } catch (err) { out.innerHTML = aiErrorHtml(err); }
         finally { btn.disabled = false; }
+      };
+      form.addEventListener("submit", (e) => { e.preventDefault(); run(form.q.value); });
+      form.q.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit(); } });
+      // Suggested and follow-up questions ask here instead of opening the side panel.
+      body.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-ask]");
+        if (!b || !body.contains(form)) return;
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        run(b.dataset.ask);
       });
+      await renderHistory();
     } else if (tab === "approvals") {
       const r = await api("/api/agents/proposals");
       body.innerHTML = proposalsList(r.proposals);

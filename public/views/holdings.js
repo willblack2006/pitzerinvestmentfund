@@ -1,4 +1,5 @@
 import { el, esc, fmtUSD, fmtPct, api, can, toast, getPref, setPref, confirmAction, lockedHint, signed, sortHeader, sortRows, bindSort, pageHead, invalidateContext, subTabs, icon, errorState, bindRetry, skeleton } from "../shared.js";
+import { askChips, suggestionsFor } from "../ai.js";
 import { openPopover } from "../ui/popover.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { alertHref, ICON, TAB } from "./alerts.js";
@@ -517,6 +518,7 @@ export async function mount(container) {
     </div>
     <section class="summary summary-main" id="summary" aria-label="Portfolio summary"></section>
     <p class="summary-more small" id="summaryMore"></p>
+    ${askChips(suggestionsFor(null).slice(0, 3), { label: "Ask about the portfolio" })}
     <div class="two-col">
       <section class="panel" id="concentration" aria-label="Largest positions"></section>
       <section class="panel quick-links" aria-labelledby="ql-title">

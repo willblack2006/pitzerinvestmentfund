@@ -1,4 +1,5 @@
 import { el, esc, safeUrl, fmtUSD, fmtPct, fmtCompact, fmtNum, fmtRatio, api, can, toast, lockedHint, getPref, setPref, signed, fundContext, invalidateContext, pushRecent, statusBadge, tabNav, icon, skeleton, errorState, bindRetry } from "../shared.js";
+import { aiPanelHtml, loadAiPanel } from "../ai.js";
 import { destroyAll } from "../charts.js";
 import { priceTerminalHtml, mountPriceTerminal } from "../priceTerminal.js";
 import { mountMyAlerts } from "../myAlerts.js";
@@ -142,6 +143,7 @@ function renderOverview(c, { symbol, data, fund, price }) {
         </details>
       </div>
       <aside class="research-side" aria-label="Company context">
+        ${aiPanelHtml({ id: "aiResearch", title: "AI research", symbol })}
         <section class="panel" aria-labelledby="about-h">
           <h3 id="about-h">About</h3>
           ${profile.longBusinessSummary ? `
@@ -171,6 +173,7 @@ function renderOverview(c, { symbol, data, fund, price }) {
       </aside>
     </div>`;
 
+  loadAiPanel("aiResearch", { symbol });
   mountPriceTerminal({ symbol, position: data.position, thesis: data.thesis, priceAlerts: data.priceAlerts, trades: data.trades, peers: data.peers });
   loadFactorProfile(symbol);
   loadGovContracts(symbol);
@@ -534,6 +537,7 @@ export async function mount(container, params) {
         ${data.quote?.time ? `<div class="muted small price-time">${{ REGULAR: "Live", PRE: "Pre-market", POST: "After hours" }[data.quote.marketState] || "At close"} · ${esc(new Date(data.quote.time).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }))} ET</div>` : ""}
       </div>
       <div class="page-actions">
+        ${can("ai") ? `<button type="button" class="btn btn-ghost ask-open" data-ask-open title="Ask PIF about ${esc(symbol)} (press A)">${icon("sparkle", { size: 16 })}<span>Ask about ${esc(symbol)}</span></button>` : ""}
         <a class="btn btn-primary" href="#/pitches/new/${encodeURIComponent(symbol)}">Pitch it</a>
         <button id="moreBtn" type="button" class="btn btn-ghost" aria-haspopup="dialog" aria-expanded="false" aria-label="More actions">${icon("more-horizontal", { size: 18 })}<span class="more-label">More</span></button>
       </div>

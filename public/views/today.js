@@ -1,4 +1,5 @@
 import { el, esc, api, safeUrl, getPref, can, currentMember, skeleton, errorState, bindRetry } from "../shared.js";
+import { aiPanelHtml, loadAiPanel } from "../ai.js";
 import { openChat } from "../chat.js";
 import { term } from "../glossary.js";
 
@@ -386,6 +387,7 @@ function render(container) {
         <div class="ord-hn">${show("holdingsNews") ? holdingsNewsSection(ed) : ""}</div>
       </div>
       <aside class="brief-side" aria-label="Portfolio and calendar">
+        ${aiPanelHtml({ id: "aiToday" })}
         <div class="ord-pf">${show("portfolio") ? portfolioSection() : ""}</div>
         <div class="ord-deck">${show("deck") ? onDeckSection() : ""}</div>
         <div class="ord-sec">${show("sectors") ? sectorsSection() : ""}</div>
@@ -395,6 +397,7 @@ function render(container) {
 
   wireSparks(container);
   wireImageFallbacks(container);
+  loadAiPanel("aiToday", { days: 7, limit: 4 });
   container.querySelectorAll("[data-open-chat]").forEach((b) => b.addEventListener("click", openChat));
   el("toggleAll")?.addEventListener("click", () => { state.showAll = !state.showAll; render(container); });
   container.querySelectorAll("[data-movers]").forEach((b) => b.addEventListener("click", () => { state.movers = b.dataset.movers; render(container); }));
