@@ -488,6 +488,9 @@ db.exec(`
 addColumn("pitches", "authorId", "INTEGER");
 // Why the committee decided as it did (written by whoever closes the vote).
 addColumn("pitches", "decisionNote", "TEXT NOT NULL DEFAULT ''");
+// Variant view (what the market expects, why we differ) and kill criteria (what would make us sell, state + date).
+addColumn("pitches", "variantView", "TEXT NOT NULL DEFAULT ''");
+addColumn("pitches", "killCriteria", "TEXT NOT NULL DEFAULT ''");
 db.exec(`
   CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
