@@ -161,3 +161,64 @@ test("dispatch: a failed event is retried after a wait, up to 3 runs", async () 
   assert.equal(attempts, 3, "gives up after 3 runs");
   assert.equal(db.prepare("SELECT status FROM agent_events WHERE id = ?").get(id).status, "failed");
 });
+
+// ---- alert volume: what goes out alone, what waits for the digest ----
+
+test("digest: only big filings, big-holding or negative earnings alert alone", () => {
+  const { alertFor } = require("../lib/agents/digest");
+  db.exec("DELETE FROM positions");
+  db.prepare("INSERT INTO positions (symbol, shares, marketValue) VALUES ('BIG', 1, 970), ('SMALL', 1, 30)").run();
+  assert.equal(alertFor({ tier: "push", workflow: "filing_flash", symbol: "SMALL" }), "important filing");
+  assert.match(alertFor({ tier: "inbox", workflow: "earnings_flash", symbol: "BIG", tone: "positive" }), /97% holding/);
+  assert.equal(alertFor({ tier: "inbox", workflow: "earnings_flash", symbol: "SMALL", tone: "positive" }), null);
+  assert.equal(alertFor({ tier: "inbox", workflow: "earnings_flash", symbol: "SMALL", tone: "negative" }), "negative earnings");
+  assert.equal(alertFor({ tier: "inbox", workflow: "filing_flash", symbol: "BIG", tone: "negative" }), null, "a 10-Q or officer change waits for the digest");
+});
+
+test("digest: one notification per weekday evening listing what wasn't sent alone", () => {
+  const digest = require("../lib/agents/digest");
+  db.exec("DELETE FROM notifications; DELETE FROM members;");
+  const ai = Number(db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash, canUseAi) VALUES ('AI', 'Analyst', '', 'ai@t.edu', 'x', 1)").run().lastInsertRowid);
+  db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash) VALUES ('Plain', 'Analyst', '', 'p@t.edu', 'x')").run();
+  const add = (workflow, symbol, output) => db.prepare("INSERT INTO agent_runs (workflow, symbol, status, output) VALUES (?, ?, 'done', ?)").run(workflow, symbol, JSON.stringify(output));
+  add("filing_flash", "MU", { form: "10-Q", headline: "Margins widen" });
+  add("earnings_flash", "BIG", { headline: "Beat", alerted: "earnings on a 90% holding" });
+  add("earnings_preview", "TJX", { reportDate: "2026-11-20" });
+  add("thesis_check", "MU", { status: "intact" });
+  add("macro_brief", null, { title: "Rates fall again" });
+  add("ask_pif", null, { answer: "private question" });
+  const wed = (h) => new Date(Date.UTC(2026, 10, 18, h, 30));
+  assert.equal(digest.maybeSend({ now: wed(15) }), null, "not before the evening");
+  assert.equal(digest.maybeSend({ now: new Date(Date.UTC(2026, 10, 21, 23)) }), null, "not on Saturday");
+  assert.deepEqual(digest.maybeSend({ now: wed(22) }), { sent: 1, items: 3 });
+  assert.equal(digest.maybeSend({ now: wed(23) }), null, "once a day");
+  const n = db.prepare("SELECT * FROM notifications").all();
+  assert.equal(n.length, 1); assert.equal(n[0].memberId, ai); assert.equal(n[0].type, "agentDigest");
+  assert.equal(n[0].title, "Research digest: 3 new items");
+  assert.match(n[0].body, /MU 10-Q: Margins widen/); assert.match(n[0].body, /TJX reports 2026-11-20/); assert.match(n[0].body, /Rates fall again/);
+  assert.doesNotMatch(n[0].body, /Beat|intact|private/, "alerted items, intact thesis checks and Ask PIF stay out");
+});
+
+test("notify: replaceToday folds a burst into one unread notification; muting 13F sticks", () => {
+  const { notify } = require("../lib/notify");
+  const prefs = require("../lib/prefs");
+  db.exec("DELETE FROM notifications; DELETE FROM members;");
+  const m = Number(db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash) VALUES ('M', 'Analyst', '', 'm@t.edu', 'x')").run().lastInsertRowid);
+  notify([m], { type: "thirteenF", title: "13F filed: A" }, { replaceToday: true });
+  notify([m], { type: "thirteenF", title: "13F filings today from 2 managers" }, { replaceToday: true });
+  assert.deepEqual(db.prepare("SELECT title FROM notifications").all().map((r) => r.title), ["13F filings today from 2 managers"]);
+  prefs.setPrefs(m, { notifyOff: ["thirteenF", "agentDigest"] });
+  assert.deepEqual(prefs.getPrefs(m).notifyOff, ["thirteenF", "agentDigest"]);
+  notify([m], { type: "thirteenF", title: "another" }, { replaceToday: true });
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM notifications").get().n, 1, "muted type isn't delivered");
+});
+
+test("digest: weekly reports alone don't send one; they ride along with the next", () => {
+  const digest = require("../lib/agents/digest");
+  db.exec("DELETE FROM notifications; DELETE FROM members; DELETE FROM agent_events;");
+  db.prepare("INSERT INTO members (name, role, pinHash, email, passwordHash, isAdmin) VALUES ('A', 'Admin', '', 'a@t.edu', 'x', 1)").run();
+  db.prepare("INSERT INTO agent_runs (workflow, status, output) VALUES ('macro_brief', 'done', ?)").run(JSON.stringify({ title: "Rates fall" }));
+  assert.deepEqual(digest.maybeSend({ now: new Date(Date.UTC(2026, 10, 16, 22, 30)) }), { sent: 0 });
+  db.prepare("INSERT INTO agent_runs (workflow, symbol, status, output) VALUES ('filing_flash', 'MU', 'done', ?)").run(JSON.stringify({ form: "8-K", headline: "CFO leaves" }));
+  assert.deepEqual(digest.maybeSend({ now: new Date(Date.UTC(2026, 10, 17, 22, 30)) }), { sent: 1, items: 2 });
+});
