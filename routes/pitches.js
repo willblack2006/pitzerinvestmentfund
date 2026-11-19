@@ -180,6 +180,7 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
   const fresh = db.prepare("SELECT * FROM pitches WHERE id = ?").get(p.id);
   if (status === "voting") require("../lib/feed/activity").pitchOpened(fresh, req.member);
   else if (["approved", "rejected", "executed"].includes(status)) require("../lib/feed/activity").pitchDecided(fresh, status, req.member, status === "executed" ? null : tally(p.id).counts);
+  try { require("../lib/platform/bus").emit("pitch_status", { pitchId: p.id, symbol: p.symbol, status, from: p.status }); } catch { /* agent triggers are optional */ }
   if (status === "voting") {
     // Research agents: the red team reads the pitch when it opens for a vote.
     const agents = require("../lib/agents");

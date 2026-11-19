@@ -1,0 +1,39 @@
+{
+  "slug": "stale-thesis-reminder",
+  "name": "Stale thesis reminder",
+  "icon": "clock",
+  "description": "Free, no AI. Mondays: reminds the team about holdings whose thesis hasn't been updated in 90 days.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "schedule",
+        "preset": "weekly_mon",
+        "tz": "America/New_York"
+      }
+    ],
+    "conditions": [
+      {
+        "metric": "thesis.daysSinceUpdate",
+        "op": ">=",
+        "value": 90
+      }
+    ],
+    "steps": [],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "changed"
+      },
+      {
+        "type": "notify",
+        "who": "team",
+        "tier": "digest",
+        "when": "changed"
+      }
+    ]
+  }
+}
