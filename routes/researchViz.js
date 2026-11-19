@@ -125,5 +125,6 @@ router.get("/research/:symbol/valuation-viz", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.autoMount = true; // WS1 auto-mount (server.js mounts routes/*.js with this flag)
 module.exports.annotationsFor = annotationsFor;
 module.exports.valuationVizFor = valuationVizFor;

@@ -3,6 +3,7 @@ import { barChart, lineChart } from "../../charts.js";
 import { scoreMeter, signalBadge } from "../insiderSignal.js";
 import { term } from "../../glossary.js";
 import { revisionPath } from "../../revisionPath.js";
+import { beatMissHtml, loadBeatMiss } from "../../viz/beatMiss.js";
 
 const PERIOD = { "0q": "This quarter", "+1q": "Next quarter", "0y": "This fiscal year", "+1y": "Next fiscal year" };
 
@@ -133,6 +134,7 @@ export async function render(c, { symbol, data, price }) {
         <div class="chart-box chart-sm"><canvas id="pathChart" role="img" aria-label="${esc(`Consensus EPS estimate change over 90 days: ${revisionPath(st.estimates).map((r) => `${r.label} ${r.values.at(-1) >= 0 ? "+" : ""}${r.values.at(-1).toFixed(1)}%`).join(", ")}.`)}"></canvas></div>
         <p class="muted small">Each line starts at 0% (the estimate 90 days ago). Lines climbing together mean analysts are raising numbers; a line falling into earnings is an early warning. Yahoo only gives these five points, so the chart can't go further back.</p>
       </section>` : ""}
+      ${beatMissHtml()}
       <section class="panel span-full" aria-labelledby="chg-h">
         <h3 id="chg-h">Recent analyst actions</h3>
         ${changesTable(st.changes)}
@@ -155,6 +157,7 @@ export async function render(c, { symbol, data, price }) {
     legend: false,
   });
 
+  loadBeatMiss(symbol);
   const path = revisionPath(st.estimates);
   if (path && el("pathChart")) {
     lineChart(el("pathChart"), {
