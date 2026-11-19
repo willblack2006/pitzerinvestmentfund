@@ -73,6 +73,15 @@ app.use((req, res, next) => {
 // stream: compression buffers output, which would hold events back.
 app.use(compression({ filter: (req, res) => req.path !== "/api/events" && compression.filter(req, res) }));
 app.use(express.json({ limit: "200kb" }));
+// Service worker: built from the files in public/ so each deploy gets a new version (see
+// lib/serviceWorker.js). Browsers must always revalidate it.
+const sw = require("./lib/serviceWorker").build(path.join(__dirname, "public"));
+app.get("/sw.js", (req, res) => {
+  res.set({ "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": "/" });
+  res.send(sw.source);
+});
+app.get("/manifest.webmanifest", (req, res, next) => { res.type("application/manifest+json"); next(); });
+app.use("/icons", express.static(path.join(__dirname, "public", "icons"), { maxAge: "30d", immutable: true }));
 app.use(express.static(path.join(__dirname, "public"), {
   // These files aren't content-hashed and the app is many ES modules, so a cached copy of one
   // file next to a fresh copy of another breaks pages right after a deploy. maxAge 0 makes the
