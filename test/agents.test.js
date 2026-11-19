@@ -267,7 +267,7 @@ test("Ask PIF: answers from tool data, marks sources it actually read, flags unb
   db.exec("DELETE FROM positions");
   db.prepare("INSERT INTO positions (symbol, shares, marketValue) VALUES ('NVDA', 100, 18000), ('MU', 50, 6000)").run();
   let r;
-  try { r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "What's our biggest holding?" }, ctx)); } finally {
+  try { r = await runs.run({ workflow: "ask_pif", memberId: m }, (ctx) => ask({ question: "Which holding is biggest across the portfolio?" }, ctx)); } finally {
     db.exec("DELETE FROM positions");
     for (const p of saved) db.prepare(`INSERT INTO positions (${Object.keys(p).join(",")}) VALUES (${Object.keys(p).map(() => "?").join(",")})`).run(...Object.values(p));
   }
@@ -278,7 +278,7 @@ test("Ask PIF: answers from tool data, marks sources it actually read, flags unb
   assert.equal(requests[2].tools.length > 10, true, "the revision turn may call tools");
   assert.equal(r.output.revised, true);
   assert.deepEqual(r.output.unbackedNumbers, ["3x"], "a computed ratio is still flagged for checking");
-  assert.equal(requests[0].tools.length > 10, true, "Ask PIF gets the whole read-only catalog");
+  assert.equal(requests[0].tools.length > 10, true, "Ask PIF gets the fund tools plus the core ones");
   assert.match(requests[0].input[1].content, /Fund holdings \(weight[^\n]*NVDA 75\.0%, MU 25\.0%/, "holdings are in the prompt so the model can route");
   assert.equal(db.prepare("SELECT memberId FROM agent_runs WHERE id = ?").get(r.runId).memberId, m, "billed to the member's daily budget");
 });
