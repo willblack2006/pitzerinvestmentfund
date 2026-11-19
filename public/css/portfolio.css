@@ -9,7 +9,9 @@
 }
 .summary-more .muted { color: var(--text-2); }
 @media (max-width: 600px) {
-  .summary.summary-main .stat-lg { grid-column: auto; }
+  /* Total portfolio gets a full row so its dollar amount never breaks mid-number. */
+  .summary.summary-main .stat-lg { grid-column: 1 / -1; }
+  .summary-main .stat .value { overflow-wrap: normal; white-space: nowrap; }
 }
 @media (max-width: 560px) { .summary-main { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary-main .stat { min-width: 0; overflow-wrap: anywhere; } }
 

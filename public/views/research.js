@@ -520,7 +520,8 @@ export async function mount(container, params) {
   if (owned) pills.push(`<span class="badge badge-owned">Owned</span>`);
   else if (watched) pills.push(`<span class="badge badge-watch">Watching</span>`);
 
-  const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => k);
+  const PARTIAL_LABELS = { chart: "price chart", quote: "live quote", quoteSummary: "company profile and estimates", peers: "peer comparison", financials: "financial statements", news: "news", sec: "SEC filings", filings: "SEC filings" };
+  const partial = Object.entries(data.errors || {}).filter(([, v]) => v).map(([k]) => PARTIAL_LABELS[k] || k);
 
   container.innerHTML = `
     <div class="page-head research-head">

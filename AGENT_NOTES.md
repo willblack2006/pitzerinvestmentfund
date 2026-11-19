@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-19, Claude (product experience pass, cloud session)
+- Did: ran every main page at 1280 and 390 on a DB copy and fixed what showed up: the Portfolio total broke mid-number on phones (now a full row, no wrapping); Research's partial-data notice named internal fields (`quoteSummary`) and now says plain English; the Today "no edition" notice was double-indented; when the chart library fails to load the Research chart showed the drawing toolbar over an empty box, now it collapses to a message with Retry; the first heading of each page is exposed as `aria-level=1` (the app had no h1).
+- Checked: screenshots before/after, `npm test` 170 pass, 1 fail (known `api.test.js` chart-bars test).
+- Gotchas: sandbox has no outside network, so quotes/Yahoo/fonts/CDN were all offline; that is how the empty and error states were reviewed.
+
 ## 2026-11-19, Claude (merged the AI PRs #10-#15 to main, integration test)
 - Did: merged #11 → #12 → #10 → #13 → #14 → #15 locally (conflicts in AGENT_NOTES, tools.js exports, runs.js tool memo/agent loop, ask.js prompt, .env.example), pushed main @ 3511d56 with Will's OK. #13-#15 were stacked, so they were closed as merged-by-push. Fixes found while testing: `analytics.align()` crashed on an empty map (Performance 500 whenever Yahoo is down), plain-English tool names in `public/aiFormat.js`, Ask PIF hint mentions the web, clearer `get_dcf` error.
 - Tested offline on a DB copy with a fake OpenAI preloaded via `node -r` (scripted tool calls, schema-shaped answers): Ask PIF through the UI panel, primer, red team, all 7 scheduled workflows, every page at 1280px and 375px (no JS errors, no sideways scroll). Only network-backed tools failed, as expected.
