@@ -17,6 +17,7 @@ const finnhub = require("../lib/sources/finnhub");
 const ai = require("../lib/sources/openai");
 const { extractSections } = require("../lib/filingText");
 const fundamentals = require("../lib/fundamentals");
+const { peHistory } = require("../lib/valuationHistory");
 const analytics = require("../lib/analytics");
 const benchmarks = require("../lib/benchmarks");
 const { benchmarkFor } = require("../lib/prefs");
@@ -139,6 +140,20 @@ router.get("/research/:symbol/bars", async (req, res) => {
   } catch (e) {
     // Still say where the window starts, so the chart doesn't have to special-case an outage.
     res.json({ symbol, frame, range, interval, visibleFrom: frameStart(back), intraday: !interval.endsWith("d") && !interval.endsWith("wk") && !interval.endsWith("mo"), bars: [], error: e.message });
+  }
+});
+
+// Price / trailing EPS against its own history (weekly), for the Valuation tab.
+router.get("/research/:symbol/pe-history", async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase().trim();
+  try {
+    const [facts, bars] = await Promise.all([sec.getCompanyFacts(symbol), yahoo.getChart(symbol, "max", "1wk")]);
+    if (!facts?.eps?.length) return res.json({ symbol, available: false, reason: "No SEC earnings history (ETF, fund or foreign filer)." });
+    const h = peHistory(facts.eps, bars);
+    if (!h?.summary) return res.json({ symbol, available: false, reason: "Not enough quarters of positive earnings to compare against." });
+    res.json({ symbol, available: true, summary: h.summary, points: h.points.map((p) => ({ date: p.date, pe: p.pe === null ? null : Math.round(p.pe * 10) / 10 })) });
+  } catch (e) {
+    res.json({ symbol, available: false, reason: e.message });
   }
 });
 
