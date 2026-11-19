@@ -171,3 +171,4 @@ Format:
 - Did: `lib/cache.js` `cached()` now shares one in-flight fetch per key, falls back to an expired copy (up to 3 days old) when the source errors, never stores `undefined`, and has `purgeExpired()` (run each scheduler tick) plus an `expires_at` index so `api_cache` stops growing. Tests in `test/cache.test.js`.
 - Gotcha: `test/api.test.js` "daily frames say where the window starts" fails without network (also on main).
 - Unfinished: agent tool results still report `cached: null` and `as_of: now()`; surfacing the real cache age would let agents see stale data.
+- Follow-up (same day): API responses now carry `x-pif-data-as-of` (oldest cached row used, via AsyncLocalStorage in `lib/cache.js` + middleware in `server.js`). Agent tools built on `getApi` return that as `as_of` and `cached: true/false` (see `freshness()` in `lib/agents/tools.js`). Tools that don't go through `getApi` (SEC filing text, FRED, gov data) still say `as_of: now`/`cached: null`.

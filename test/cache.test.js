@@ -26,3 +26,14 @@ test("undefined results are not cached; purge drops rows past the grace window",
   assert.ok(purgeExpired() >= 1);
   assert.strictEqual(db.prepare("SELECT 1 FROM api_cache WHERE cache_key='t:old'").get(), undefined);
 });
+
+test("requestAge records the oldest cached row a request used", async () => {
+  const { requestAge } = require("../lib/cache");
+  db.prepare("INSERT OR REPLACE INTO api_cache (cache_key, payload, fetched_at, expires_at, source) VALUES ('t:age', '{}', '2026-01-01 00:00:00', '2999-01-01 00:00:00', 'test')").run();
+  const store = {};
+  await requestAge.run(store, async () => {
+    await cached("t:age", 60, "test", async () => ({}));
+    await cached("t:fresh", 60, "test", async () => ({}));
+  });
+  assert.strictEqual(store.oldest, "2026-01-01T00:00:00.000Z");
+});
