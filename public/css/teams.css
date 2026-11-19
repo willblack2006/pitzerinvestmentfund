@@ -105,3 +105,6 @@
   .team-debate { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .team-dot.is-running { animation: none; } }
+/* Scorecards scroll sideways on phones instead of squeezing the notes column. */
+.team-scores { min-width: 640px; }
+.team-scores td.left { min-width: 240px; }
