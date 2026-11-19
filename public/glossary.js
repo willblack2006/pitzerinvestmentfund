@@ -6,6 +6,28 @@ import { esc } from "./shared.js";
 import { togglePopover } from "./ui/popover.js";
 
 export const GLOSSARY = {
+  // Basics (for people new to investing)
+  marketCap: ["Market cap", "Share price × number of shares: what the market says the whole company is worth. It says how big a company is, not how expensive its stock is."],
+  weight: ["Weight", "A holding's share of the whole portfolio's value. A 10% weight means one in every ten dollars of the fund is in that stock. Big weights mean one company's bad day moves the whole fund."],
+  costBasis: ["Cost basis", "What the fund paid for the shares it holds, per share (average cost) or in total. Gain or loss is measured against it."],
+  unrealizedGain: ["Unrealized gain", "The profit or loss on shares you still own: today's value minus cost basis. It only becomes real (realized) when you sell."],
+  benchmark: ["Benchmark", "The index the fund is measured against, such as the S&P 500. Beating a benchmark means doing better than simply buying the index, which anyone can do cheaply."],
+  diversification: ["Diversification", "Spreading money across companies and sectors that don't all move together, so one failure doesn't sink the fund. See correlation and weight."],
+  dividend: ["Dividend", "A cash payment a company makes to its shareholders, usually quarterly. Not every company pays one; many growth companies reinvest the cash instead."],
+  dividendYield: ["Dividend yield", "Yearly dividend per share ÷ share price. A very high yield can mean the market expects the dividend to be cut."],
+  eps: ["Earnings per share (EPS)", "A company's profit divided by its share count: profit per share. P/E divides the price by it."],
+  revenue: ["Revenue", "Total sales over a period, before any costs. The top line of the income statement."],
+  grossMargin: ["Gross margin", "(Revenue − cost of goods sold) ÷ revenue: what is left of each sales dollar after making the product, before overhead. Higher and steady usually means pricing power."],
+  operatingMargin: ["Operating margin", "Operating profit ÷ revenue: what is left after all running costs, before interest and taxes."],
+  freeCashFlow: ["Free cash flow", "Cash from operations minus capital spending: the cash left for owners after the business pays to keep running and growing. Harder to dress up than reported earnings."],
+  etf: ["ETF", "Exchange-traded fund: a basket of securities that trades like a stock. Index ETFs such as SPY hold a market index."],
+  sector: ["Sector", "A group of companies in similar businesses (technology, health care, energy). The fund's policy caps how much can sit in one sector."],
+  thesis: ["Thesis", "Your one-paragraph reason a stock should do well, including what the market is missing. A good thesis can be proven wrong by something you can check."],
+  catalyst: ["Catalyst", "A specific upcoming event that could make the market see the company differently: an earnings report, a product launch, a rule change. Without one, a cheap stock can stay cheap."],
+  scenarios: ["Bull, base and bear cases", "Three versions of the future with a price target for each: things go well, things go as expected, things go badly. Writing the bear case first is a good habit; it shows how much you could lose."],
+  stopPrice: ["Stop price", "The price at which you've decided you were wrong and will sell. Setting it before you buy keeps a loss from turning into hope."],
+  alpha: ["Alpha", "Return beyond what the stock's risk (beta) would explain, or in everyday use, return above the benchmark. Most professionals don't earn it consistently, so be skeptical of any single hot streak."],
+  guidance: ["Guidance", "The company's own forecast of upcoming results. Stocks often move more on a change in guidance than on the quarter just reported."],
   // Risk & performance
   beta: ["Beta", "How much the stock tends to move when the benchmark moves 1%. 1.0 moves with the market; 1.5 moves about 50% more; below 1 moves less. Measured on two years of daily returns."],
   volatility: ["Volatility", "How much the price bounces around: the standard deviation of daily returns, scaled to a year. Higher means a wider range of likely outcomes."],

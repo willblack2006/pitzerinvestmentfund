@@ -1,7 +1,8 @@
-import { el, esc, api, safeUrl, getPref, can, currentMember, skeleton, errorState, bindRetry } from "../shared.js";
+import { el, esc, api, safeUrl, getPref, setPref, can, currentMember, skeleton, errorState, bindRetry } from "../shared.js";
 import { aiPanelHtml, loadAiPanel } from "../ai.js";
 import { openChat } from "../chat.js";
 import { term } from "../glossary.js";
+import { LESSONS, learnSummary } from "../learnContent.js";
 
 export const title = "Today";
 
@@ -350,6 +351,17 @@ function forYouSection() {
 // ---- Render ----
 
 // Sections someone turned off in Account & preferences.
+// One quiet line for members who haven't finished the Start here path; hideable for good.
+let learn = null; // /api/learn/progress
+function learnNudge() {
+  if (!can("member") || !learn || getPref("learnHidden", false)) return "";
+  const sum = learnSummary(learn.done, getPref("learnRead", []));
+  if (sum.finished) return "";
+  return `<aside class="notice learn-nudge" aria-label="New to investing">
+    <span><strong>New to investing?</strong> ${sum.count === 0 ? `Start with ${LESSONS.length} short lessons` : `${sum.count} of ${sum.total} steps done${sum.next ? `, next: ${esc(sum.next.title)}` : ""}`}. <a href="#/learn">${sum.count === 0 ? "Start here" : "Keep going"}</a></span>
+    <button type="button" class="btn-link small" data-hide-learn>Hide</button></aside>`;
+}
+
 const show = (key) => !getPref("todayHidden", []).includes(key);
 
 function render(container) {
@@ -375,6 +387,7 @@ function render(container) {
       </div>
       ${picker(r, cur)}
     </header>
+    ${learnNudge()}
     ${missing ? `<p class="muted page-pad">${slotInfo?.status === "upcoming" ? "This edition isn't out yet. Editions are saved at about 8:00 AM, 12:30 PM and 4:30 PM ET." : `No edition was captured for ${esc(dayLabel(cur.date, r.editions[0].date))}${slotInfo ? ` (${esc(slotInfo.label.toLowerCase())})` : ""}.`}</p>` : `
     ${show("read") ? readSection(useEdBriefing ? ed.briefing : live?.briefing, useEdBriefing ? ed : null) : ""}
     ${show("markets") ? tilesSection() : ""}
@@ -395,6 +408,10 @@ function render(container) {
       </aside>
     </div>`}`;
 
+  container.querySelector("[data-hide-learn]")?.addEventListener("click", async () => {
+    await setPref("learnHidden", true);
+    container.querySelector(".learn-nudge")?.remove();
+  });
   wireSparks(container);
   wireImageFallbacks(container);
   loadAiPanel("aiToday", { days: 7, limit: 4 });
@@ -427,8 +444,10 @@ async function loadEdition(container) {
 }
 
 export async function mount(container) {
-  live = null; current = null; forYou = null;
+  live = null; current = null; forYou = null; learn = null;
   container.innerHTML = skeleton("cards", { rows: 6, label: "Loading your briefing" });
+  // Only members who haven't hidden the reminder; a failure just means no reminder.
+  const learnPromise = can("member") && !getPref("learnHidden", false) ? api("/api/learn/progress").then((d) => { learn = d; }).catch(() => {}) : Promise.resolve();
   const livePromise = api("/api/today/live").then((d) => { live = d; }).catch(() => { live = null; });
   const forYouPromise = can("member") && !getPref("todayHidden", []).includes("foryou")
     ? api("/api/today/foryou").then((d) => { forYou = d; }).catch(() => { forYou = { tickers: [], notes: [], chat: { unread: 0, mentions: [] }, toVote: [], paper: null }; })
@@ -441,6 +460,7 @@ export async function mount(container) {
     container.querySelectorAll(".foryou [data-open-chat]").forEach((b) => b.addEventListener("click", openChat));
     wireImageFallbacks(container.querySelector(".foryou"));
   });
+  await Promise.all([learnPromise]);
   await loadEdition(container);
   await livePromise;
   if (container.isConnected && current) render(container);
