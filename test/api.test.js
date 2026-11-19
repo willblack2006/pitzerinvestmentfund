@@ -228,6 +228,12 @@ test("pitches: lifecycle, quorum, threshold, permissions", async () => {
   await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { thesis: "x", basePrice: 50, bullPrice: 70, bearPrice: 30 } });
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).status, 400, "needs a pre-mortem too");
   await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { preMortem: "Thesis broke because of X." } });
+  const notReady = await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } });
+  assert.equal(notReady.status, 400, "needs kill criteria and a gradable confidence/horizon");
+  assert.equal(notReady.body.missing.length, 2);
+  assert.equal((await s.api(`/api/pitches/${id}`)).body.readiness.ready, false);
+  await s.api(`/api/pitches/${id}`, { method: "PUT", member: tokens.Ana, body: { killCriteria: "If by Dec 2027 margins are below 20%, sell.", confidencePct: 60, horizonMonths: 12 } });
+  assert.equal((await s.api(`/api/pitches/${id}`)).body.readiness.ready, true);
   assert.equal((await s.api(`/api/pitches/${id}/status`, { method: "POST", member: tokens.Ana, body: { action: "open" } })).body.status, "voting");
 
   assert.equal((await s.api(`/api/pitches/${id}/vote`, { method: "POST", body: { vote: "yes" } })).status, 401, "anonymous can't vote");

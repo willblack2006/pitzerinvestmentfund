@@ -4,6 +4,7 @@ const { requireSignedIn } = require("../middleware/auth");
 const { getSettings } = require("../lib/settings");
 const { latestPrices } = require("../lib/prices");
 const { notify } = require("../lib/notify");
+const { readiness } = require("../lib/pitchReadiness");
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ const isAuthorOrAdmin = (req, p) => req.member.isAdmin || isAuthor(req, p);
 const authorIdOf = (p) => p.authorId ?? db.prepare("SELECT id FROM members WHERE name = ?").get(p.author)?.id ?? null;
 const pitchLabel = (p) => `${p.direction[0].toUpperCase()}${p.direction.slice(1)} ${p.symbol}${p.title ? `: ${p.title}` : ""}`;
 
-const FIELDS = ["symbol", "direction", "title", "thesis", "catalysts", "risks", "valuation", "bullCase", "baseCase", "bearCase", "bullPrice", "basePrice", "bearPrice", "sizePct", "confidencePct", "horizonMonths", "preMortem", "bearChecklist"];
+const FIELDS = ["symbol", "direction", "title", "thesis", "variantView", "killCriteria", "catalysts", "risks", "valuation", "bullCase", "baseCase", "bearCase", "bullPrice", "basePrice", "bearPrice", "sizePct", "confidencePct", "horizonMonths", "preMortem", "bearChecklist"];
 const NUM = new Set(["bullPrice", "basePrice", "bearPrice", "sizePct", "confidencePct", "horizonMonths"]);
 
 function clean(body) {
@@ -78,7 +79,7 @@ router.get("/pitches/:id", async (req, res) => {
   const p = db.prepare("SELECT * FROM pitches WHERE id = ?").get(req.params.id);
   if (!p) return res.status(404).json({ error: "Pitch not found." });
   const prices = await latestPrices([p.symbol]);
-  res.json({ ...p, tally: tally(p.id), currentPrice: prices[p.symbol]?.price ?? null });
+  res.json({ ...p, readiness: readiness(p), tally: tally(p.id), currentPrice: prices[p.symbol]?.price ?? null });
 });
 
 router.post("/pitches", requireSignedIn, async (req, res) => {
@@ -86,10 +87,10 @@ router.post("/pitches", requireSignedIn, async (req, res) => {
   try { data = clean(req.body || {}); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
   if (!data.symbol) return res.status(400).json({ error: "A ticker is required." });
   const prices = await latestPrices([data.symbol]);
-  const row = { direction: "buy", title: "", thesis: "", catalysts: "", risks: "", valuation: "", bullCase: "", baseCase: "", bearCase: "", bullPrice: null, basePrice: null, bearPrice: null, sizePct: null, confidencePct: null, horizonMonths: null, preMortem: "", bearChecklist: "[]", ...data };
+  const row = { direction: "buy", title: "", thesis: "", variantView: "", killCriteria: "", catalysts: "", risks: "", valuation: "", bullCase: "", baseCase: "", bearCase: "", bullPrice: null, basePrice: null, bearPrice: null, sizePct: null, confidencePct: null, horizonMonths: null, preMortem: "", bearChecklist: "[]", ...data };
   const info = db.prepare(`
-    INSERT INTO pitches (symbol, direction, title, author, authorId, thesis, catalysts, risks, valuation, bullCase, baseCase, bearCase, bullPrice, basePrice, bearPrice, sizePct, confidencePct, horizonMonths, preMortem, bearChecklist, priceAtPitch)
-    VALUES (@symbol, @direction, @title, @author, @authorId, @thesis, @catalysts, @risks, @valuation, @bullCase, @baseCase, @bearCase, @bullPrice, @basePrice, @bearPrice, @sizePct, @confidencePct, @horizonMonths, @preMortem, @bearChecklist, @priceAtPitch)
+    INSERT INTO pitches (symbol, direction, title, author, authorId, thesis, variantView, killCriteria, catalysts, risks, valuation, bullCase, baseCase, bearCase, bullPrice, basePrice, bearPrice, sizePct, confidencePct, horizonMonths, preMortem, bearChecklist, priceAtPitch)
+    VALUES (@symbol, @direction, @title, @author, @authorId, @thesis, @variantView, @killCriteria, @catalysts, @risks, @valuation, @bullCase, @baseCase, @bearCase, @bullPrice, @basePrice, @bearPrice, @sizePct, @confidencePct, @horizonMonths, @preMortem, @bearChecklist, @priceAtPitch)
   `).run({ ...row, author: req.member.name, authorId: req.member.id, priceAtPitch: prices[data.symbol]?.price ?? null });
   res.status(201).json(db.prepare("SELECT * FROM pitches WHERE id = ?").get(info.lastInsertRowid));
 });
@@ -103,7 +104,7 @@ router.put("/pitches/:id", requireSignedIn, (req, res) => {
   try { data = clean(req.body || {}); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
   const merged = { ...p, ...data };
   db.prepare(`
-    UPDATE pitches SET symbol=@symbol, direction=@direction, title=@title, thesis=@thesis, catalysts=@catalysts, risks=@risks,
+    UPDATE pitches SET symbol=@symbol, direction=@direction, title=@title, thesis=@thesis, variantView=@variantView, killCriteria=@killCriteria, catalysts=@catalysts, risks=@risks,
       valuation=@valuation, bullCase=@bullCase, baseCase=@baseCase, bearCase=@bearCase, bullPrice=@bullPrice, basePrice=@basePrice,
       bearPrice=@bearPrice, sizePct=@sizePct, confidencePct=@confidencePct, horizonMonths=@horizonMonths, preMortem=@preMortem,
       bearChecklist=@bearChecklist, updatedAt=datetime('now') WHERE id=@id
@@ -125,8 +126,8 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
   }
   let status;
   if (action === "open" && p.status === "draft") {
-    if (!p.thesis.trim() || p.basePrice === null) return res.status(400).json({ error: "Add a thesis and a base-case price target before opening the vote." });
-    if (!p.preMortem?.trim()) return res.status(400).json({ error: "Add a pre-mortem (\"it's a year later and this lost 40% — why?\") before opening the vote." });
+    const r = readiness(p);
+    if (!r.ready) return res.status(400).json({ error: `Before the vote can open, add: ${r.missing.join("; ")}.`, missing: r.missing });
     status = "voting";
     db.prepare("UPDATE pitches SET status='voting', votingOpenedAt=datetime('now'), updatedAt=datetime('now') WHERE id=?").run(p.id);
   } else if (action === "close" && p.status === "voting") {

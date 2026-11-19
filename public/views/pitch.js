@@ -6,8 +6,10 @@ export const title = (p) => (p.id ? `Pitch #${p.id}` : "New pitch");
 
 const SECTIONS = [
   ["thesis", "Investment thesis", "What does the market misunderstand? Why now?", 6],
+  ["variantView", "Variant view", "What does the market expect today (consensus numbers, what's priced in), and why is our view different and better founded?", 3],
   ["catalysts", "Catalysts", "Specific events in the next 6 to 18 months that should close the gap (earnings, launches, buybacks…)", 3],
   ["risks", "Key risks", "What would make this thesis wrong? What would make us sell?", 3],
+  ["killCriteria", "Kill criteria", "State and date: \"If by (date) we haven't seen (specific result), we sell or trim.\" Write it now, before we own it.", 3],
   ["valuation", "Valuation", "Multiples vs peers, DCF assumptions, how the target was derived", 3],
 ];
 
@@ -105,7 +107,9 @@ function readView(p) {
   const blocks = SECTIONS.filter(([k]) => p[k]?.trim()).map(([k, label]) => `<section class="pitch-section"><h3>${label}</h3><div class="prose">${esc(p[k])}</div></section>`).join("");
   const cases = [["Bear", p.bearCase, p.bearPrice], ["Base", p.baseCase, p.basePrice], ["Bull", p.bullCase, p.bullPrice]].filter(([, t, v]) => t?.trim() || v);
   const checklist = parseChecklist(p.bearChecklist);
-  return `${blocks || `<p class="muted">No write-up yet.</p>`}
+  const rd = p.status === "draft" && p.readiness && !p.readiness.ready
+    ? `<section class="pitch-section notice" role="note"><h3>Before this can go to a vote</h3><ul class="link-list small">${p.readiness.items.map((i) => `<li>${i.done ? "✓" : i.required ? "○ <strong>Needed:</strong>" : "○ Suggested:"} ${esc(i.label)}</li>`).join("")}</ul></section>` : "";
+  return `${rd}${blocks || `<p class="muted">No write-up yet.</p>`}
     ${cases.length ? `<section class="pitch-section"><h3>Scenarios</h3><div class="case-grid">${cases.map(([l, t, v]) => `<div class="case case-${l.toLowerCase()}"><strong>${l}${v ? ` · ${fmtUSD(v)}` : ""}</strong><p class="small">${esc(t || "")}</p></div>`).join("")}</div></section>` : ""}
     ${p.preMortem?.trim() ? `<section class="pitch-section"><h3>Pre-mortem</h3><p class="prose">${esc(p.preMortem)}</p></section>` : ""}
     ${checklist.length ? `<section class="pitch-section"><h3>Bear-case checklist</h3><ul class="link-list small">${BEAR_CHECKLIST.map((label, i) => checklist.includes(i) ? `<li>✓ ${esc(label)}</li>` : "").join("")}</ul></section>` : ""}`;
