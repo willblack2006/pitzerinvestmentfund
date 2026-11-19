@@ -177,6 +177,7 @@ router.post("/pitches/:id/status", requireSignedIn, (req, res) => {
     return res.status(409).json({ error: `Can't ${action} a pitch that is ${p.status}.` });
   }
   const link = `#/pitches/${p.id}`;
+  try { require("../lib/platform/bus").emit("pitch_status", { pitchId: p.id, symbol: p.symbol, status, from: p.status }); } catch { /* agent triggers are optional */ }
   if (status === "voting") {
     // Research agents: the red team reads the pitch when it opens for a vote.
     const agents = require("../lib/agents");

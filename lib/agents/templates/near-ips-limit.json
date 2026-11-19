@@ -1,0 +1,39 @@
+{
+  "slug": "near-ips-limit",
+  "name": "Near policy limit",
+  "icon": "gauge",
+  "description": "Free, no AI. Daily after the close: flags holdings within 2 points of the max position size.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "schedule",
+        "preset": "close",
+        "tz": "America/New_York"
+      }
+    ],
+    "conditions": [
+      {
+        "metric": "fund.ipsHeadroomPct",
+        "op": "<",
+        "value": 2
+      }
+    ],
+    "steps": [],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "changed"
+      },
+      {
+        "type": "notify",
+        "who": "team",
+        "tier": "inbox",
+        "when": "changed"
+      }
+    ]
+  }
+}
