@@ -166,3 +166,7 @@ Format:
 - Did: added `CLAUDE.md`, `AGENTS.md`, this file. No git changes — repo already had ~45 uncommitted files before this.
 - In progress / unfinished: those ~45 pre-existing uncommitted changes (congressTrades, govContracts, paperTrading features and related test/public/route files) are still uncommitted — review and commit before heavy multi-agent use. `codex-output/` folder mentioned in CLAUDE.md/AGENTS.md was not created — create it when Codex first needs it.
 - Gotchas: repo has both `render.yaml` (live deploy, Render) and a leftover `.vercel/` folder (not current) — don't treat `.vercel/` as live.
+
+## 2026-11-19 — Claude (data shaping + analytics edge cases)
+- Did: `get_risk` result for agents is reshaped (`riskForAgent` in `lib/agents/tools.js`): the 2-year rebased series and rolling beta/correlation arrays (~3,000 numbers) become 12 evenly spaced points plus the latest value; verdicts untouched. `lib/analytics.js`: `align` drops missing/zero closes and duplicate dates; beta, correlation, Sharpe and information ratio are `null` (not NaN/Infinity) when a series is flat. Tests in `test/dataShaping.test.js`.
+- Gotcha: `test/api.test.js` "daily frames say where the window starts" fails offline (also on main).
