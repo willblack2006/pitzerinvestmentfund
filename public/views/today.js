@@ -1,4 +1,4 @@
-import { el, esc, api, safeUrl, getPref, setPref, can, currentMember, skeleton, errorState, bindRetry } from "../shared.js";
+import { el, esc, api, safeUrl, getPref, setPref, can, currentMember, skeleton, errorState, bindRetry, emptyState } from "../shared.js";
 import { aiPanelHtml, loadAiPanel } from "../ai.js";
 import { openChat } from "../chat.js";
 import { term } from "../glossary.js";
@@ -202,7 +202,7 @@ function recapSection(ed, aiEnabled) {
 }
 
 function storiesSection(list, ed) {
-  if (!list.length) return `<section class="panel"><h3 class="sec-title">Top stories</h3><p class="muted">No market headlines available.${ed?.newsError ? ` (${esc(ed.newsError)})` : ""}</p></section>`;
+  if (!list.length) return `<section class="panel"><h3 class="sec-title">Top stories</h3>${emptyState({ icon: "doc", title: "No headlines right now", body: ed?.newsError ? `The news feed said: ${ed.newsError}` : "New stories show up here as the wire updates." })}</section>`;
   // Lead = the newest of the first 8 stories that has a real photo (else the newest story).
   const leadIdx = Math.max(0, list.slice(0, 8).findIndex((h) => h.image));
   const lead = list[leadIdx];

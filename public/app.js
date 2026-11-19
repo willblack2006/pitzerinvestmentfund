@@ -6,6 +6,7 @@ import { initChat } from "./chat.js";
 import { initAsk } from "./ai.js";
 import { initInbox, setFundAlertCount } from "./inbox.js";
 import { initTickerPicker } from "./tickerPicker.js";
+import { initCommandPalette } from "./commandPalette.js";
 import { togglePopover } from "./ui/popover.js";
 
 // Each page's code only downloads when the user actually navigates there, instead of every
@@ -305,6 +306,8 @@ el("jumpForm").addEventListener("submit", (e) => {
   el("jumpInput").blur();
   closeSearch();
 });
+
+initCommandPalette(); // Cmd/Ctrl+K
 
 // "/" focuses search from anywhere (unless already typing in a field).
 document.addEventListener("keydown", (e) => {

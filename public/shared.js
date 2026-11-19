@@ -72,8 +72,16 @@ export async function setPref(key, value) {
   }
 }
 // Light / dark / system. "system" leaves it to the device (prefers-color-scheme).
+let themeApplied = false;
 export function applyTheme() {
   const t = prefs.theme;
+  const root = document.documentElement;
+  // Crossfade colors on a user-driven switch (not the first paint).
+  if (themeApplied && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    root.classList.add("theme-fade");
+    setTimeout(() => root.classList.remove("theme-fade"), 260);
+  }
+  themeApplied = true;
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
   // Browser/status-bar color follows an explicit in-app choice (the meta tags in index.html

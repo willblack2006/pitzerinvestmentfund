@@ -10,6 +10,11 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-19, Claude (AI experience polish, cloud session)
+- Did: Ask PIF panel and every AI card. Panel glides in, answers fade in paragraph by paragraph (once, `is-new`), progress shows the last 3 steps with a soft pulse and folds older ones, composer is one rounded field with a round send button that grows with the text and stays quiet until there is text, Up arrow recalls the last question, "New chat" clears the panel, empty state is friendlier, feedback buttons fade until hover. Brief/report cards got the same type rhythm. All in `public/ai.js` and the end of `public/css/agents.css`; all motion is off under `prefers-reduced-motion`. New `arrow-up` icon.
+- Checked: screenshots at 1280 and 390 against a fake OpenAI (scripted tool call plus canned answer) in `/mnt/project-files/ai-polish/`. `npm test` 232 pass; one `features.test.js` Senate eFD test failed once in the full run and passes alone.
+- Gotchas: answers still arrive whole (no token streaming from the server); the reveal is a CSS stagger, not real streaming.
+
 ## 2026-11-19, Claude (product experience pass, cloud session)
 - Did: ran every main page at 1280 and 390 on a DB copy and fixed what showed up: the Portfolio total broke mid-number on phones (now a full row, no wrapping); Research's partial-data notice named internal fields (`quoteSummary`) and now says plain English; the Today "no edition" notice was double-indented; when the chart library fails to load the Research chart showed the drawing toolbar over an empty box, now it collapses to a message with Retry; the first heading of each page is exposed as `aria-level=1` (the app had no h1).
 - Checked: screenshots before/after, `npm test` 170 pass, 1 fail (known `api.test.js` chart-bars test).
@@ -241,6 +246,10 @@ Format:
 ## 2026-11-19 — Claude (data shaping + analytics edge cases)
 - Did: `get_risk` result for agents is reshaped (`riskForAgent` in `lib/agents/tools.js`): the 2-year rebased series and rolling beta/correlation arrays (~3,000 numbers) become 12 evenly spaced points plus the latest value; verdicts untouched. `lib/analytics.js`: `align` drops missing/zero closes and duplicate dates; beta, correlation, Sharpe and information ratio are `null` (not NaN/Infinity) when a series is flat. Tests in `test/dataShaping.test.js`.
 - Gotcha: `test/api.test.js` "daily frames say where the window starts" fails offline (also on main).
+
+## 2026-11-19 — Claude (feel pass: core pages and navigation)
+- Did: Cmd/Ctrl+K command palette (`public/commandPalette.js`: pages, holdings, any ticker); quiet view fade-in, press feedback and transitions plus a settings two-column grid and watchlist spacing (end of `public/css/shell.css`); real empty states for Risk and Today headlines; calmer "last saved prices" line on Portfolio.
+- Gotcha: the fade-in uses `animation-fill-mode: backwards` on purpose (a forwards fill can break sticky bars).
 
 ## 2026-11-19 — Claude (speed + mobile / home-screen app)
 - Service worker (`lib/serviceWorker.js`, served at `/sw.js` by `server.js`) precaches every file in `public/` under a cache named for a hash of them, so a deploy replaces the set atomically; `/api` is never cached. Add new static files to `public/` and they are picked up automatically. A new deploy shows a "PIF was updated. Refresh" toast (app.js). Warm reload on throttled 3G-ish: ~1.6s -> ~0.25s to a drawn page.

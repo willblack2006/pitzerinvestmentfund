@@ -1,4 +1,4 @@
-import { el, esc, api, pageHead, loading, subTabs, errorState, bindRetry, signed } from "../shared.js";
+import { el, esc, api, pageHead, loading, subTabs, errorState, bindRetry, signed, emptyState } from "../shared.js";
 import { lineChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { term } from "../glossary.js";
@@ -64,7 +64,7 @@ export async function mount(container) {
   }
   const r = d.risk;
   if (!r) {
-    container.innerHTML = head + pageHead("Risk", "Where the fund's risk comes from and what a sell-off would cost.") + `<p class="muted page-pad">${esc(d.reason || "No data.")}</p>`;
+    container.innerHTML = head + pageHead("Risk", "Where the fund's risk comes from and what a sell-off would cost.") + `<div class="page-pad">${emptyState({ icon: "trending-up", title: "Risk appears once there is price history", body: d.reason || "No data yet." })}</div>`;
     return;
   }
   const L = r.loss, dd = r.drawdown;
