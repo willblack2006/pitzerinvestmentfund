@@ -119,6 +119,8 @@ app.use("/api", membersRouter);
 app.use("/api", require("./routes/agents"));
 app.use("/api", require("./routes/tripwires"));
 
+app.use("/api", require("./routes/agentDesk"));
+
 app.use("/api", (req, res) => res.status(404).json({ error: "No such API endpoint." }));
 
 // Express 5 forwards async errors here; answer JSON so the UI can show a message.

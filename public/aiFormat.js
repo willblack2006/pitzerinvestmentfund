@@ -22,7 +22,7 @@ const TOOL_LABEL = {
   get_idea_screen: "the idea screen", get_track_record: "the pitch track record", get_paper_trading: "paper trading", get_market_news: "today's market news",
   get_13f_season: "the 13F season", get_13f_manager: "a manager's 13F", search_13f_managers: "13F manager search", get_macro_detail: "detailed macro data",
   get_lobbying: "lobbying disclosures", get_fda_activity: "FDA recalls and approvals", search_federal_register: "the Federal Register",
-  get_momentum_backtest: "the momentum backtest", web_search: "the web",
+  get_momentum_backtest: "the momentum backtest", web_search: "the web", simulate_trades: "the simulated trades",
 };
 export function toolLabel(name, args = {}) {
   const base = TOOL_LABEL[name] || String(name || "").replace(/^get_/, "").replace(/_/g, " ");
@@ -39,6 +39,7 @@ export function sourceLabel(u) {
     const [a, b, c] = s.slice(2).split("/");
     if (a === "research" && b) return `${decodeURIComponent(b)} · ${TAB_LABEL[c] || "Research"}`;
     if (a === "pitches" && b) return `Pitch #${b}`;
+    if (a === "agents" && b === "desk") return "Simulated result";
     return PAGE_LABEL[a] || a;
   }
   try {
