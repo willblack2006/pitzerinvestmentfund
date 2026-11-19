@@ -818,6 +818,7 @@ dialog label { display: flex; flex-direction: column; gap: 4px; font-size: var(-
 .fin-table thead th { text-align: right; padding: 8px 10px; }
 .fin-table thead th:first-child, .fin-table tbody th { text-align: left; font-weight: 500; }
 .fin-table tr.group th { padding-top: 14px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; border-bottom-color: var(--border-strong); }
+.fin-table .ttm-col { border-left: 1px solid var(--border-strong); background: color-mix(in srgb, var(--accent, #5b8def) 6%, transparent); }
 .hint {
   display: inline-grid; place-items: center;
   width: 16px; height: 16px; border-radius: 50%;
