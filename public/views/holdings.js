@@ -271,7 +271,7 @@ const STATE_LABEL = { REGULAR: "Market open", PRE: "Pre-market", POST: "After ho
 function marketLine() {
   const m = state.market;
   if (!m) return "Loading live prices…";
-  if (m.error) return `Live prices unavailable. Showing last saved prices. <button type="button" class="btn-link" id="retryQuotes">Retry</button>`;
+  if (m.error) return `<span class="live-dot" aria-hidden="true"></span>Showing last saved prices (live feed unavailable). <button type="button" class="btn-link" id="retryQuotes">Retry</button>`;
   const t = m.asOf ? new Date(m.asOf).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }) : null;
   const live = LIVE_STATES.has(m.marketState);
   return `<span class="live-dot ${live ? "on" : ""}" aria-hidden="true"></span>${STATE_LABEL[m.marketState] || "Live prices"}${t ? ` · prices as of ${t} ET` : ""}${live ? " · updates every minute" : ""}`;

@@ -73,7 +73,7 @@ export async function mount(container) {
   container.innerHTML = `
     ${pageHead("Settings", "The fund's investment policy, voting rules, cash and members. Admins change policy and members; portfolio managers maintain cash.")}
     ${member ? "" : `<div class="toolbar">${lockedHint("Sign in to manage settings and members.")}</div>`}
-    <div class="tab-grid">
+    <div class="tab-grid settings-grid">
       <section class="panel" aria-labelledby="ips-h">
         <h3 id="ips-h">Investment policy limits</h3>
         ${admin ? `<form id="policyForm" class="stack-form">
