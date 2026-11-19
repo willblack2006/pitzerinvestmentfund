@@ -102,20 +102,20 @@ export const NOTIFY_TIERS = [{ key: "push", label: "right away" }, { key: "inbox
 export const FALLBACK_METRICS = [
   { name: "quote.price", label: "Price", unit: "$", group: "Price" },
   { name: "quote.changePct", label: "Change today", unit: "%", group: "Price" },
-  { name: "move.sigma", label: "Move vs normal (σ)", unit: "σ", group: "Price" },
-  { name: "rsi.14", label: "RSI (14 days)", unit: "", group: "Price" },
+  { name: "price.moveSigma", label: "Move vs normal (σ)", unit: "σ", group: "Price" },
+  { name: "price.rsi14", label: "RSI (14 days)", unit: "", group: "Price" },
   { name: "valuation.pe", label: "P/E", unit: "×", group: "Valuation" },
   { name: "valuation.evEbitda", label: "EV/EBITDA", unit: "×", group: "Valuation" },
   { name: "valuation.fcfYield", label: "FCF yield", unit: "%", group: "Valuation" },
   { name: "fundamentals.revenueGrowthYoY", label: "Revenue growth (YoY)", unit: "%", group: "Fundamentals" },
   { name: "fundamentals.grossMargin", label: "Gross margin", unit: "%", group: "Fundamentals" },
-  { name: "estimates.revisions30d", label: "Estimate revisions (30 days)", unit: "", group: "Street" },
-  { name: "short.interestPct", label: "Short interest", unit: "%", group: "Ownership" },
-  { name: "insiders.netBuys90d", label: "Insider net buys (90 days)", unit: "$", group: "Ownership" },
+  { name: "street.epsRevision30dPct", label: "EPS estimate change (30 days)", unit: "%", group: "Street" },
+  { name: "ownership.shortPctFloat", label: "Short interest", unit: "%", group: "Ownership" },
+  { name: "ownership.insiderBuys90d", label: "Insider net buys (90 days)", unit: "$", group: "Ownership" },
   { name: "fund.weightPct", label: "Weight in fund", unit: "%", group: "Fund" },
-  { name: "fund.distanceToTargetPct", label: "Distance to target", unit: "%", group: "Fund" },
-  { name: "fund.distanceToTripwirePct", label: "Distance to tripwire", unit: "%", group: "Fund" },
-  { name: "earnings.daysUntil", label: "Days to earnings", unit: "days", group: "Events" },
+  { name: "fund.targetDistancePct", label: "Distance to target", unit: "%", group: "Fund" },
+  { name: "fund.tripwireDistancePct", label: "Distance to tripwire", unit: "%", group: "Fund" },
+  { name: "street.nextEarningsDays", label: "Days to earnings", unit: "days", group: "Events" },
 ];
 
 const clone = (x) => JSON.parse(JSON.stringify(x));

@@ -80,7 +80,7 @@ export async function mountBuilder(root, { slug = null, template = null, embedde
   const toolGroups = st.catalog?.groups?.length ? st.catalog.groups : [{ key: "core", label: "Everyday", tools: FALLBACK_TOOLS.map((name) => ({ name, dataStep: true, perSymbol: true })) }];
   const allTools = toolGroups.flatMap((g) => g.tools);
   const metricGroups = [...new Set(st.metrics.map((m) => m.group || "Other"))];
-  const metricSelect = (path, cur) => `<select ${bind(path)} aria-label="What to check"><option value="">Pick a value…</option>${metricGroups.map((g) => `<optgroup label="${esc(g)}">${st.metrics.filter((m) => (m.group || "Other") === g).map((m) => `<option value="${esc(m.name)}"${m.name === cur ? " selected" : ""}>${esc(m.label || m.name)}</option>`).join("")}</optgroup>`).join("")}${cur && !st.metrics.some((m) => m.name === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)}</option>` : ""}</select>`;
+  const metricSelect = (path, cur) => `<select ${bind(path)} aria-label="What to check"><option value="">Pick a value…</option>${metricGroups.map((g) => `<optgroup label="${esc(g.charAt(0).toUpperCase() + g.slice(1))}">${st.metrics.filter((m) => (m.group || "Other") === g).map((m) => `<option value="${esc(m.name)}"${m.name === cur ? " selected" : ""}>${esc(m.label || m.name)}</option>`).join("")}</optgroup>`).join("")}${cur && !st.metrics.some((m) => m.name === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)}</option>` : ""}</select>`;
 
   // ---- Section bodies ----
   const scopeBody = () => {

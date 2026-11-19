@@ -80,7 +80,8 @@ test("draft: keyword reader turns the plan's example into a spec", () => {
   const s = r.spec;
   assert.equal(s.scope.universe, "holdings");
   assert.ok(s.triggers.some((t) => t.on === "estimate_revision"));
-  assert.deepEqual(s.conditions[0], { metric: "estimates.revisions30d", op: "<=", value: -2 });
+  assert.deepEqual(s.conditions[0], { metric: "street.epsRevision30dPct", op: "<", value: -2 });
+  assert.equal(require("../lib/agents/spec").normalize(s).errors.length, 0);
   assert.equal(s.steps.find((x) => x.type === "ai").output, "verdict");
   assert.ok(s.outputs.some((o) => o.type === "thesis_check"));
   assert.ok(s.outputs.some((o) => o.type === "notify" && o.who === "owner"));
