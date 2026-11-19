@@ -42,7 +42,8 @@ test("every tool has a strict-mode schema OpenAI accepts", () => {
 
 test("Ask PIF's catalog includes the new tools", () => {
   const { ASK_TOOLS } = require("../lib/agents/workflows/ask");
-  for (const n of ["get_financials", "get_fund_view", "get_price_history"]) assert.ok(ASK_TOOLS.includes(n));
+  const list = typeof ASK_TOOLS === "function" ? ASK_TOOLS() : ASK_TOOLS;
+  for (const n of ["get_financials", "get_fund_view", "get_price_history"]) assert.ok(list.includes(n));
 });
 
 test("get_financials returns the full statement history, not just the latest year", async () => {
