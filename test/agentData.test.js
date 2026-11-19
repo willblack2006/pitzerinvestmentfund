@@ -32,7 +32,8 @@ test("every tool has a strict-mode schema OpenAI accepts", () => {
   const defs = tools.toOpenAITools(names);
   assert.equal(new Set(defs.map((d) => d.name)).size, defs.length, "no duplicate names");
   assert.ok(defs.length <= 128, "under OpenAI's tool limit");
-  for (const d of defs) {
+  assert.ok(defs.some((d) => d.type === "web_search"), "web search is offered as OpenAI's built-in tool");
+  for (const d of defs.filter((x) => x.type === "function")) {
     assert.match(d.name, /^[a-z0-9_]{1,64}$/);
     assert.equal(d.parameters.additionalProperties, false, d.name);
     assert.deepEqual([...d.parameters.required].sort(), Object.keys(d.parameters.properties).sort(), `${d.name}: strict mode needs every property required`);
@@ -108,4 +109,25 @@ test("get_meeting_brief passes a valid date and ignores anything else", async ()
   assert.equal((await tools.callTool("get_meeting_brief", { since: "2026-11-01" })).data.since, "2026-11-01");
   assert.equal((await tools.callTool("get_meeting_brief", { since: "x&y=1" })).data.since, "default");
   assert.deepEqual(seen, ["/meeting-brief?since=2026-11-01", "/meeting-brief"]);
+});
+
+test("web search: built-in tool, billed per search, cited pages logged as run sources; off switch works", async () => {
+  process.env.OPENAI_API_KEY = "test-key";
+  const runs = require("../lib/agents/runs");
+  const replies = [{ model: "gpt-6.1-sol", status: "completed", usage: { input_tokens: 1000, output_tokens: 100 }, output: [
+    { type: "web_search_call", id: "ws1", status: "completed", action: { type: "search", query: "why did MU fall today" } },
+    { type: "message", content: [{ type: "output_text", text: "Guidance cut.", annotations: [{ type: "url_citation", url: "https://news.example/mu", title: "Micron cuts guidance", start_index: 0, end_index: 5 }] }] },
+  ] }];
+  const sent = [];
+  global.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return new Response(JSON.stringify(replies.shift()), { status: 200 }); };
+  const r = await runs.run({ workflow: "test_web" }, (ctx) => ctx.agent({ system: "s", user: "u", tools: ["get_holdings", "web_search"] }));
+  assert.deepEqual(sent[0].tools.map((t) => t.type), ["function", "web_search"]);
+  const run = runs.getRun(r.runId);
+  const web = run.steps.find((s) => s.kind === "tool" && s.name === "web_search");
+  assert.equal(web.source_url, "https://news.example/mu");
+  assert.equal(Math.round(run.costUsd * 1e4) / 1e4, Math.round((1000 * 2 + 100 * 10) / 1e6 * 1e4 + 100) / 1e4, "tokens plus $0.01 for the search");
+  process.env.AGENT_WEB_SEARCH = "off";
+  assert.ok(!tools.toOpenAITools(["get_holdings", "web_search"]).some((t) => t.type === "web_search"));
+  delete process.env.AGENT_WEB_SEARCH;
+  assert.match((await tools.callTool("web_search", {})).error, /OpenAI's side/);
 });
