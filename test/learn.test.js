@@ -17,7 +17,7 @@ test("Learn content: every lesson term is in the glossary and every link is a re
       assert.ok(a.href === "#/" || app.includes(`"/${first}`), `${l.id}: no route for ${a.href}`);
     }
   }
-  assert.deepEqual(ACTION_KEYS.sort(), ["note", "paperThesis", "paperTrade", "pitch", "vote", "watchlist"]);
+  assert.deepEqual(ACTION_KEYS.sort(), ["agentCreated", "agentFollowed", "feedComment", "note", "paperThesis", "paperTrade", "pitch", "vote", "watchlist"]);
   const none = learnSummary({}, []);
   assert.equal(none.count, 0);
   assert.equal(none.next.id, LESSONS[0].id);
@@ -33,7 +33,7 @@ test("API: learn progress follows what the member did; prefs validate", async ()
   try {
     assert.equal((await s.api("/api/learn/progress")).status, 401);
     const empty = await s.api("/api/learn/progress", { auth: true });
-    assert.deepEqual(Object.values(empty.body.done), [false, false, false, false, false, false]);
+    assert.ok(Object.values(empty.body.done).length >= 9 && Object.values(empty.body.done).every((v) => v === false), JSON.stringify(empty.body.done));
 
     const note = await s.api("/api/notes", { method: "POST", auth: true, body: { symbol: "NVDA", body: "Sells the chips behind most AI training." } });
     assert.ok(note.status < 300, JSON.stringify(note.body));

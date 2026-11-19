@@ -1,0 +1,4 @@
+/* WS12 polish fixes. Kept out of style.css (no-edit hotspot during the agent platform build). */
+
+/* Learn quiz: long answer options wrap instead of pushing the page sideways on phones. */
+.learn-opt { white-space: normal; text-align: left; max-width: 100%; height: auto; min-height: 32px; line-height: 1.35; padding-block: 6px; }
