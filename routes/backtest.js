@@ -13,6 +13,7 @@ const router = express.Router();
 // copies of. Backtesting those would mean reusing today's value at every past date — not a
 // real backtest — so the endpoint says so instead of faking one.
 const SUPPORTED = new Set(["momentum"]);
+const yahooRange = (years) => (years <= 1 ? "1y" : years <= 2 ? "2y" : years <= 5 ? "5y" : "10y");
 
 router.get("/backtest", async (req, res) => {
   const signal = String(req.query.signal || "momentum");
@@ -32,11 +33,22 @@ router.get("/backtest", async (req, res) => {
   const symbols = [...new Set([...owned, ...watched])];
   if (symbols.length < 6) return res.json({ error: "Need at least 6 holdings + watchlist names to form meaningful terciles.", universeSize: symbols.length });
 
-  const [universeSeries, benchSeries] = await Promise.all([
-    histories(symbols, `${years}y`),
-    benchmarks.series(bench, `${years}y`),
-  ]);
-  const usable = Object.fromEntries(Object.entries(universeSeries).filter(([, s]) => s.length >= 300));
+  // Yahoo only accepts 1y, 2y, 5y and 10y ranges (a "7y" request fails, which broke the default),
+  // so fetch the next range up and trim to the years asked for.
+  const range = yahooRange(years);
+  const cutoff = new Date(Date.now() - years * 365.25 * 864e5).toISOString().slice(0, 10);
+  const trim = (series) => (series || []).filter((p) => p.date >= cutoff);
+  let universeSeries, benchSeries;
+  try {
+    [universeSeries, benchSeries] = await Promise.all([histories(symbols, range), benchmarks.series(bench, range)]);
+  } catch (err) {
+    return res.status(502).json({ error: `Price history unavailable: ${err.message}` });
+  }
+  benchSeries = trim(benchSeries);
+  const usable = Object.fromEntries(Object.entries(universeSeries).map(([k, s]) => [k, trim(s)]).filter(([, s]) => s.length >= 300));
+  if (Object.keys(usable).length < 6 || benchSeries.length < 300) {
+    return res.json({ signal, years, error: "Not enough price history for a backtest (need 6+ names with over a year of daily closes).", universeSize: Object.keys(usable).length });
+  }
   const { rows, summary } = backtestMomentum(usable, benchSeries, { costBps });
 
   res.json({
@@ -48,3 +60,4 @@ router.get("/backtest", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.yahooRange = yahooRange;
