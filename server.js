@@ -118,6 +118,9 @@ if (require.main === module) {
   const syncDb = require("./db");
   const sync = require("./lib/migrations/schwab20261109").apply(syncDb, process.env.DB_PATH || path.join(__dirname, "data", "pif.db"));
   if (sync.ran) console.log(`[migration] Schwab 11/09 applied: ${sync.positions} positions, backup ${sync.backup}`);
+  // A stray rejected promise (a data source failing in a background job or a route that
+  // forgot a handler) should be logged, not stop the server for every member.
+  process.on("unhandledRejection", (err) => console.error("[unhandled rejection]", err?.stack || err));
   const interrupted = require("./lib/agents/runs").markInterrupted();
   if (interrupted) console.log(`[agents] ${interrupted} run(s) interrupted by the last restart marked failed`);
   app.listen(PORT, () => {

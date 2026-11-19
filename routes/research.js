@@ -444,6 +444,9 @@ router.get("/research/:symbol/risk", async (req, res) => {
   // pure added latency on every Risk tab load).
   const assetPromise = yahoo.getChart(symbol, "2y", "1d");
   const benchPromise = benchmarks.series(benchmark, "2y");
+  // Both are awaited only after the sector lookup; without a handler now, a Yahoo failure in
+  // that window is an unhandled rejection, which stops the whole Node process.
+  assetPromise.catch(() => {}); benchPromise.catch(() => {});
   let sector = "";
   try { sector = (await yahoo.getSector(symbol)).sector; } catch { /* unknown */ }
   const sectorEtf = analytics.SECTOR_ETF[sector] || null;
