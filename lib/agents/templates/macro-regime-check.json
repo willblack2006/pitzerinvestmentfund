@@ -1,0 +1,69 @@
+{
+  "slug": "macro-regime-check",
+  "name": "Macro regime check",
+  "icon": "globe",
+  "description": "Weekly read of rates, inflation and the curve, and which holdings are most exposed to a change.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "fund"
+    },
+    "triggers": [
+      {
+        "type": "schedule",
+        "preset": "weekly_mon",
+        "tz": "America/New_York"
+      },
+      {
+        "type": "manual"
+      }
+    ],
+    "steps": [
+      {
+        "id": "d1",
+        "type": "tool",
+        "tool": "get_macro",
+        "args": {}
+      },
+      {
+        "id": "d2",
+        "type": "tool",
+        "tool": "get_allocation",
+        "args": {}
+      },
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "cheap",
+        "output": "verdict",
+        "maxSteps": 3,
+        "tools": [
+          "get_macro_detail"
+        ],
+        "recall": true,
+        "instructions": "Describe the macro regime in two sentences (rates, inflation, curve, labor). Verdict: intact if nothing changed for the fund's positioning, watch if something shifted, weakened if the regime moved against the fund's largest exposures. Name the holdings most exposed."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "always"
+      },
+      {
+        "type": "memory",
+        "scope": "fund",
+        "kind": "observation",
+        "when": "changed"
+      },
+      {
+        "type": "handoff",
+        "topic": "macro",
+        "when": "verdict_not:intact"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.04,
+      "perMonthUsd": 1
+    }
+  }
+}
