@@ -14,7 +14,7 @@
 
 **Unfinished**
 - Weekly memory-hygiene agent proposing retractions: only `memory.hygiene()` (expired count, stale open questions) exists; nothing proposes yet.
-- WS2's engine `ai` step with `recall: true` should call `memory.forPrompt(ctx, { symbol, agentId, memberId, query })` and put `block` in the user message and `rules` in the system prompt; and its `handoff` trigger can read `agent_messages` rows the blackboard leaves open (built-in subscribers only take `thesis` handoffs and unclaimed requests after the grace period).
+- WS2 engine `ai` steps with `recall: true` now use `memory.forPrompt` (ranked by the step instructions, ids shown as [m12], logged for Why?). Its `handoff` trigger can read `agent_messages` rows the blackboard leaves open (built-in subscribers only take `thesis` handoffs and unclaimed requests after the grace period).
 - `#/agents/memory` falls back to Briefs until WS11's Agents shell loads `public/views/agents/index.js`; `#/memory` works now.
 
 **Gotchas**
