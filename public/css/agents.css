@@ -418,3 +418,7 @@ a.agent-id:hover .agent-chip-name { color: var(--accent); }
 .ask-page-head h3 { margin: 0; font-size: var(--fs-lg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ask-page-actions [aria-pressed="true"] { color: var(--accent); }
 .ask-page-main .ask-convo .ask-list { max-height: 70vh; overflow-y: auto; }
+.inbox-group { list-style: none; display: grid; gap: 4px; padding: var(--sp-2) 0; }
+.inbox-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: 0 var(--sp-2); }
+.inbox-group-head button { margin-left: auto; }
+.inbox-group > .inbox-list { padding-left: var(--sp-3); border-left: 2px solid var(--border); }

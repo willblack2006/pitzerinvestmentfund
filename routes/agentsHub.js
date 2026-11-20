@@ -87,5 +87,17 @@ router.get("/agents-hub/search", requireAi, (req, res) => {
   res.json({ agents, runs: runs.map((r) => runView(r, allAgents)), threads: q ? threads.listThreads(req.member, { q, limit: 5 }) : [] });
 });
 
+// Mute (or unmute) the agent behind a notification: its run's agent stops notifying this member.
+// Stored as an agent_follows row with notify 'none' (the engine skips those members).
+router.post("/agents-hub/mute", requireAi, (req, res) => {
+  const runId = Number(req.body?.runId), on = req.body?.mute !== false;
+  const run = Number.isInteger(runId) ? tryGet("SELECT agentId FROM agent_runs WHERE id = ?", runId) : null;
+  const agent = run?.agentId ? tryGet("SELECT id, name, slug FROM agents WHERE id = ?", run.agentId) : null;
+  if (!agent) return res.status(404).json({ error: "That notification isn't from an agent." });
+  db.prepare(`INSERT INTO agent_follows (agentId, memberId, notify) VALUES (?, ?, ?)
+    ON CONFLICT(agentId, memberId) DO UPDATE SET notify = excluded.notify`).run(agent.id, req.member.id, on ? "none" : "inbox");
+  res.json({ agent: { id: agent.id, name: agent.name, slug: agent.slug }, muted: on });
+});
+
 module.exports = router;
 module.exports.autoMount = true;
