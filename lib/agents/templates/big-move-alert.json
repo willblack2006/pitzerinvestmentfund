@@ -1,0 +1,33 @@
+{
+  "slug": "big-move-alert",
+  "name": "Big move alert",
+  "icon": "zap",
+  "description": "Free, no AI. Posts when a holding moves more than twice its usual daily move.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "event",
+        "on": "price_move",
+        "sigma": 2
+      }
+    ],
+    "conditions": [],
+    "steps": [],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "always"
+      },
+      {
+        "type": "notify",
+        "who": "followers",
+        "tier": "digest",
+        "when": "always"
+      }
+    ]
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "slug": "thesis-guardian",
+  "name": "Thesis guardian",
+  "icon": "shield",
+  "description": "After each filing or earnings, checks a holding against its written thesis and says if it still holds. Proposes a status change for a member to approve.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "event",
+        "on": "filing",
+        "forms": [
+          "10-Q",
+          "10-K",
+          "8-K"
+        ]
+      },
+      {
+        "type": "schedule",
+        "preset": "weekly_mon",
+        "tz": "America/New_York"
+      },
+      {
+        "type": "manual"
+      }
+    ],
+    "conditions": [
+      {
+        "metric": "thesis.hasThesis",
+        "op": "==",
+        "value": 1
+      }
+    ],
+    "steps": [
+      {
+        "id": "d1",
+        "type": "tool",
+        "tool": "get_research_overview",
+        "args": {
+          "symbol": "$symbol"
+        }
+      },
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "mid",
+        "output": "verdict",
+        "maxSteps": 6,
+        "tools": [
+          "get_recent_filings",
+          "get_filing_text",
+          "get_estimate_revisions",
+          "get_news"
+        ],
+        "recall": true,
+        "instructions": "Compare what the latest data and filings say with the fund's written thesis (in the overview). Verdict: intact if nothing contradicts it, watch if something needs watching, weakened if a key part looks wrong, broken if the core idea no longer holds. Name the pillar affected and cite the evidence."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "changed"
+      },
+      {
+        "type": "thesis_check"
+      },
+      {
+        "type": "memory",
+        "scope": "symbol",
+        "kind": "observation",
+        "when": "changed"
+      },
+      {
+        "type": "proposal",
+        "kind": "thesis_status",
+        "when": "verdict_not:intact"
+      },
+      {
+        "type": "notify",
+        "who": "followers",
+        "tier": "inbox",
+        "when": "verdict_not:intact"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.15,
+      "perMonthUsd": 3
+    }
+  }
+}
