@@ -6,6 +6,13 @@
 // and appends its file name to TAB_FILES below (append-only, one line each). WS11's Agents shell
 // calls loadTabs(); a tab file that fails to import is skipped with a console warning.
 export const TAB_FILES = [
+  "home.js",
+  "ask.js",
+  "briefs.js",
+  "desk.js",
+  "approvals.js",
+  "activity.js",
+  "events.js",
   "teams.js",
   "stats.js",
   "memory.js",

@@ -152,85 +152,59 @@ export function askChips(questions, { label = "Ask PIF" } = {}) {
 }
 
 // ---- Ask PIF side panel ----
+// The conversation itself lives in askConversation.js (shared with Agents → Ask): stored threads,
+// follow-ups that remember the conversation, live steps and answer text, @agent, sharing.
 
 let panel = null;
-const convo = []; // this visit's questions and answers in the panel: { q, runId, output, error }
-let busy = false;
+let convo = null;   // the mounted conversation (askConversation.mountConversation)
+let showingHistory = false;
 
 function panelHtml() {
   return `<div class="ask">
-    <header class="chat-head"><div><h2 id="askTitle">${icon("sparkle")} Ask PIF</h2></div>
-      <div class="ask-head-actions"><button type="button" class="btn-link small hidden" id="askNew">New chat</button><a class="small" href="#/agents/ask">History</a><button type="button" class="icon-btn" id="askClose" aria-label="Close Ask PIF">${icon("x")}</button></div></header>
-    <div class="ask-list" id="askList"></div>
-    <form class="ask-compose" id="askPanelForm">
-      <label for="askPanelInput" class="sr-only">Your question</label>
-      <div class="ask-field"><textarea id="askPanelInput" rows="1" maxlength="1000" placeholder="Ask about the fund or a ticker"></textarea>
-      <button class="ask-send" id="askPanelSend" aria-label="Ask" disabled>${icon("arrow-up", { size: 16 })}</button></div>
-      <p class="muted small ask-hint"><span>Enter to ask · Shift+Enter for a new line</span><span id="askBudget"></span></p>
-    </form>
+    <header class="chat-head ask-head"><div class="ask-head-title"><h2 id="askTitle">${icon("sparkle")} <span id="askTitleText">Ask PIF</span></h2></div>
+      <div class="ask-head-actions">
+        <button type="button" class="icon-btn" id="askHistory" aria-pressed="false" aria-label="Past conversations" title="Past conversations">${icon("inbox", { size: 18 })}</button>
+        <button type="button" class="icon-btn hidden" id="askShare" aria-label="Share with the team" title="Share with the team">${icon("users", { size: 18 })}</button>
+        <button type="button" class="icon-btn hidden" id="askNew" aria-label="New conversation" title="New conversation">${icon("plus", { size: 18 })}</button>
+        <a class="icon-btn" id="askFull" href="#/agents/ask" aria-label="Open in the Agents page" title="Open full page">${icon("maximize", { size: 18 })}</a>
+        <button type="button" class="icon-btn" id="askClose" aria-label="Close Ask PIF">${icon("x")}</button></div></header>
+    <div class="ask-history hidden" id="askHistoryList" aria-label="Past conversations"></div>
+    <div class="ask-body" id="askBody"></div>
   </div>`;
 }
 
-function renderList() {
-  const list = panel?.querySelector("#askList");
-  if (!list) return;
-  if (!convo.length) {
-    list.innerHTML = `<div class="ask-empty"><span class="ask-empty-mark" aria-hidden="true">${icon("sparkle", { size: 22 })}</span><p class="ask-empty-title">What would you like to know?</p>
-      <p class="muted">PIF looks things up in the app and in SEC filings, and shows where every fact came from.</p>
-      <div class="ask-suggest">${suggestionsFor().map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask-fill="${esc(q)}">${esc(q)}</button>`).join("")}</div></div>`;
-    return;
-  }
-  panel.querySelector("#askNew")?.classList.toggle("hidden", !convo.length || busy);
-  list.innerHTML = convo.map((c, i) => c.output ? answerCard(c.output, c.runId, { compact: true, fresh: c.fresh })
-    : c.error ? `<div class="panel agent-answer is-compact"><p class="agent-q">${icon("chat", { size: 14 })}<span>${esc(c.q)}</span></p>${aiErrorHtml(c.error)}<div><button type="button" class="btn btn-ghost btn-sm" data-ask="${esc(c.q)}">Try again</button></div></div>`
-    : `<div class="panel agent-answer is-compact"><p class="agent-q">${icon("chat", { size: 14 })}<span>${esc(c.q)}</span></p><div id="askProgress${i}"></div></div>`).join("");
+function syncHead(st) {
+  if (!panel) return;
+  const t = st?.thread;
+  panel.querySelector("#askTitleText").textContent = t?.title ? t.title : "Ask PIF";
+  panel.querySelector("#askNew").classList.toggle("hidden", !st?.turns.length || st.busy);
+  const share = panel.querySelector("#askShare");
+  share.classList.toggle("hidden", !(t && t.mine) || st.busy);
+  share.setAttribute("aria-pressed", String(t?.visibility === "team"));
+  share.title = t?.visibility === "team" ? "Shared with the team (click to make private)" : "Share with the team";
+  panel.querySelector("#askFull").setAttribute("href", t ? `#/agents/ask?thread=${t.id}` : "#/agents/ask");
 }
 
-async function refreshBudget() {
-  try {
-    const o = await api("/api/agents/overview");
-    const b = o.budget;
-    const node = panel?.querySelector("#askBudget");
-    if (node && b?.memberRemainingUsd != null) node.textContent = `${fmtUSD(b.memberRemainingUsd)} left today`;
-    if (node && !o.aiConfigured) node.textContent = "AI is off on the server right now.";
-  } catch { /* optional */ }
+async function toggleHistory(force) {
+  showingHistory = force ?? !showingHistory;
+  const box = panel.querySelector("#askHistoryList");
+  panel.querySelector("#askHistory").setAttribute("aria-pressed", String(showingHistory));
+  box.classList.toggle("hidden", !showingHistory);
+  panel.querySelector("#askBody").classList.toggle("hidden", showingHistory);
+  if (!showingHistory) return;
+  const { threadList, threadListHtml } = await import("./askConversation.js");
+  box.innerHTML = `<p class="muted small">Loading…</p>`;
+  const [mine, team] = await Promise.all([threadList("mine", { limit: 20 }), threadList("team", { limit: 10 })]);
+  const teamOnly = (team || []).filter((t) => !t.mine);
+  box.innerHTML = `<p class="pf-sub">Your conversations</p>${mine == null ? `<p class="muted small">Couldn't load them.</p>` : threadListHtml(mine, { activeId: convo?.state.thread?.id })}
+    ${teamOnly.length ? `<p class="pf-sub">Shared by the team</p>${threadListHtml(teamOnly)}` : ""}
+    <p class="small"><a href="#/agents/ask">All conversations →</a></p>`;
 }
 
 export async function ask(question) {
-  const q = String(question || "").trim();
-  if (!q || busy) return;
-  busy = true;
-  const item = { q };
-  convo.push(item);
-  renderList();
-  const list = panel.querySelector("#askList");
-  list.scrollTop = list.scrollHeight;
-  syncSend();
-  const box = panel.querySelector(`#askProgress${convo.length - 1}`);
-  try {
-    const r = await withProgress(box, api("/api/agents/ask", { method: "POST", body: JSON.stringify({ question: q }) }), { workflow: "ask_pif", intro: "Reading your question", expect: "Usually 10 to 40 seconds" });
-    Object.assign(item, { output: r.output, runId: r.runId, fresh: true });
-  } catch (err) { item.error = err; }
-  busy = false;
-  syncSend();
-  renderList();
-  item.fresh = false; // the reveal animation plays once; later re-renders show the card at rest
-  const cards = list.querySelectorAll(".agent-answer");
-  cards[cards.length - 1]?.scrollIntoView({ block: "start", behavior: reduceMotion() ? "auto" : "smooth" });
-  const input = panel.querySelector("#askPanelInput");
-  if (panel.open && !document.activeElement?.closest?.("a, button, summary")) input.focus({ preventScroll: true });
-  refreshBudget();
-}
-
-const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-// The send button is quiet until there is something to send, and the box grows with the question.
-function syncSend() {
-  const input = panel?.querySelector("#askPanelInput");
-  if (!input) return;
-  input.style.height = "auto";
-  input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
-  panel.querySelector("#askPanelSend").disabled = busy || !input.value.trim();
+  if (!panel) await openAsk();
+  toggleHistory(false);
+  return convo?.ask(question);
 }
 
 function closeAsk() {
@@ -238,7 +212,7 @@ function closeAsk() {
   el("askBtn")?.focus();
 }
 
-export function openAsk({ question = "", autoSubmit = false } = {}) {
+export async function openAsk({ question = "", autoSubmit = false, threadId = null } = {}) {
   if (!can("ai")) return;
   if (!panel) {
     panel = document.createElement("dialog");
@@ -246,30 +220,33 @@ export function openAsk({ question = "", autoSubmit = false } = {}) {
     panel.setAttribute("aria-labelledby", "askTitle");
     panel.innerHTML = panelHtml();
     document.body.append(panel);
-    panel.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); closeAsk(); } });
+    const { mountConversation } = await import("./askConversation.js");
+    convo = mountConversation(panel.querySelector("#askBody"), { compact: true, onChange: syncHead });
+    panel.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); closeAsk(); } });
     panel.querySelector("#askClose").addEventListener("click", closeAsk);
-    const input = panel.querySelector("#askPanelInput");
-    panel.querySelector("#askPanelForm").addEventListener("submit", (e) => { e.preventDefault(); const q = input.value; input.value = ""; syncSend(); ask(q); });
-    input.addEventListener("input", syncSend);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); panel.querySelector("#askPanelForm").requestSubmit(); }
-      // Up arrow in an empty box brings back the last question, like a terminal or Messages.
-      if (e.key === "ArrowUp" && !input.value) { const last = [...convo].reverse().find((c) => c.q); if (last) { e.preventDefault(); input.value = last.q; syncSend(); } }
+    panel.querySelector("#askNew").addEventListener("click", () => { toggleHistory(false); convo.reset(); });
+    panel.querySelector("#askHistory").addEventListener("click", () => toggleHistory());
+    panel.querySelector("#askShare").addEventListener("click", async () => {
+      const t = convo.state.thread;
+      if (!t) return;
+      try { const { shareThread } = await import("./askConversation.js"); convo.state.thread = await shareThread(t, t.visibility !== "team"); syncHead(convo.state); }
+      catch (err) { toast(err.message, { type: "error" }); }
     });
-    panel.querySelector("#askNew").addEventListener("click", () => { if (busy) return; convo.length = 0; renderList(); input.focus(); });
+    panel.querySelector("#askHistoryList").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-thread]");
+      if (!b) return;
+      toggleHistory(false);
+      convo.load(Number(b.dataset.thread));
+    });
     panel.addEventListener("click", (e) => {
-      const f = e.target.closest("[data-ask-fill]");
-      if (f) { input.value = f.dataset.askFill; syncSend(); input.focus(); }
       if (e.target.closest("a[href^='#/']") && window.matchMedia("(max-width: 720px)").matches) closeAsk();
     });
-    bindFeedback(panel);
-    renderList();
   }
-  if (!panel.open) { panel.show(); refreshBudget(); if (!convo.length) renderList(); syncSend(); }
+  if (!panel.open) panel.show();
   el("chatBtn") && document.querySelector(".chat-panel:not(.ask-panel)[open]")?.close();
-  const input = panel.querySelector("#askPanelInput");
-  if (question && autoSubmit) ask(question);
-  else { if (question) input.value = question; syncSend(); input.focus(); }
+  if (threadId) { toggleHistory(false); convo.load(threadId); return; }
+  if (question && autoSubmit) { toggleHistory(false); convo.ask(question); }
+  else { if (question) { convo.input.value = question; convo.input.dispatchEvent(new Event("input")); } convo.focus(); }
 }
 
 export function initAsk() {
@@ -277,7 +254,7 @@ export function initAsk() {
   const sync = () => {
     const on = can("ai");
     btn?.classList.toggle("hidden", !on);
-    if (!on) { panel?.close(); convo.length = 0; }
+    if (!on) { panel?.close(); convo?.reset(); }
   };
   btn?.addEventListener("click", () => (panel?.open ? closeAsk() : openAsk()));
   window.addEventListener("pif:session-changed", sync);

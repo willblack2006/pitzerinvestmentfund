@@ -123,7 +123,9 @@ function accountMenuHtml() {
   return `<div class="account-menu-body" data-account-menu>
     ${who}
     ${m ? link("user", "My profile", "#/members/me") + link("doc", "My notes", "#/notes") + link("inbox", "Notifications", "#/inbox") : ""}
-    ${m && (m.canUseAi || m.isAdmin) ? link("flask", "Research agents", "#/agents") : ""}
+    ${m && (m.canUseAi || m.isAdmin) ? link("flask", "Agents", "#/agents") : ""}
+    ${m && (m.canUseAi || m.isAdmin) ? link("target", "Theses", "#/theses") : ""}
+    ${m?.isAdmin ? link("percent", "AI spending", "#/ai-spend") : ""}
     ${act("chat", "Club chat", "chat")}
     ${m ? link("flag", "Start here", "#/learn") : ""}
     ${link("help", "Glossary", "#/glossary")}
