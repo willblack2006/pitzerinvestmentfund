@@ -107,8 +107,8 @@ export function initRouter(routeMap) {
     await sessionReady(); // know who's signed in before the first page draws
     await registryReady; // routes from public/routes.d/
     // Your start page: opening the app's bare address goes to Today if you chose that.
-    if (firstRender && !location.hash.replace(/^#\/?/, "") && getPref("startPage") === "today") {
-      location.replace("#/today");
+    if (firstRender && !location.hash.replace(/^#\/?/, "") && ["today", "cockpit"].includes(getPref("startPage"))) {
+      location.replace(`#/${getPref("startPage")}`);
       return;
     }
     const segments = parseHash();
