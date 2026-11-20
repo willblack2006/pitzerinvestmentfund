@@ -7,6 +7,7 @@
 // calls loadTabs(); a tab file that fails to import is skipped with a console warning.
 export const TAB_FILES = [
   "teams.js",
+  "stats.js",
 ];
 
 export async function loadTabs() {

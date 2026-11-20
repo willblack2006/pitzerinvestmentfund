@@ -9,4 +9,5 @@
 // A file may also export an array of entries.
 export const ROUTE_FILES = [
   "teams.js",
+  "observability.js",
 ];
