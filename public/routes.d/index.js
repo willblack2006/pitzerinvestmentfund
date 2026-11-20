@@ -16,4 +16,5 @@ export const ROUTE_FILES = [
   "observability.js",
   "memory.js",
   "agentBuilder.js",
+  "feed.js",
 ];

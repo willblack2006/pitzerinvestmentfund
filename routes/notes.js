@@ -44,6 +44,7 @@ router.post("/notes", requireSignedIn, (req, res) => {
   try { n = cleanNote(req.body || {}); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
   const info = db.prepare(`INSERT INTO notes (memberId, symbol, pageRef, pageTitle, quote, body, tags, visibility, pinned)
     VALUES (@memberId, @symbol, @pageRef, @pageTitle, @quote, @body, @tags, @visibility, @pinned)`).run({ memberId: req.member.id, ...n });
+  if (n.visibility === "club") require("../lib/feed/activity").noteShared({ ...n, memberId: req.member.id }, req.member);
   res.status(201).json(shape(db.prepare(`${SELECT} WHERE n.id = ?`).get(info.lastInsertRowid), req.member));
 });
 
@@ -64,6 +65,7 @@ router.put("/notes/:id", requireSignedIn, (req, res) => {
   if (!String(merged.body).trim() && !merged.quote) return res.status(400).json({ error: "A note can't be empty." });
   db.prepare(`UPDATE notes SET symbol=@symbol, pageRef=@pageRef, pageTitle=@pageTitle, quote=@quote, body=@body, tags=@tags,
     visibility=@visibility, pinned=@pinned, updatedAt=datetime('now') WHERE id=@id`).run(merged);
+  if (merged.visibility === "club" && n.visibility !== "club") require("../lib/feed/activity").noteShared(merged, req.member);
   res.json(shape(db.prepare(`${SELECT} WHERE n.id = ?`).get(n.id), req.member));
 });
 

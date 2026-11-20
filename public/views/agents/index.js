@@ -18,6 +18,8 @@ export const TAB_FILES = [
   "memory.js",
   "gallery.js",
   "builder.js",
+  "feed.js",
+  "directory.js",
 ];
 
 export async function loadTabs() {
