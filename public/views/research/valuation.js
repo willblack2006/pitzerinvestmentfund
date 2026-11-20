@@ -1,6 +1,8 @@
 import { el, esc, api, fmtUSD, fmtMoneyCompact, fmtRatio, signed, fmtPct, icon, skeleton, errorState, bindRetry } from "../../shared.js";
 import { term } from "../../glossary.js";
 import { lineChart } from "../../charts.js";
+import { timeChart } from "../../tvchart.js";
+import { footballFieldHtml, wireFootballField } from "../../viz/footballField.js";
 
 // ---- Peer comparison ----
 
@@ -223,6 +225,16 @@ export async function render(c, { symbol, data, price, isFinancial }) {
       <div class="stat"><div class="label">${term("fcfYield", "FCF yield")}</div><div class="value">${Number.isFinite(ks.freeCashflow) && Number.isFinite(data.stats.summaryDetail?.marketCap?.raw) ? fmtRatio(ks.freeCashflow / data.stats.summaryDetail.marketCap.raw) : "—"}</div><div class="sub">Free cash flow / market cap</div></div>
     </section>
     <div class="tab-grid">
+      <section class="panel span-full" aria-labelledby="ff-h">
+        <div class="panel-head"><h3 id="ff-h">What it might be worth: every method side by side</h3><span class="muted small">Ranges per share against today's price</span></div>
+        <div id="ffBody">${skeleton("rows", { rows: 5, label: "Lining up valuation ranges" })}</div>
+      </section>
+      <section class="panel span-full" aria-labelledby="bands-h">
+        <div class="panel-head"><h3 id="bands-h">Price against its usual multiples</h3>
+          <div class="rv-seg" role="group" aria-label="Multiple"><button type="button" class="rv-seg-btn" data-band="pe" aria-pressed="true">P/E</button><button type="button" class="rv-seg-btn" data-band="evEbitda" aria-pressed="false">EV/EBITDA</button></div>
+        </div>
+        <div id="bandsBody">${skeleton("text", { rows: 3, label: "Loading five years of multiples" })}</div>
+      </section>
       <section class="panel span-full" aria-labelledby="comps-h">
         <div class="panel-head"><h3 id="comps-h">Peer comparison</h3><span class="muted small">Trailing twelve months · Finnhub</span></div>
         <div id="compsBody"></div>
@@ -238,6 +250,7 @@ export async function render(c, { symbol, data, price, isFinancial }) {
     </div>`;
   if (!isFinancial) wireDcf(symbol, data, price);
   loadPeHistory(symbol);
+  loadValuationViz(symbol);
   await loadComps(symbol, data.peers);
 }
 
@@ -271,5 +284,70 @@ async function loadPeHistory(symbol) {
       { label: "Median", data: pts.map(() => s.median), color: "--muted" },
     ],
     yFormat: (v) => `${Number(v).toFixed(0)}×`,
+  });
+}
+
+// ---- Football field + multiple bands (WS10, GET /api/research/:symbol/valuation-viz) ----
+
+const BAND_NAME = { pe: "P/E", evEbitda: "EV/EBITDA" };
+async function loadValuationViz(symbol) {
+  let v;
+  try {
+    v = await api(`/api/research/${encodeURIComponent(symbol)}/valuation-viz`);
+  } catch (err) {
+    for (const id of ["ffBody", "bandsBody"]) {
+      const box = el(id);
+      if (!box) continue;
+      box.innerHTML = errorState({ title: "Couldn't load valuation charts.", detail: err.message, retryId: `vv-${id}` });
+      bindRetry(box, `vv-${id}`, () => loadValuationViz(symbol));
+    }
+    return;
+  }
+  const ff = el("ffBody");
+  if (!ff) return;
+  ff.innerHTML = `${footballFieldHtml(v.football, { symbol })}
+    <p class="muted small">Each bar is a range of value per share from one method; the line is today's price. Wide bars mean the method is unsure. When most bars sit above the price, the methods agree it looks cheap, and the reverse. None of these is a fair value on its own.</p>`;
+  wireFootballField(v.football, { symbol });
+  let which = v.bands?.pe ? "pe" : "evEbitda";
+  const draw = () => {
+    document.querySelectorAll("[data-band]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.band === which)));
+    drawBands(symbol, v, which);
+  };
+  document.querySelectorAll("[data-band]").forEach((b) => b.addEventListener("click", () => { which = b.dataset.band; draw(); }));
+  draw();
+}
+
+function drawBands(symbol, v, which) {
+  const box = el("bandsBody");
+  if (!box) return;
+  const b = v.bands?.[which];
+  const name = BAND_NAME[which];
+  if (!b) {
+    box.innerHTML = `<p class="muted">${esc(v.errors?.facts || `No ${name} history: needs at least half a year of positive ${which === "pe" ? "earnings" : "EBITDA"} in SEC filings and weekly prices.`)}</p>`;
+    return;
+  }
+  const s = b.summary;
+  const x = (n) => (n == null ? "—" : `${n.toFixed(1)}×`);
+  const pct = s.percentile == null ? null : Math.round(s.percentile * 100);
+  box.innerHTML = `
+    <div class="kv-grid kv-4 rv-bands-kv">
+      <div><span class="muted small">${name} now</span><strong>${x(s.current)}</strong></div>
+      <div><span class="muted small">Five-year median</span><strong>${x(s.p50)}</strong></div>
+      <div><span class="muted small">Usual range (10th to 90th)</span><strong>${x(s.p10)} to ${x(s.p90)}</strong></div>
+      <div><span class="muted small">Cheaper than now</span><strong>${pct == null ? "—" : `${pct}% of weeks`}</strong></div>
+    </div>
+    <div class="chart-box"><div id="bandsChart" role="img" aria-label="${esc(`${symbol} weekly price since ${s.from} with the price it would have at its own ${name} 10th percentile, median and 90th percentile. ${name} now ${x(s.current)}, median ${x(s.p50)}.`)}"></div></div>
+    <p class="muted small">The dashed lines are what the stock would cost at its own low, middle and high ${name} given the ${which === "pe" ? "trailing earnings" : "trailing EBITDA, debt and cash"} known each week (numbers count about 40 days after a quarter ends). Price near the top line means it is priced richly for its own history; near the bottom, cheaply. A business that changed can deserve a new range.</p>`;
+  const pts = b.points;
+  const times = pts.map((p) => p.date);
+  timeChart(el("bandsChart"), {
+    series: [
+      { label: "Price", times, values: pts.map((p) => p.price), color: "--chart-line" },
+      { label: `At ${x(s.p90)} (high)`, times, values: pts.map((p) => p.implied.p90), color: "--s2", dash: true },
+      { label: `At ${x(s.p50)} (median)`, times, values: pts.map((p) => p.implied.p50), color: "--s3", dash: true },
+      { label: `At ${x(s.p10)} (low)`, times, values: pts.map((p) => p.implied.p10), color: "--s4", dash: true },
+    ],
+    yFormat: (n) => (Math.abs(n) >= 100 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`),
+    caption: `${symbol} price and ${name} bands`,
   });
 }

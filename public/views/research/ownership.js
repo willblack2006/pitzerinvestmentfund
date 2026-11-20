@@ -1,3 +1,4 @@
+import { insiderTimelineHtml, loadInsiderTimeline } from "../../viz/ownershipViz.js";
 import { el, esc, api, safeUrl, fmtMoneyCompact, fmtRatio, fmtNum, signed, fmtPct, loading } from "../../shared.js";
 import { insiderCodeLabel, insiderShares } from "../insiders.js";
 import { scoreMeter, signalBadge, kindTag } from "../insiderSignal.js";
@@ -96,6 +97,7 @@ export async function render(c, { symbol, data }) {
         <div class="panel-head"><h3 id="sig-h">Insider signal</h3><span class="muted small">SEC Form 4 since 2018 · <a href="#/insiders">compare across holdings →</a></span></div>
         <div id="signalBody">${loading("Classifying insider trading history…")}</div>
       </section>
+      ${insiderTimelineHtml()}
       <section class="panel span-full" aria-labelledby="inst-h">
         <div class="panel-head"><h3 id="inst-h">Largest institutional holders</h3><span class="muted small">From 13F filings (quarterly, ~45-day lag)</span></div>
         ${o?.holders?.length ? `
@@ -124,6 +126,7 @@ export async function render(c, { symbol, data }) {
 
   renderSignal(symbol);
   renderBreadthPanel(symbol);
+  loadInsiderTimeline(symbol);
   renderActivist(symbol);
   renderCongress(symbol);
   try {

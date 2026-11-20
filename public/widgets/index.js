@@ -18,4 +18,6 @@ export const WIDGETS = [
   { key: "caps", load: () => import("./caps.js") },
   { key: "factors", load: () => import("./factors.js") },
   { key: "nav-ledger", load: () => import("./navLedger.js") },
+  { key: "signal-matrix", load: () => import("./signalMatrixMini.js") }, // WS10
+  { key: "vol-movers", load: () => import("./volMovers.js") }, // WS10
 ];
