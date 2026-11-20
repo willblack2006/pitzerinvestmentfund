@@ -1,0 +1,68 @@
+{
+  "agent": "filing_flash",
+  "workflow": "filing_flash",
+  "description": "Filing flash on 8-Ks. Fixtures are a trimmed real-style filing; the fake replies quote it exactly, so a live model is held to the same quotes and numbers.",
+  "cases": [
+    {
+      "id": "cfo-departure-8k-502",
+      "event": { "symbol": "EVALCO", "type": "8-K", "items": "5.02", "sourceUrl": "https://www.sec.gov/Archives/edgar/data/999999/000099999926000101/evalco-8k.htm", "asOf": "2026-11-02", "tier": "inbox", "title": "EVALCO 8-K (items 5.02) filed 2026-11-02" },
+      "http": [
+        { "match": "evalco-8k.htm", "body": "<html><body><p>Item 5.02 Departure of Directors or Certain Officers.</p><p>On October 30, 2026, Jane Smith notified Evalco Corp. of her decision to resign as Chief Financial Officer, effective November 15, 2026.</p><p>Ms. Smith's resignation is not the result of any disagreement with the Company on any matter relating to its operations, policies or practices.</p><p>The Board has appointed Robert Lee, currently Vice President of Finance, as interim Chief Financial Officer.</p><p>Mr. Lee will receive an annual base salary of $425,000.</p></body></html>" }
+      ],
+      "fakeModel": [
+        { "json": {
+          "headline": "CFO Jane Smith resigns; VP Finance Robert Lee named interim CFO",
+          "bottomLine": "The CFO is leaving on November 15 and the company says it is not over a disagreement. An interim CFO from inside the finance team takes over while a search runs.",
+          "tone": "neutral",
+          "points": [
+            { "text": "The CFO resigned effective mid-November.", "quote": "Jane Smith notified Evalco Corp. of her decision to resign as Chief Financial Officer, effective November 15, 2026." },
+            { "text": "The company says the departure is not due to a disagreement.", "quote": "Ms. Smith's resignation is not the result of any disagreement with the Company on any matter relating to its operations, policies or practices." },
+            { "text": "An internal finance executive steps in as interim CFO.", "quote": "The Board has appointed Robert Lee, currently Vice President of Finance, as interim Chief Financial Officer." }
+          ],
+          "kpis": [],
+          "questions": ["Is there a permanent CFO search, and does the board expect an outside hire?", "Does the timing line up with the next earnings report or any guidance change?"]
+        } }
+      ],
+      "expect": {
+        "status": "done",
+        "fields": ["headline", "bottomLine", "points"],
+        "match": { "headline": "(?i)(cfo|chief financial officer)", "bottomLine": "(?i)(resign|leav|depart)" },
+        "notMatch": { "bottomLine": "(?i)\\b(buy|sell) the stock\\b" },
+        "minVerifiedShare": 0.66,
+        "maxUnbacked": 0,
+        "maxModelTurns": 2,
+        "maxCostUsd": 0.08
+      }
+    },
+    {
+      "id": "material-agreement-8k-101",
+      "event": { "symbol": "EVALCO", "type": "8-K", "items": "1.01", "sourceUrl": "https://www.sec.gov/Archives/edgar/data/999999/000099999926000117/evalco-8k-101.htm", "asOf": "2026-11-10", "tier": "inbox", "title": "EVALCO 8-K (items 1.01) filed 2026-11-10" },
+      "http": [
+        { "match": "evalco-8k-101.htm", "body": "<html><body><p>Item 1.01 Entry into a Material Definitive Agreement.</p><p>On November 7, 2026, Evalco Corp. entered into a supply agreement with Northwind Systems under which Northwind committed to purchase at least $1.2 billion of products over three years.</p><p>The agreement may be terminated by either party upon 180 days' written notice after the first anniversary.</p><p>Northwind accounted for 14% of the Company's revenue in fiscal 2025.</p></body></html>" }
+      ],
+      "fakeModel": [
+        { "json": {
+          "headline": "Northwind commits to at least $1.2 billion of purchases over three years",
+          "bottomLine": "A large customer signed a multi-year minimum purchase commitment, which makes part of future revenue more visible. Either side can exit on 180 days' notice after year one, so the commitment is softer than the headline.",
+          "tone": "positive",
+          "points": [
+            { "text": "Minimum purchase commitment of $1.2 billion over three years.", "quote": "Northwind committed to purchase at least $1.2 billion of products over three years." },
+            { "text": "Either party can terminate after the first year with notice.", "quote": "The agreement may be terminated by either party upon 180 days' written notice after the first anniversary." },
+            { "text": "Northwind is already a big customer.", "quote": "Northwind accounted for 14% of the Company's revenue in fiscal 2025." }
+          ],
+          "kpis": [ { "name": "Northwind minimum purchases", "value": "$1.2 billion over three years", "quote": "Northwind committed to purchase at least $1.2 billion of products over three years." } ],
+          "questions": ["How does $1.2 billion over three years compare with what Northwind bought last year?", "Are prices fixed, or can Northwind renegotiate?"]
+        } }
+      ],
+      "expect": {
+        "status": "done",
+        "fields": ["headline", "points", "kpis"],
+        "match": { "headline": "(?i)northwind", "bottomLine": "(?i)(terminat|exit|notice)" },
+        "minVerifiedShare": 0.66,
+        "maxUnbacked": 0,
+        "maxModelTurns": 2,
+        "maxCostUsd": 0.08
+      }
+    }
+  ]
+}
