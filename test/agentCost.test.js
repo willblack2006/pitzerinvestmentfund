@@ -79,7 +79,7 @@ test("Ask PIF: the cheap model's unbacked numbers escalate to the mid model with
   const r = await runs.run({ workflow: "ask_pif" }, (ctx) => ask({ question: "What is our biggest holding?" }, ctx));
   assert.equal(r.output.plan.escalated, true);
   assert.equal(requests.at(-1).model, "gpt-6.1-sol");
-  assert.equal(requests.at(-1).tools.filter((t) => t.type === "function").length, ASK_TOOLS().filter((n) => !tools.TOOLS[n].builtin).length);
+  assert.equal(requests.at(-1).tools.filter((t) => t.type === "function").length, ASK_TOOLS().filter((n) => !tools.TOOLS[n].builtin && n !== "ask_agent" && n !== "list_agents").length, "every tool (asking other agents only when the question mentions agents)");
   assert.match(r.output.answer, /18000/);
   assert.equal(r.output.toolsUsed.length, 1, "the repeated tool call was answered from memory");
 });
