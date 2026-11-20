@@ -8,5 +8,7 @@
 // load is skipped with a console warning, so one broken route can't take down the app.
 // A file may also export an array of entries.
 export const ROUTE_FILES = [
+  "teams.js",
+  "observability.js",
   "memory.js",
 ];
