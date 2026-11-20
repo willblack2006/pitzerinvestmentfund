@@ -275,7 +275,7 @@ export function describe(spec, { metrics, agentsBySlug } = {}) {
   const cond = s.conditions.length ? `, if ${joinAnd(s.conditions.map((c) => describeCondition(c, metrics)))}` : "";
   const steps = s.steps.map((x) => describeStep(x, metrics));
   const outs = s.outputs.map((o) => describeOutput(o, agentsBySlug));
-  const doing = joinAnd([...steps, ...(outs.length ? [] : ["keep the result on the run page"])]);
+  const doing = joinAnd([...steps, ...(outs.length || steps.length ? [] : ["keep the result on the run page"])]);
   const tail = outs.length ? `${steps.length ? ", then " : ""}${joinAnd(outs)}` : "";
   return `${when}, ${describeScope(s.scope)}${cond}: ${doing}${tail}.`.replace(/: ,/, ":").replace(/\s+/g, " ");
 }
@@ -328,7 +328,7 @@ export function check(spec, { name, ...counts } = {}) {
     if (!c.metric) add(`conditions.${i}.metric`, "Pick what to compare in each condition.");
     else if (!opDef(c.op).noValue && (c.value === "" || c.value == null)) add(`conditions.${i}.value`, `Add a value for "${metricLabel(c.metric)}".`);
   }
-  if (!s.steps.length) add("steps", "Add at least one step for the agent to do.");
+  if (!s.steps.length && !s.outputs.length) add("steps", "Add a step or somewhere for results to go.");
   if (s.steps.length > MAX_STEPS) add("steps", `An agent can have at most ${MAX_STEPS} steps.`);
   const ai = s.steps.filter((x) => x.type === "ai");
   if (ai.length > MAX_AI_STEPS) add("steps", `At most ${MAX_AI_STEPS} AI steps per agent.`);
