@@ -11,4 +11,5 @@ export const ROUTE_FILES = [
   "cockpit.js",
   "teams.js",
   "observability.js",
+  "memory.js",
 ];
