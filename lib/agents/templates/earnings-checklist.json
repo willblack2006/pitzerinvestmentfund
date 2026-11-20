@@ -1,0 +1,63 @@
+{
+  "slug": "earnings-checklist",
+  "name": "Earnings in 3 days checklist",
+  "icon": "check-square",
+  "description": "Free, no AI. Three days before a holding reports, posts a checklist: thesis age, estimate trend, distance to target.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "event",
+        "on": "earnings_soon",
+        "days": 3
+      }
+    ],
+    "steps": [
+      {
+        "id": "r1",
+        "type": "rule",
+        "if": {
+          "metric": "thesis.daysSinceUpdate",
+          "op": "<",
+          "value": 100000
+        },
+        "else": "continue"
+      },
+      {
+        "id": "r2",
+        "type": "rule",
+        "if": {
+          "metric": "street.epsRevision30dPct",
+          "op": ">=",
+          "value": 0
+        },
+        "else": "continue"
+      },
+      {
+        "id": "r3",
+        "type": "rule",
+        "if": {
+          "metric": "fund.targetDistancePct",
+          "op": ">",
+          "value": 0
+        },
+        "else": "continue"
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "always"
+      },
+      {
+        "type": "notify",
+        "who": "followers",
+        "tier": "inbox",
+        "when": "always"
+      }
+    ]
+  }
+}

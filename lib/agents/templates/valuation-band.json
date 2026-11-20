@@ -1,0 +1,60 @@
+{
+  "slug": "valuation-band",
+  "name": "Valuation band",
+  "icon": "ruler",
+  "description": "Flags when a holding's forward P/E leaves its usual band and explains whether the move is price or estimates.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "schedule",
+        "preset": "close",
+        "tz": "America/New_York"
+      },
+      {
+        "type": "manual"
+      }
+    ],
+    "conditions": [
+      {
+        "metric": "valuation.forwardPe",
+        "op": "pct_change_gt",
+        "value": 15
+      }
+    ],
+    "steps": [
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "cheap",
+        "output": "brief",
+        "maxSteps": 4,
+        "tools": [
+          "get_research_overview",
+          "get_comps",
+          "get_estimate_revisions"
+        ],
+        "instructions": "The forward P/E moved more than 15% since the last check. Say whether price or estimates drove it, where it sits against peers, and whether that changes the valuation case in the thesis."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "always"
+      },
+      {
+        "type": "notify",
+        "who": "owner",
+        "tier": "digest",
+        "when": "always"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.04,
+      "perMonthUsd": 2
+    }
+  }
+}
