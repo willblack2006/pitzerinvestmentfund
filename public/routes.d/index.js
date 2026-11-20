@@ -10,4 +10,8 @@
 export const ROUTE_FILES = [
   "signalMatrix.js", // WS10
   "compare.js", // WS10
+  "cockpit.js",
+  "teams.js",
+  "observability.js",
+  "memory.js",
 ];
