@@ -1,0 +1,62 @@
+{
+  "slug": "estimate-revision-tracker",
+  "name": "Estimate revision tracker",
+  "icon": "trending-up",
+  "description": "Tracks analyst EPS revisions on holdings and writes up big swings in either direction.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "event",
+        "on": "estimate_revision",
+        "minScore": 40
+      },
+      {
+        "type": "schedule",
+        "preset": "weekly_fri",
+        "tz": "America/New_York"
+      }
+    ],
+    "conditions": [],
+    "steps": [
+      {
+        "id": "d1",
+        "type": "tool",
+        "tool": "get_estimate_revisions",
+        "args": {
+          "symbol": "$symbol"
+        }
+      },
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "cheap",
+        "output": "score",
+        "maxSteps": 3,
+        "tools": [
+          "get_news"
+        ],
+        "instructions": "Summarize how analysts' EPS and revenue estimates moved over 30 and 90 days, how many raised vs cut, and the likely reason. Score -100 (heavy cuts) to 100 (heavy raises)."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "changed"
+      },
+      {
+        "type": "memory",
+        "scope": "symbol",
+        "kind": "observation",
+        "when": "changed"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.04,
+      "perMonthUsd": 2
+    }
+  }
+}

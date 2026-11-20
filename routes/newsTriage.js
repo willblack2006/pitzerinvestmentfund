@@ -18,6 +18,7 @@ async function triageSymbol(symbol, news) {
     const text = await ai.triageHeadlines(symbol, uncached.map((n) => n.headline));
     const parsed = parseTriageResponse(text, uncached.length);
     if (parsed) uncached.forEach((n, i) => setCached(`news_triage_${n.key}`, parsed[i], TTL, "news_triage"));
+    try { if (parsed) uncached.forEach((n, i) => { if (parsed[i].materiality >= 7) require("../lib/platform/bus").emit("news_high", { symbol, headline: n.headline, url: n.url, materiality: parsed[i].materiality, direction: parsed[i].direction, key: n.key }); }); } catch { /* agent triggers are optional */ }
   }
   return results.map((n) => ({ ...n, ...(getCached(`news_triage_${n.key}`) || { materiality: null, direction: null, reason: null }) }));
 }
