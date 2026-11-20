@@ -527,6 +527,7 @@ router.put("/research/:symbol/thesis", requireSignedIn, (req, res) => {
       author = excluded.author, thesis = excluded.thesis, targetPrice = excluded.targetPrice,
       priceAtThesis = excluded.priceAtThesis, updatedAt = datetime('now')
   `).run({ symbol, author: author || "", thesis: thesis || "", targetPrice: tp, priceAtThesis: pat });
+  try { require("../lib/thesis/store").saveVersion({ symbol, text: thesis || "", targetPrice: tp, editedBy: req.member?.id || null }); } catch { /* thesis history (WS4) is best effort */ }
   res.json(db.prepare("SELECT * FROM research_notes WHERE symbol = ?").get(symbol));
 });
 
