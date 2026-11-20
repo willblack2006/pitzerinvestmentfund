@@ -235,7 +235,7 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
     if (r.unavailable) { listEl.innerHTML = emptyState({ icon: "users", title: "The team feed isn't set up on this server yet." }); return; }
     renderList(); renderMore();
     const top = state.items[0]?.id;
-    if (markRead && top && top > state.lastReadId) { api("/api/feed/read", { method: "POST", body: { lastReadId: top } }).then(() => window.dispatchEvent(new Event("pif:feed-read"))).catch(() => {}); }
+    if (markRead && top && top > state.lastReadId) { api("/api/feed/read", { method: "POST", body: JSON.stringify({ lastReadId: top }) }).then(() => window.dispatchEvent(new Event("pif:feed-read"))).catch(() => {}); }
   }
 
   async function older() {
@@ -258,7 +258,7 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
     state.items.unshift(...r.items.map((i) => ({ ...i, fresh: true })));
     renderList();
     for (const i of r.items) container.querySelector(`[data-item="${i.id}"]`)?.classList.add("is-new");
-    if (markRead && document.visibilityState === "visible") api("/api/feed/read", { method: "POST", body: { lastReadId: r.items[0].id } }).then(() => window.dispatchEvent(new Event("pif:feed-read"))).catch(() => {});
+    if (markRead && document.visibilityState === "visible") api("/api/feed/read", { method: "POST", body: JSON.stringify({ lastReadId: r.items[0].id }) }).then(() => window.dispatchEvent(new Event("pif:feed-read"))).catch(() => {});
   }
 
   const itemOf = (id) => state.items.find((i) => i.id === id);
@@ -295,11 +295,11 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
   function watchPresence(id, on) {
     const target = `item:${id}`;
     if (on && !beats.has(id)) {
-      const beat = () => api("/api/feed/presence", { method: "POST", body: { target } }).then((r) => showViewers(id, r.viewers)).catch(() => {});
+      const beat = () => api("/api/feed/presence", { method: "POST", body: JSON.stringify({ target }) }).then((r) => showViewers(id, r.viewers)).catch(() => {});
       beat(); beats.set(id, setInterval(beat, 30e3));
     } else if (!on && beats.has(id)) {
       clearInterval(beats.get(id)); beats.delete(id);
-      api("/api/feed/presence", { method: "POST", body: { target, leave: true } }).catch(() => {});
+      api("/api/feed/presence", { method: "POST", body: JSON.stringify({ target, leave: true }) }).catch(() => {});
     }
   }
   function showViewers(id, viewers = []) {
@@ -330,7 +330,7 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
     const react = e.target.closest("[data-react]");
     if (react) {
       try {
-        const r = await api(`/api/feed/${id}/react`, { method: "POST", body: { emoji: react.dataset.react } });
+        const r = await api(`/api/feed/${id}/react`, { method: "POST", body: JSON.stringify({ emoji: react.dataset.react }) });
         const it = itemOf(id) || {}; it.reactions = r.reactions;
         art.querySelector("[data-reacts]").outerHTML = reactionsHtml({ reactions: r.reactions });
         art.querySelector(".feed-react-menu")?.remove();
@@ -368,7 +368,7 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
     const shareBtn = e.target.closest("[data-share-run]");
     if (shareBtn) {
       shareBtn.disabled = true;
-      try { await api(`/api/agents/runs/${shareBtn.dataset.shareRun}/share`, { method: "POST", body: {} }); shareBtn.textContent = "Shared"; fetchNew({ reveal: true }); } catch (err) { shareBtn.disabled = false; toast(err.message, { type: "error" }); }
+      try { await api(`/api/agents/runs/${shareBtn.dataset.shareRun}/share`, { method: "POST", body: JSON.stringify({}) }); shareBtn.textContent = "Shared"; fetchNew({ reveal: true }); } catch (err) { shareBtn.disabled = false; toast(err.message, { type: "error" }); }
     }
   });
 
@@ -384,7 +384,7 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
     btn.disabled = true;
     if (form.matches("[data-compose]")) {
       try {
-        const r = await api(`/api/feed/${id}/comments`, { method: "POST", body: { text } });
+        const r = await api(`/api/feed/${id}/comments`, { method: "POST", body: JSON.stringify({ text }) });
         ta.value = ""; ta.style.height = "auto";
         for (const n of r.notices || []) toast(n);
         if (r.agentRuns?.length) { state.working.set(id, new Set(r.agentRuns.map((a) => a.name))); }
@@ -395,7 +395,7 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
       const out = art.querySelector("[data-followup-out]");
       out.innerHTML = `<p class="feed-working small" role="status"><span class="agent-pulse" aria-hidden="true"></span> Working on your follow-up…</p>`;
       try {
-        const r = await api(`/api/feed/${id}/follow-up`, { method: "POST", body: { question: text } });
+        const r = await api(`/api/feed/${id}/follow-up`, { method: "POST", body: JSON.stringify({ question: text }) });
         ta.value = "";
         out.innerHTML = `<div class="feed-followup-answer"><div class="feed-text">${renderMarkdown(r.output?.answer || "")}</div>
           <p class="small muted">Only you see this answer. <button type="button" class="btn btn-ghost btn-sm" data-share-run="${r.runId}">Share to feed</button> <a class="btn btn-ghost btn-sm" href="#/agents/runs/${r.runId}">Open run</a></p></div>`;

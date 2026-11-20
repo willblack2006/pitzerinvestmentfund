@@ -44,7 +44,7 @@ export function bindFollow(root, onChange) {
     b.disabled = true;
     const slug = b.dataset.follow, following = b.dataset.following === "1";
     try {
-      const r = await api(`/api/agents/a/${encodeURIComponent(slug)}/follow`, { method: following ? "DELETE" : "PUT", body: following ? undefined : { notify: "inbox" } });
+      const r = await api(`/api/agents/a/${encodeURIComponent(slug)}/follow`, { method: following ? "DELETE" : "PUT", body: following ? undefined : JSON.stringify({ notify: "inbox" }) });
       b.outerHTML = followButton({ slug, following: r.following });
       toast(r.following ? "Following. Important posts reach your inbox; the rest go in the evening digest." : "Unfollowed.");
       onChange?.(r);
@@ -148,25 +148,25 @@ export async function mount(container, params = {}) {
     const el = container.querySelector("#profilePresence");
     if (el) el.textContent = others.length ? `${others.map((v) => v.name).join(", ")} ${others.length === 1 ? "is" : "are"} looking at this agent too` : "";
   };
-  const beat = () => api("/api/feed/presence", { method: "POST", body: { target } }).then((r) => showViewers(r.viewers)).catch(() => {});
+  const beat = () => api("/api/feed/presence", { method: "POST", body: JSON.stringify({ target }) }).then((r) => showViewers(r.viewers)).catch(() => {});
   beat();
   const timer = setInterval(beat, 30e3);
   const onLive = (e) => { if (e.detail?.type === "feed.presence" && e.detail.data?.target === target) showViewers(e.detail.data.viewers); };
   window.addEventListener("pif:live", onLive);
-  const leave = () => { clearInterval(timer); window.removeEventListener("pif:live", onLive); window.removeEventListener("hashchange", leave); api("/api/feed/presence", { method: "POST", body: { target, leave: true } }).catch(() => {}); };
+  const leave = () => { clearInterval(timer); window.removeEventListener("pif:live", onLive); window.removeEventListener("hashchange", leave); api("/api/feed/presence", { method: "POST", body: JSON.stringify({ target, leave: true }) }).catch(() => {}); };
   window.addEventListener("hashchange", leave);
 
   const reload = () => mount(container, params);
   bindFollow(container.querySelector(".feed-profile-actions"), () => reload());
   container.querySelector("#followLevel")?.addEventListener("change", async (e) => {
-    try { await api(`/api/agents/a/${encodeURIComponent(a.slug)}/follow`, { method: "PUT", body: { notify: e.target.value } }); toast("Saved."); } catch (err) { toast(err.message, { type: "error" }); }
+    try { await api(`/api/agents/a/${encodeURIComponent(a.slug)}/follow`, { method: "PUT", body: JSON.stringify({ notify: e.target.value }) }); toast("Saved."); } catch (err) { toast(err.message, { type: "error" }); }
   });
   const on = (sel, fn) => container.querySelector(sel)?.addEventListener("click", async (e) => {
     const btn = e.currentTarget; btn.disabled = true;
     try { await fn(); } catch (err) { toast(err.message, { type: "error" }); } finally { btn.disabled = false; }
   });
   on("[data-run-now]", async () => {
-    const r = await engine(`${a.id}/run`, { method: "POST", body: {} });
+    const r = await engine(`${a.id}/run`, { method: "POST", body: JSON.stringify({}) });
     toast("Running. Its post will show up in the feed when it's done.", r?.runId ? { action: { label: "Watch", onClick: () => { location.hash = `#/agents/runs/${r.runId}`; } } } : {});
   });
   on("[data-ask-agent]", async () => {
@@ -174,16 +174,16 @@ export async function mount(container, params = {}) {
     openAsk({ question: `@${a.slug} ` });
   });
   on("[data-duplicate]", async () => {
-    const r = await engine(`${a.id}/fork`, { method: "POST", body: {} });
+    const r = await engine(`${a.id}/fork`, { method: "POST", body: JSON.stringify({}) });
     const copy = r?.agent || r;
     toast("Copied. It's yours to edit.");
     if (copy?.slug) location.hash = `#/agents/${encodeURIComponent(copy.slug)}/edit`;
   });
-  on("[data-pause]", async () => { await engine(`${a.id}/pause`, { method: "POST", body: {} }); reload(); });
-  on("[data-resume]", async () => { await engine(`${a.id}/resume`, { method: "POST", body: {} }); reload(); });
+  on("[data-pause]", async () => { await engine(`${a.id}/pause`, { method: "POST", body: JSON.stringify({}) }); reload(); });
+  on("[data-resume]", async () => { await engine(`${a.id}/resume`, { method: "POST", body: JSON.stringify({}) }); reload(); });
   on("[data-suspend]", async () => {
     if (!(await confirmAction({ title: `Suspend ${a.name}?`, body: "It stops running for everyone until an admin lifts the suspension.", confirmLabel: "Suspend", danger: true }))) return;
-    await engine(`${a.id}/suspend`, { method: "POST", body: {} }); reload();
+    await engine(`${a.id}/suspend`, { method: "POST", body: JSON.stringify({}) }); reload();
   });
 }
 

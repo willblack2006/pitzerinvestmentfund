@@ -32,7 +32,7 @@ export async function renderFeedPage(container, { filter = "all", base = "#/feed
   container.querySelector("[data-feed-member]")?.addEventListener("change", (e) => { q.member = e.target.value; start(); });
   container.querySelector("#feedMarkRead")?.addEventListener("click", async () => {
     const r = await api("/api/feed?limit=1").catch(() => null);
-    if (r?.items[0]) await api("/api/feed/read", { method: "POST", body: { lastReadId: r.items[0].id } });
+    if (r?.items[0]) await api("/api/feed/read", { method: "POST", body: JSON.stringify({ lastReadId: r.items[0].id }) });
     window.dispatchEvent(new Event("pif:feed-read"));
     start();
   });
