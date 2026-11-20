@@ -1,0 +1,28 @@
+{
+  "agent": "ask_pif",
+  "workflow": "ask_pif_eval",
+  "description": "Ask PIF through the agent loop with fixed tool data. The workflow name ask_pif_eval is registered by lib/agents/evalAgents.js and calls the real ask() with event.question.",
+  "cases": [
+    {
+      "id": "largest-holding",
+      "event": { "question": "What is the fund's largest holding by market value, and how big is it?" },
+      "tools": {
+        "get_holdings": { "data": [ { "symbol": "NVDA", "shares": 100, "marketValue": 18120, "weightPct": 21.4 }, { "symbol": "MU", "shares": 80, "marketValue": 9040, "weightPct": 10.7 } ], "source_url": "#/holdings" },
+        "get_allocation": { "data": { "positions": [ { "symbol": "NVDA", "weightPct": 21.4 }, { "symbol": "MU", "weightPct": 10.7 } ], "cashPct": 4.1 }, "source_url": "#/allocation" }
+      },
+      "fakeModel": [
+        { "call": "get_holdings", "args": {} },
+        { "json": { "answer": "NVDA is the largest holding at $18,120, about 21.4% of the fund.", "claims": [ { "text": "NVDA market value $18,120, 21.4% weight", "source_url": "#/holdings", "quote": "" } ], "followUps": ["How concentrated is the fund in semiconductors?"] } }
+      ],
+      "expect": {
+        "status": "done",
+        "fields": ["answer", "claims"],
+        "match": { "answer": "NVDA" },
+        "toolsUsed": ["get_holdings"],
+        "maxUnbacked": 0,
+        "maxModelTurns": 4,
+        "maxCostUsd": 0.05
+      }
+    }
+  ]
+}
