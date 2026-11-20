@@ -21,6 +21,8 @@ const PAGES = [
   ["Market: Insiders", "#/insiders", "form 4"],
   ["Market: 13F tracker", "#/13f", "managers"],
   ["Market: Calendar", "#/calendar", "earnings"],
+  ["Market: Signal matrix", "#/signals/matrix", "signals heatmap holdings"],
+  ["Compare tickers", "#/compare", "side by side peers chart"],
   ["Settings", "#/settings", "policy members"],
   ["Notes", "#/notes", ""],
   ["Portfolio: Cockpit", "#/cockpit", "attribution dashboard"],
