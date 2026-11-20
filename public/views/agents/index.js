@@ -8,6 +8,7 @@
 export const TAB_FILES = [
   "teams.js",
   "stats.js",
+  "memory.js",
   "feed.js",
   "directory.js",
 ];

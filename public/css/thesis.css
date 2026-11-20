@@ -1,0 +1,108 @@
+/* Thesis tracking (WS4): board, timeline, pillars. Uses the app's tokens only, so light and dark
+   both follow the theme. Status colour always comes with a glyph. */
+.th-chip { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs, 12px); font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; line-height: 1.6; }
+.th-intact { color: var(--positive); background: var(--positive-soft); fill: var(--positive); }
+.th-watch { color: var(--accent); background: var(--accent-soft); fill: var(--accent); }
+.th-weakened { color: var(--caution); background: var(--caution-soft); fill: var(--caution); }
+.th-broken { color: var(--negative); background: var(--negative-soft); fill: var(--negative); }
+.th-unknown { color: var(--muted); background: var(--surface-2, var(--panel-2)); fill: var(--muted); }
+
+.th-health { display: inline-flex; align-items: baseline; gap: 4px; }
+.th-health strong { font-size: 1.15em; font-variant-numeric: tabular-nums; }
+.th-health-good strong { color: var(--positive); }
+.th-health-ok strong { color: var(--accent); }
+.th-health-weak strong { color: var(--caution); }
+.th-health-bad strong { color: var(--negative); }
+
+.th-spark { vertical-align: middle; overflow: visible; }
+.th-spark path { fill: none; stroke: var(--chart-line, var(--accent)); stroke-width: 1.5; }
+.th-spark circle { fill: var(--chart-line, var(--accent)); }
+.th-spark-down path, .th-spark-down circle { stroke: var(--caution); fill: var(--caution); }
+.th-spark-down path { fill: none; }
+.th-spark-ref { stroke: var(--grid, var(--border)); stroke-dasharray: 2 2; }
+
+.th-wrap { display: grid; gap: var(--s3, 12px); margin-top: var(--s3, 12px); }
+.th-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3, 12px); padding: var(--s3, 12px); border: 1px solid var(--border); border-radius: var(--radius, 8px); background: var(--panel); }
+.th-summary > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.th-drift { grid-column: 1 / -1; flex-direction: row !important; align-items: baseline; gap: 8px !important; }
+.th-actions { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.th-panel .panel-head { flex-wrap: wrap; gap: 8px; }
+.th-legend { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.th-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--s3, 12px); }
+
+.th-pillars, .th-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.th-pillar { padding: 10px 0; border-bottom: 1px solid var(--border); display: grid; gap: 4px; }
+.th-pillar:last-child { border-bottom: 0; }
+.th-pillar-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.th-pillar-text { font-weight: 600; }
+.th-list > li { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.th-list > li:last-child { border-bottom: 0; }
+.th-list blockquote, .th-table blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border-strong); color: var(--text-2, var(--muted)); }
+
+.th-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; align-items: end; margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: var(--panel-2, transparent); }
+.th-form h4 { grid-column: 1 / -1; margin: 0; }
+.th-form label { display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-xs, 12px); color: var(--muted); }
+.th-form input, .th-form select, .th-form textarea { font: inherit; font-size: 14px; color: var(--text); min-width: 0; }
+.th-form .th-full { grid-column: 1 / -1; }
+.th-inline-form { display: flex; flex-wrap: wrap; }
+.th-inline-form label { flex: 0 1 90px; }
+.th-inline-form .th-grow { flex: 1 1 200px; min-width: 0; }
+.th-form [hidden] { display: none; }
+
+.th-tl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.th-tl { display: block; width: 100%; min-width: 620px; height: auto; }
+.th-tl .th-grid { stroke: var(--grid, var(--border)); stroke-width: 1; }
+.th-tl .th-now { stroke: var(--accent); stroke-dasharray: 3 3; }
+.th-tl .th-axis { font-size: 11px; fill: var(--muted); }
+.th-tl .th-price { fill: none; stroke: var(--chart-line, var(--accent)); stroke-width: 1.5; }
+.th-tl .th-bearline { stroke: var(--negative); stroke-dasharray: 4 3; opacity: .7; }
+.th-tl .th-baseline { stroke: var(--muted); stroke-dasharray: 4 3; opacity: .7; }
+.th-tl .th-healthline { fill: none; stroke: var(--text-2, var(--text)); stroke-width: 1.5; }
+.th-tl .th-healthdot { fill: var(--text-2, var(--text)); }
+.th-tl .th-mark { font-size: 11px; fill: var(--text-2, var(--muted)); cursor: default; }
+.th-tl .th-mark-shape { fill: var(--text-2, var(--muted)); }
+.th-tl .th-mark-x { stroke: var(--negative); stroke-width: 2; }
+.th-tl .th-cat-pending { fill: var(--accent); }
+.th-tl .th-cat-miss, .th-tl .th-cat-late { fill: var(--negative); }
+.th-tl .th-cat-hit { fill: var(--positive); }
+.th-tl .th-cat-dropped { fill: var(--muted); }
+.th-tl .th-lane { opacity: .55; }
+.th-tl .th-dot { stroke: var(--panel); stroke-width: 1; }
+.th-tl .th-ring { fill: var(--panel); stroke-width: 2; }
+.th-tl .th-ring.th-intact { stroke: var(--positive); }
+.th-tl .th-ring.th-watch { stroke: var(--accent); }
+.th-tl .th-ring.th-weakened { stroke: var(--caution); }
+.th-tl .th-ring.th-broken { stroke: var(--negative); }
+.th-tl .th-ring.th-unknown { stroke: var(--muted); }
+.th-tl .th-sq { stroke: var(--text); stroke-width: 1; }
+
+.th-odds rect.th-bull, .th-key.th-bull { fill: var(--positive); background: var(--positive); }
+.th-odds rect.th-base, .th-key.th-base { fill: var(--muted); background: var(--muted); }
+.th-odds rect.th-bear, .th-key.th-bear { fill: var(--negative); background: var(--negative); }
+.th-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-left: 6px; }
+
+.th-table td, .th-table th { vertical-align: top; text-align: left; }
+.th-moved td { background: var(--row-hover, transparent); }
+.th-diff { margin-top: 4px; }
+.th-diff p { margin: 2px 0; padding: 2px 6px; border-radius: 4px; white-space: pre-wrap; }
+.th-add { background: var(--positive-soft); }
+.th-del { background: var(--negative-soft); text-decoration: line-through; text-decoration-color: var(--muted); }
+.th-pending { border-color: var(--accent); }
+
+.th-toolbar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: var(--s3, 12px); }
+.th-toolbar .segmented { flex-wrap: wrap; }
+.th-board .th-cell { text-align: center; width: 1%; white-space: nowrap; }
+.th-board th[scope="row"] { white-space: nowrap; }
+.nowrap { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .th-summary { grid-template-columns: 1fr 1fr; }
+}
+
+/* Grid and flex parents size to content by default; keep the wide chart and tables inside their
+   own scrollers instead of widening the page on phones. */
+#thesisTimelineBox, .th-wrap, .th-wrap > *, .th-grid > * { min-width: 0; max-width: 100%; }
+.th-panel .table-wrap { overflow-x: auto; }
+.th-panel .panel-head label { max-width: 100%; min-width: 0; }
+.th-panel select { max-width: 100%; }
+#thFilter { width: 14em; }
