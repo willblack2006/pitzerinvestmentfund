@@ -10,7 +10,8 @@
     "start": "node server.js",
     "test": "node --test test/*.test.js",
     "test:live": "LIVE=1 node --test test/*.test.js",
-    "eval:ask": "node scripts/eval-ask.js"
+    "eval:ask": "node scripts/eval-ask.js",
+    "eval:agents": "node scripts/eval-agents.js"
   },
   "keywords": [],
   "author": "",
