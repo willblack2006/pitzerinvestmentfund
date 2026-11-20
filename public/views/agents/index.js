@@ -16,6 +16,8 @@ export const TAB_FILES = [
   "teams.js",
   "stats.js",
   "memory.js",
+  "gallery.js",
+  "builder.js",
 ];
 
 export async function loadTabs() {

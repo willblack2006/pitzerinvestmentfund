@@ -15,4 +15,5 @@ export const ROUTE_FILES = [
   "teams.js",
   "observability.js",
   "memory.js",
+  "agentBuilder.js",
 ];
