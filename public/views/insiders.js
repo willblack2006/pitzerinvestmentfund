@@ -68,8 +68,8 @@ export function insiderShares(t) {
 
 export const MARKET_TABS = [
   ["#/macro", "Macro backdrop", "Backdrop"], ["#/calendar", "Calendar", "Backdrop"],
-  ["#/insiders", "Insider activity", "Signals"], ["#/short-interest", "Short interest", "Signals"], ["#/13f", "13F tracker", "Signals"], ["#/congress", "Congress trades", "Signals"],
-  ["#/index-radar", "Index radar", "Tools"], ["#/backtest", "Backtester", "Tools"],
+  ["#/insiders", "Insider activity", "Signals"], ["#/short-interest", "Short interest", "Signals"], ["#/13f", "13F tracker", "Signals"], ["#/congress", "Congress trades", "Signals"], ["#/signals/matrix", "Signal matrix", "Signals"],
+  ["#/index-radar", "Index radar", "Tools"], ["#/backtest", "Backtester", "Tools"], ["#/compare", "Compare", "Tools"],
 ];
 
 const state = { data: null, symbol: "", signalsOnly: true };
