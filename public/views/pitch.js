@@ -269,6 +269,7 @@ export async function mount(container, params) {
 
   if (!isNew && el("fitBody")) loadFit(p);
   if (!isNew && can("ai")) loadRedTeam(p);
+  if (!isNew && can("ai")) import("./pitch/committee.js").then((m) => m.mount(container, p)).catch((err) => console.warn("[pitch] committee panel", err)); // WS6
   el("primerBtn")?.addEventListener("click", () => draftWithAi(el("pitchForm")));
   el("editBtn")?.addEventListener("click", () => { container.dataset.editing = String(p.id); mount(container, params); });
   el("cancelEdit")?.addEventListener("click", () => { delete container.dataset.editing; mount(container, params); });

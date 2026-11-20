@@ -178,7 +178,8 @@ export async function mount(container, params = {}) {
     container.innerHTML = pageHead("Agents") + `<div class="toolbar">${lockedHint("Sign in to use the research agents.", "ai")}</div>`;
     return;
   }
-  if (params.id) return mountRun(container, params.id);
+  // A run's page is its trace (WS8); the old run view stays as a fallback.
+  if (params.id) { try { return await (await import("./agents/trace.js")).mount(container, params); } catch { return mountRun(container, params.id); } }
   const { key: wanted, query } = splitTab(params.tab);
   const [{ loadTabs }, links] = await Promise.all([import("./agents/index.js"), registeredSectionLinks()]);
   const tabs = await loadTabs();

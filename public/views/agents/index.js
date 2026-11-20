@@ -13,6 +13,8 @@ export const TAB_FILES = [
   "approvals.js",
   "activity.js",
   "events.js",
+  "teams.js",
+  "stats.js",
 ];
 
 export async function loadTabs() {
