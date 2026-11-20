@@ -199,10 +199,15 @@ test("feed: post stores, publishes SSE to members, lists newest first with filte
 // ---- memory ----
 
 test("memory: remember/recall by symbol, agent, member and fund; supersede and retract", () => {
+  // WS5 semantics (lib/agents/memory.js): an agent's fact waits for approval ('proposed'); recall
+  // ranks by query overlap instead of filtering (fuller cases in test/memory.test.js).
   const m = member("Mem");
   const agentId = db.prepare("SELECT id FROM agents WHERE workflow = 'thesis_check'").get().id;
-  const f = memory.remember({ scope: "symbol", scopeKey: "nvda", kind: "fact", text: "Data center is 88% of revenue", sourceUrl: "https://sec.gov/x", agentId });
-  memory.remember({ scope: "symbol", scopeKey: "MU", kind: "fact", text: "Other company" });
+  const proposed = memory.remember({ scope: "symbol", scopeKey: "nvda", kind: "fact", text: "Data center is 88% of revenue", sourceUrl: "https://sec.gov/x", agentId });
+  assert.equal(db.prepare("SELECT status FROM agent_memory WHERE id = ?").get(proposed).status, "proposed");
+  db.prepare("UPDATE agent_memory SET status = 'active' WHERE id = ?").run(proposed);
+  const f = proposed;
+  memory.remember({ scope: "symbol", scopeKey: "MU", kind: "fact", text: "Other company", memberId: m });
   memory.remember({ scope: "fund", kind: "decision", text: "Max 10% per position", memberId: m });
   memory.remember({ scope: "member", scopeKey: m, kind: "preference", text: "Likes short briefs", memberId: m });
   memory.remember({ scope: "symbol", scopeKey: "NVDA", kind: "observation", text: "old", expiresAt: "2000-01-01T00:00:00Z" });
@@ -211,15 +216,13 @@ test("memory: remember/recall by symbol, agent, member and fund; supersede and r
   assert.equal(got.find((r) => r.id === f).by.name, "Thesis check");
   assert.equal(memory.recall({ symbol: "NVDA", memberId: m }).length, 3);
   assert.equal(memory.recall({ symbol: "NVDA", kinds: ["fact"] }).length, 1);
-  assert.equal(memory.recall({ symbol: "NVDA", query: "88%" }).length, 1, "LIKE wildcards stripped from the query");
-  assert.equal(memory.recall({ symbol: "NVDA", query: "%" }).length, 2, "a bare wildcard matches like an empty query");
-  assert.equal(memory.recall({ symbol: "NVDA", query: "data center" }).length, 1);
+  assert.equal(memory.recall({ symbol: "NVDA", query: "data center" })[0].id, f, "query overlap ranks first");
   const f2 = memory.supersede(f, { text: "Data center is 90% of revenue" });
   assert.equal(db.prepare("SELECT status FROM agent_memory WHERE id = ?").get(f).status, "superseded");
   assert.equal(memory.dossier("nvda").facts[0].id, f2);
   assert.equal(memory.retract(f2, m), true);
   assert.equal(memory.dossier("NVDA").facts.length, 0);
-  assert.throws(() => memory.remember({ scope: "symbol", kind: "fact", text: "no key" }), /scopeKey/);
+  assert.throws(() => memory.remember({ scope: "symbol", kind: "fact", text: "no key" }), /ticker/);
   assert.throws(() => memory.remember({ scope: "fund", kind: "gossip", text: "x" }));
 });
 

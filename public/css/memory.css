@@ -1,0 +1,57 @@
+/* Shared memory (WS5): Memory page / Agents tab, Research dossier card, run "Why?" panel. */
+.mem-wrap { display: grid; gap: var(--sp-3); min-width: 0; }
+.mem-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.mem-seg { margin-top: 0; }
+.mem-search { position: relative; flex: 1 1 220px; display: flex; align-items: center; }
+.mem-search svg { position: absolute; left: 10px; color: var(--muted); pointer-events: none; }
+.mem-search input { width: 100%; padding-left: 32px; }
+.mem-ticker input { width: 7.5em; text-transform: uppercase; }
+.mem-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.mem-filters .chip.is-active, .mem-filters .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); color: var(--text); }
+.mem-tickers { margin-top: var(--sp-2); }
+.mem-explain { max-width: 70ch; }
+.mem-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.mem-item, .mem-msg { padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-1); min-width: 0; }
+.mem-item.is-pinned { border-left: 3px solid var(--accent); }
+.mem-item.is-retracted .mem-text { text-decoration: line-through; color: var(--muted); }
+.mem-item.is-proposed { border-style: dashed; }
+.mem-item.is-focus { box-shadow: 0 0 0 2px var(--focus); }
+.mem-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--sp-2); }
+.mem-id { margin-left: auto; font-variant-numeric: tabular-nums; }
+.mem-text { margin: 6px 0 4px; line-height: 1.5; overflow-wrap: anywhere; text-wrap: pretty; }
+.mem-meta { margin: 0; display: flex; flex-wrap: wrap; gap: 0 4px; align-items: center; }
+.mem-by { display: inline-flex; align-items: center; gap: 4px; }
+.mem-pin { color: var(--accent); display: inline-flex; }
+.mem-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.mem-actions .btn { padding-inline: 8px; }
+.mem-badge-pred { background: var(--surface-3); }
+.mem-badge-pref { background: var(--accent-bg); }
+.mem-route { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; font-weight: 600; }
+.mem-topic { padding: 1px 8px; font-size: var(--fs-xs); }
+.mem-answer { margin: 4px 0; padding: 6px 10px; border-radius: var(--r-md); background: var(--surface-2); line-height: 1.5; }
+.mem-edit textarea, .mem-form textarea { width: 100%; min-height: 4.5em; }
+.mem-form { display: grid; gap: var(--sp-3); max-width: 720px; }
+.mem-form h3 { margin: 0; }
+.mem-form-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.mem-form-row .field-block { flex: 1 1 160px; }
+.mem-history ol { margin: 4px 0 0; padding-left: 1.2em; }
+.mem-dossier p { margin: 0 0 var(--sp-2); line-height: 1.55; }
+.mem-points { margin: 0 0 var(--sp-2); padding-left: 1.2em; display: grid; gap: 4px; }
+.mem-ref { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; padding: 0 5px; border-radius: var(--r-full); background: var(--surface-3); text-decoration: none; }
+.mem-dossier-panel h3 { margin-bottom: var(--sp-2); }
+/* Research → Overview card */
+.dossier-card { margin: 12px var(--gutter) 0; }
+.dossier-card .panel-head h3 { display: flex; align-items: center; gap: 6px; }
+.dossier-card .mem-list { margin-top: var(--sp-2); }
+.dossier-card details summary { cursor: pointer; }
+/* Run page "Why?" */
+.mem-why { margin-top: var(--sp-4); }
+.mem-why h4 { margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-md); }
+@media (max-width: 600px) {
+  .mem-item, .mem-msg { padding: var(--sp-3); }
+  .mem-ticker input { width: 6em; }
+  .mem-id { margin-left: 0; }
+}
+.mem-form[hidden] { display: none; }
+.mem-filters .chip[aria-pressed="true"] .muted { color: inherit; opacity: 0.8; }
+.mem-form .field-block > select { display: block; margin-top: 4px; }

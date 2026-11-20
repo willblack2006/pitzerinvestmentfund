@@ -564,6 +564,10 @@ export async function mount(container, params) {
       box.className = "overview-notes";
       body.querySelector(".research-layout")?.before(box);
       TAB_LOADERS.notes().then((m) => box.isConnected && m.render(box, { symbol, compact: true }));
+      // What the fund's agents and members already know about this ticker (shared memory).
+      const mem = document.createElement("section");
+      box.after(mem);
+      import("./research/dossierCard.js").then((m) => mem.isConnected && m.render(mem, { symbol })).catch(() => mem.remove());
     }
   }
   else if (tab === "thesis") renderThesisTab(body, tctx);
