@@ -1,0 +1,62 @@
+{
+  "slug": "competitor-watch",
+  "name": "Competitor watch",
+  "icon": "binoculars",
+  "description": "Weekly: reads peers' news and filings and says what it means for each holding.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "schedule",
+        "preset": "weekly_mon",
+        "tz": "America/New_York"
+      },
+      {
+        "type": "manual"
+      }
+    ],
+    "steps": [
+      {
+        "id": "d1",
+        "type": "tool",
+        "tool": "get_comps",
+        "args": {
+          "symbol": "$symbol"
+        }
+      },
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "cheap",
+        "output": "list",
+        "maxSteps": 6,
+        "tools": [
+          "get_news",
+          "get_recent_filings",
+          "get_supply_chain"
+        ],
+        "recall": true,
+        "instructions": "Look at the main peers in the comps table. List up to three things peers announced or filed in the last week that matter for this holding (pricing, share, capacity, guidance), with the impact on the fund's thesis. If nothing mattered, return an empty list and say so."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "nonempty"
+      },
+      {
+        "type": "memory",
+        "scope": "symbol",
+        "kind": "observation",
+        "when": "nonempty"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.06,
+      "perMonthUsd": 3
+    }
+  }
+}

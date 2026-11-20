@@ -1,0 +1,61 @@
+{
+  "slug": "tripwire-watcher",
+  "name": "Tripwire watcher",
+  "icon": "alert-triangle",
+  "description": "When a holding is within 5% of an exit tripwire, writes a short note on what is driving it so the team can decide before it trips.",
+  "spec": {
+    "v": 1,
+    "scope": {
+      "universe": "holdings"
+    },
+    "triggers": [
+      {
+        "type": "schedule",
+        "preset": "close",
+        "tz": "America/New_York"
+      },
+      {
+        "type": "event",
+        "on": "tripwire"
+      }
+    ],
+    "conditions": [
+      {
+        "metric": "fund.tripwireDistancePct",
+        "op": "<=",
+        "value": 5
+      }
+    ],
+    "steps": [
+      {
+        "id": "a1",
+        "type": "ai",
+        "tier": "cheap",
+        "output": "verdict",
+        "maxSteps": 4,
+        "tools": [
+          "get_research_overview",
+          "get_news",
+          "get_price_history"
+        ],
+        "instructions": "The price is close to an exit tripwire the fund wrote down. Explain what is driving the move (news, sector, market) and whether the reason the tripwire was set looks like it is happening. Verdict: watch or weakened; broken only if the tripwire's reason is clearly happening."
+      }
+    ],
+    "outputs": [
+      {
+        "type": "feed",
+        "when": "changed"
+      },
+      {
+        "type": "notify",
+        "who": "team",
+        "tier": "inbox",
+        "when": "changed"
+      }
+    ],
+    "budget": {
+      "perRunUsd": 0.04,
+      "perMonthUsd": 2
+    }
+  }
+}
