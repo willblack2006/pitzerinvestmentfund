@@ -154,7 +154,7 @@ async function mountRun(container, id) {
 // (home, ask, briefs, desk, approvals, activity, events, plus any other workstream's tab). Links
 // to other agent-section pages (Feed, Theses, Cockpit) show once their route is registered.
 
-const SECTION_LINKS = [["feed", "#/feed", "Feed", 15], ["theses", "#/theses", "Theses", 45], ["cockpit", "#/cockpit", "Cockpit", 95]];
+const SECTION_LINKS = [["feed", "#/feed", "Feed", 15], ["theses", "#/theses", "Theses", 45], ["memory", "#/memory", "Memory", 50], ["cockpit", "#/cockpit", "Cockpit", 95]];
 let sectionLinksCache = null;
 async function registeredSectionLinks() {
   if (sectionLinksCache) return sectionLinksCache;

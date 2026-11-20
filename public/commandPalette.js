@@ -23,6 +23,7 @@ const PAGES = [
   ["Market: Calendar", "#/calendar", "earnings"],
   ["Settings", "#/settings", "policy members"],
   ["Notes", "#/notes", ""],
+  ["Portfolio: Cockpit", "#/cockpit", "attribution dashboard"],
 ];
 // Agents (members with AI access): pages and actions (WS11).
 const AGENT_PAGES = [
@@ -32,6 +33,9 @@ const AGENT_PAGES = [
   ["Agents: Ask PIF conversations", "#/agents/ask", "chat history threads"],
   ["Agents: Approvals", "#/agents/approvals", "proposals"],
   ["Agents: Activity and cost", "#/agents/activity", "runs spend"],
+  ["Theses", "#/theses", "thesis pillars tracking"],
+  ["Shared memory", "#/memory", "dossier notes remembered"],
+  ["AI spending (admins)", "#/ai-spend", "budget cost cap"],
 ];
 
 // Agents, runs and conversations matching the text (fetched as you type, cached per query).
