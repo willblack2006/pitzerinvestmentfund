@@ -51,7 +51,7 @@ export async function mount(container) {
     const sum = learnSummary(done, read);
     const openId = sum.next?.id;
     container.innerHTML = `
-      ${pageHead("Start here", "Seven short lessons, in the order a new analyst needs them. The checks fill in as you do things in the app.")}
+      ${pageHead("Start here", "Short lessons, in the order a new analyst needs them. The checks fill in as you do things in the app.")}
       <div class="page-pad narrow learn">
         <div class="panel learn-progress">
           <div class="learn-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${sum.total}" aria-valuenow="${sum.count}" aria-label="Progress"><span style="width:${sum.pct}%"></span></div>

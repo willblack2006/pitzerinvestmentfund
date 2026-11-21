@@ -1,5 +1,6 @@
 // Pure-logic tests for features #21-23 (paper trading, government contracts, congressional
 // trades). Kept apart from unit.test.js only to avoid edit collisions with parallel work.
+require("./tmpdb"); // before any lib/ module loads db.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
