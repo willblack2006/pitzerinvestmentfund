@@ -123,7 +123,9 @@ function accountMenuHtml() {
   return `<div class="account-menu-body" data-account-menu>
     ${who}
     ${m ? link("user", "My profile", "#/members/me") + link("doc", "My notes", "#/notes") + link("inbox", "Notifications", "#/inbox") : ""}
-    ${m && (m.canUseAi || m.isAdmin) ? link("flask", "Research agents", "#/agents") : ""}
+    ${m && (m.canUseAi || m.isAdmin) ? link("flask", "Agents", "#/agents") : ""}
+    ${m && (m.canUseAi || m.isAdmin) ? link("target", "Theses", "#/theses") : ""}
+    ${m?.isAdmin ? link("percent", "AI spending", "#/ai-spend") : ""}
     ${act("chat", "Club chat", "chat")}
     ${m ? link("flag", "Start here", "#/learn") : ""}
     ${link("help", "Glossary", "#/glossary")}
@@ -230,7 +232,9 @@ function connectLive() {
     if (FUND_PAGES.has(section) && !busy) router.rerender();
   });
   // Chat and presence (members only) are handled in chat.js.
-  for (const type of ["hello", "notify", "presence", "chat.message", "chat.edited", "chat.deleted", "chat.reaction", "chat.mention"]) {
+  for (const type of ["hello", "notify", "presence", "chat.message", "chat.edited", "chat.deleted", "chat.reaction", "chat.mention",
+    // Team feed (WS7): new items, comments, reactions, agents answering, presence, runs ending.
+    "feed", "feed.comment", "feed.comment_deleted", "feed.reaction", "feed.agent_working", "feed.presence", "feed.removed", "run_finished"]) {
     live.addEventListener(type, (e) => window.dispatchEvent(new CustomEvent("pif:live", { detail: { type, data: JSON.parse(e.data) } })));
   }
 }

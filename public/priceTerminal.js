@@ -14,6 +14,7 @@ import { togglePopover } from "./ui/popover.js";
 import { pickList } from "./ui/pickList.js";
 import { term } from "./glossary.js";
 import * as I from "./indicators.js";
+import { LAYERS, defaultLayers, loadAnnotations, flatten, bucket, toMarkers, priceLevels, eventCardHtml, eventListHtml } from "./viz/markers.js";
 
 const FRAMES = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y"];
 const MORE_FRAMES = [["3M", "3 months"], ["2Y", "2 years"], ["MAX", "All history"]];
@@ -139,6 +140,7 @@ export function priceTerminalHtml(symbol) {
         <button type="button" class="btn btn-ghost btn-sm ct-menu-btn" id="ctDisplay" aria-haspopup="dialog" aria-expanded="false">Display${chev()}</button>
         <button type="button" class="btn btn-ghost btn-sm ct-menu-btn" id="ctIndBtn" aria-haspopup="dialog" aria-expanded="false">${icon("plus", { size: 14 })}Indicators</button>
         <button type="button" class="btn btn-ghost btn-sm ct-menu-btn" id="ctCmpBtn" aria-haspopup="dialog" aria-expanded="false">${icon("plus", { size: 14 })}Compare</button>
+        <button type="button" class="btn btn-ghost btn-sm ct-menu-btn" id="ctLayers" aria-haspopup="dialog" aria-expanded="false">Events<span class="ct-layer-count" id="ctLayerCount"></span>${chev()}</button>
         <span class="ct-toolbar-end">
           <button type="button" class="ct-icon-btn" id="ctMax" aria-pressed="false" aria-label="Full screen" title="Full screen">${icon("maximize")}</button>
           <a class="ct-icon-btn" href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}" target="_blank" rel="noopener" aria-label="Open on TradingView (opens in a new tab)" title="Open on TradingView">${icon("external-link")}</a>
@@ -158,8 +160,14 @@ export function priceTerminalHtml(symbol) {
             <button type="button" class="btn btn-ghost btn-sm" id="ctFloatDel">${icon("trash", { size: 14 })}Delete</button>
           </div>
           <div class="ct-status muted small" id="ctStatus"></div>
+          <div class="rv-evcard hidden" id="ctEvCard" aria-hidden="true"></div>
         </div>
       </div>
+      <div class="rv-evkey" id="ctEvKey" aria-hidden="true"></div>
+      <details class="rv-events" id="ctEvents">
+        <summary>Events on this chart <span class="muted small" id="ctEvSummary"></span></summary>
+        <div id="ctEvList" class="rv-evscroll"></div>
+      </details>
       <p class="ct-hint small" id="ctHint" aria-live="polite"></p>
       <p id="ctHelp" class="sr-only">Use left and right arrow keys to move between bars, plus and minus to zoom, Home and End to jump.</p>
       <p class="sr-only" aria-live="polite" id="ctLive"></p>
@@ -181,10 +189,12 @@ export async function mountPriceTerminal(ctx) {
     selected: -1,
     pending: null,
     drawings: (getPref("chartDrawings") || {})[ctx.symbol] || [],
+    layers: { ...defaultLayers(), ...(saved?.layers || {}), ...(saved && saved.marks === false && !saved.layers ? { trades: false, levels: false } : {}) },
   };
+  let ann = null, annPending = null; // event layers (loaded once per symbol)
   let view = null; // the live chart and its data
 
-  const persist = () => setPref("chartSettings", { frame: state.frame, type: state.type, log: state.log, marks: state.marks, indicators: state.indicators });
+  const persist = () => setPref("chartSettings", { frame: state.frame, type: state.type, log: state.log, marks: state.marks, indicators: state.indicators, layers: state.layers });
   const saveDrawings = () => {
     const all = { ...(getPref("chartDrawings") || {}) };
     if (state.drawings.length) all[ctx.symbol] = state.drawings; else delete all[ctx.symbol];
@@ -439,6 +449,15 @@ export async function mountPriceTerminal(ctx) {
     togglePopover({ anchor, content: box, label: "Compare with other tickers", width: 360 });
   }
 
+  // How many events each layer has in total (shown in the Events menu).
+  const layerCount = (k) => {
+    const L = ann?.layers;
+    if (!L) return null;
+    if (k === "levels") return null;
+    if (k === "scenarios") return ann.scenarios ? [ann.scenarios.bull, ann.scenarios.base, ann.scenarios.bear].filter(Boolean).length : 0;
+    return (L[k] || []).length;
+  };
+
   // ---- Wiring ----
   panel.querySelectorAll("[data-frame]").forEach((b) => b.addEventListener("click", () => { state.frame = b.dataset.frame; persist(); draw(); }));
   $("ctMore").addEventListener("click", () => openMenu($("ctMore"), "More timeframes", () => MORE_FRAMES.map(([f, sub]) => ({
@@ -449,8 +468,12 @@ export async function mountPriceTerminal(ctx) {
   }))));
   $("ctDisplay").addEventListener("click", () => openMenu($("ctDisplay"), "Display", () => [
     { label: "Log scale", sub: "Equal % moves look the same size", pressed: state.log, onSelect: () => { state.log = !state.log; persist(); draw(); } },
-    { label: "Fund marks", sub: "Cost basis, fund buys and sells, target, alerts", pressed: state.marks, onSelect: () => { state.marks = !state.marks; persist(); draw(); } },
+    { label: "Events and levels", sub: "Earnings, filings, insider trades, pitches, trades, agent briefs (pick which in Events)", pressed: state.marks, onSelect: () => { state.marks = !state.marks; persist(); draw(); } },
   ], { keepOpen: true, width: 280 }));
+  $("ctLayers").addEventListener("click", () => openMenu($("ctLayers"), "Events on the chart", () => LAYERS.map(([k, label, sub]) => ({
+    label: `${label}${layerCount(k) != null ? ` (${layerCount(k)})` : ""}`, sub, pressed: state.marks && state.layers[k] !== false,
+    onSelect: () => { if (!state.marks) { state.marks = true; } else state.layers[k] = state.layers[k] === false; persist(); draw(); },
+  })), { keepOpen: true, width: 320 }));
   $("ctIndBtn").addEventListener("click", openIndicators);
   $("ctCmpBtn").addEventListener("click", openCompare);
   $("ctChips").addEventListener("click", (e) => {
@@ -536,6 +559,8 @@ export async function mountPriceTerminal(ctx) {
     const [LW] = await Promise.all([ensureLW()]);
     try {
       [main, ...cmps] = await Promise.all([loadBars(ctx.symbol, state.frame), ...state.compare.map((s) => loadBars(s, state.frame).catch(() => ({ bars: [], error: "not found" })))]);
+      // Events arrive separately (SEC, Form 4, Yahoo); draw prices first and add them when in.
+      if (!ann && !annPending) annPending = loadAnnotations(ctx.symbol).then((a) => { ann = a; if ($("ctChart")) draw(); });
     } catch (err) {
       status.textContent = `Couldn't load prices: ${err.message}`;
       return;
@@ -666,21 +691,33 @@ export async function mountPriceTerminal(ctx) {
     // Percent (compare) and log modes are for the price pane only, not RSI/MACD/volume.
     chart.priceScale("right", 0).applyOptions({ mode: percent ? LW.PriceScaleMode.Percentage : state.log ? LW.PriceScaleMode.Logarithmic : LW.PriceScaleMode.Normal });
 
-    // The fund's own marks.
-    if (state.marks && !percent) {
-      const pl = (price, title, color) => Number.isFinite(price) && price > 0 && series.createPriceLine({ price, color, lineWidth: 1, lineStyle: LW.LineStyle.Dashed, axisLabelVisible: true, title });
-      pl(ctx.position?.avgCost, "Avg cost", css("--s3"));
-      pl(ctx.thesis?.targetPrice, "Target", css("--s4"));
-      for (const a of ctx.priceAlerts || []) pl(a.price, `Alert ${a.direction}`, css("--warn"));
-      const markers = [];
-      for (const tr of ctx.trades || []) {
-        const bar = bars.find((b) => b.date >= tr.date);
-        if (!bar || (intraday && bar.date !== tr.date)) continue;
-        const buy = tr.type === "buy";
-        markers.push({ time: bar.t, position: buy ? "belowBar" : "aboveBar", shape: buy ? "arrowUp" : "arrowDown", color: buy ? up : down, text: `${buy ? "Buy" : "Sell"} ${+Number(tr.shares).toFixed(2)}` });
-      }
-      if (markers.length) LW.createSeriesMarkers(series, markers.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0)));
+    // The fund's own marks and the event layers (viz/markers.js).
+    const colors = { up, down, warn: css("--warn"), muted: css("--muted"), s1: css("--s1"), s2: css("--s2"), s3: css("--s3"), s4: css("--s4"), s5: css("--s5") };
+    const layers = state.marks ? state.layers : Object.fromEntries(LAYERS.map(([k]) => [k, false]));
+    // Without the annotations endpoint (offline, older server), the fund's trades still show.
+    const annOrLocal = ann?.layers ? ann : { layers: { trades: (ctx.trades || []).map((t) => ({ date: t.date, side: t.type, shares: Number(t.shares), price: Number(t.price) })) } };
+    const events = flatten(annOrLocal, layers);
+    const byBar = percent ? new Map() : bucket(events, bars, { intraday });
+    if (!percent) {
+      const styles = { dashed: LW.LineStyle.Dashed, dotted: LW.LineStyle.Dotted, solid: LW.LineStyle.Solid };
+      for (const l of priceLevels(annOrLocal, layers, ctx, colors)) series.createPriceLine({ price: l.price, color: l.color, lineWidth: 1, lineStyle: styles[l.style], axisLabelVisible: true, title: l.title });
+      const markers = toMarkers(byBar, bars, colors);
+      if (markers.length) LW.createSeriesMarkers(series, markers);
     }
+    const evCard = $("ctEvCard");
+    const showEvents = (i) => {
+      const evs = i == null ? null : byBar.get(i);
+      if (!evs) { evCard.classList.add("hidden"); return; }
+      evCard.innerHTML = eventCardHtml(bars[i].date, evs);
+      evCard.classList.remove("hidden");
+    };
+    const shownLayers = LAYERS.filter(([k]) => events.some((e) => e.layer === k));
+    $("ctEvKey").innerHTML = shownLayers.map(([k, label]) => `<span class="rv-key rv-key-${k}"><i></i>${esc(label)}</span>`).join("");
+    const inWindow = events.filter((e) => e.date >= bars[0].date && (e.date <= bars[bars.length - 1].date || e.upcoming));
+    $("ctEvSummary").textContent = percent ? "(hidden while comparing)" : inWindow.length ? `(${inWindow.length})` : "";
+    $("ctEvList").innerHTML = percent ? `<p class="muted small">Events are hidden while comparing tickers.</p>` : eventListHtml(events, { from: bars[0].date, to: bars[bars.length - 1].date });
+    const n = ann?.layers ? LAYERS.filter(([k]) => state.marks && layers[k] !== false).length : null;
+    $("ctLayerCount").textContent = n == null ? "" : ` ${n}/${LAYERS.length}`;
 
     // ---- Drawings (one primitive draws them all) ----
     const epochs = bars.map((b) => b.time);
@@ -887,6 +924,7 @@ export async function mountPriceTerminal(ctx) {
     chart.subscribeCrosshairMove((p) => {
       const i = p.time != null ? byTime.get(p.time) : undefined;
       legend.innerHTML = legendHtml(i ?? bars.length - 1);
+      showEvents(i);
       if (state.pending && p.point) {
         const pt = pointFromParam(p);
         if (pt) { state.pending.p[1] = pt; requestUpdate(); }
@@ -900,10 +938,12 @@ export async function mountPriceTerminal(ctx) {
       const b = bars[cursor];
       chart.setCrosshairPosition(b.close, b.t, series);
       legend.innerHTML = legendHtml(cursor);
+      showEvents(cursor);
       const vr = ts.getVisibleLogicalRange();
       if (vr && (cursor < vr.from || cursor > vr.to)) ts.scrollToPosition(cursor - (bars.length - 1) + (vr.to - vr.from) / 2, false);
       const prev = all[off + cursor - 1];
-      announce(`${intraday ? new Date(b.time * 1000).toLocaleString() : b.date}: close ${fmtUSD(b.close)}${state.type === "line" || state.type === "area" ? "" : `, open ${fmtUSD(b.open)}, high ${fmtUSD(b.high)}, low ${fmtUSD(b.low)}`}${prev ? `, ${b.close >= prev.close ? "up" : "down"} ${Math.abs((b.close / prev.close - 1) * 100).toFixed(2)}%` : ""}.`);
+      const evs = byBar.get(cursor);
+      announce(`${intraday ? new Date(b.time * 1000).toLocaleString() : b.date}: close ${fmtUSD(b.close)}${state.type === "line" || state.type === "area" ? "" : `, open ${fmtUSD(b.open)}, high ${fmtUSD(b.high)}, low ${fmtUSD(b.low)}`}${prev ? `, ${b.close >= prev.close ? "up" : "down"} ${Math.abs((b.close / prev.close - 1) * 100).toFixed(2)}%` : ""}.${evs ? ` Events: ${evs.map((e) => e.title).join("; ")}.` : ""}`);
     };
     const zoom = (f) => {
       const vr = ts.getVisibleLogicalRange();
@@ -920,7 +960,8 @@ export async function mountPriceTerminal(ctx) {
       else if (k === "-" || k === "_") { e.preventDefault(); zoom(1.4); }
       else if ((k === "Delete" || k === "Backspace") && state.selected >= 0) { e.preventDefault(); deleteSelected(); }
     };
-    host.onblur = () => chart.clearCrosshairPosition();
+    host.onblur = () => { chart.clearCrosshairPosition(); showEvents(null); };
+    host.onmouseleave = () => showEvents(null);
 
     // ---- Text alternative + data table ----
     const shown = bars;

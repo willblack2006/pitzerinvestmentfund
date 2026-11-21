@@ -93,6 +93,23 @@ export const LESSONS = [
     actions: [{ label: "Vote on an open pitch with a comment", href: "#/pitches", done: "vote" }, { label: "Read the track record", href: "#/track-record" }],
     ask: "How should I judge whether a pitch was right, when it only played out over a few months?",
   },
+  {
+    id: "agents", title: "Set up your first agent", minutes: 5,
+    intro: "An agent is a job that keeps checking something so you don't have to: a thesis, a filing, a price level. Start small and let the team see what it finds.",
+    points: [
+      "Pick one question you'd otherwise check by hand, such as \"did anything in NVDA's 8-Ks change my thesis?\" Start from a template rather than a blank page.",
+      "Choose the trigger: a schedule, or an event like a new filing or a big move. Rule-only steps cost nothing; add an AI step only where judgment is needed, and keep it to one.",
+      "Have it post to the team feed only when something changed. Agents read and suggest; any change to the app still waits for a member's approval.",
+      "Follow agents your teammates built, and reply on the feed. Mention an agent with @ to ask it a follow-up in the same thread.",
+    ],
+    terms: ["agent", "agentTrigger", "sharedMemory", "thesis", "catalyst"],
+    actions: [
+      { label: "Create an agent from a template on the Agents page", href: "#/agents", done: "agentCreated" },
+      { label: "Follow an agent a teammate made", href: "#/agents", done: "agentFollowed" },
+      { label: "Comment on an item in the team feed", href: "#/agents", done: "feedComment" },
+    ],
+    ask: "Suggest three simple agents a student fund could set up to watch our current holdings' theses, and what each should check.",
+  },
 ];
 
 export const ACTION_KEYS = LESSONS.flatMap((l) => l.actions.map((a) => a.done).filter(Boolean));
@@ -133,6 +150,10 @@ export const QUIZ = {
   pitch: [
     { q: "Which part of a pitch should you write first?", o: ["The bull case", "The bear case and risks", "The price target"], a: 1, why: "Starting with what could go wrong guards against falling in love with the idea and shows how much you could lose." },
     { q: "Which catalyst is the most useful in a pitch?", o: ["\"The company is great\"", "A dated event, such as an earnings report or a product launch", "\"The market will realize it eventually\""], a: 1, why: "A catalyst is a specific event that could change minds. Without one, a cheap stock can stay cheap for years." },
+  ],
+  agents: [
+    { q: "You want to know when a holding files an 8-K. Which agent setup is cheapest?", o: ["An AI step that reads the news every hour", "An event trigger on new 8-K filings with a rule check, AI only if needed", "Asking Ask PIF every morning"], a: 1, why: "Event triggers and rule steps cost nothing. Save the AI step for the part that needs judgment, after the rule says something happened." },
+    { q: "An agent thinks a pillar of the thesis is broken. What happens?", o: ["It sells the stock", "It posts to the feed and proposes a status change for a member to approve", "Nothing, agents can't say that"], a: 1, why: "Agents only read and suggest. A change to a thesis, a tripwire or a watchlist waits in the approval queue, and agents never trade." },
   ],
   vote: [
     { q: "A pitch you voted for is up 12% in two months. What does that prove?", o: ["The process is good", "Very little: one call is a small sample", "The benchmark was wrong"], a: 1, why: "Judge a process over many calls. Compare each result with the benchmark over the same days, not with zero." },

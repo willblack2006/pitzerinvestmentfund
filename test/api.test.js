@@ -752,7 +752,7 @@ test("symbol search, chart bars and red-flag endpoints degrade cleanly", async (
   const cookie = await s.ensureAdmin();
   const saved = await s.api("/api/prefs", { method: "PUT", member: cookie, body: { chartSettings: { frame: "nope", type: "candles", indicators: [{ id: "rsi", params: { n: 9999 } }, { id: "evil" }] }, chartDrawings: { hsy: [{ t: "trend", p: [{ time: 1, price: 2 }, { time: 3, price: 4 }] }, { t: "script", p: [] }] } } });
   assert.equal(saved.status, 200);
-  assert.deepEqual(saved.body.chartSettings, { frame: "1Y", type: "candles", log: false, marks: true, indicators: [{ id: "rsi", params: { n: 400 } }] });
+  assert.deepEqual(saved.body.chartSettings, { frame: "1Y", type: "candles", log: false, marks: true, indicators: [{ id: "rsi", params: { n: 400 } }], layers: {} });
   assert.deepEqual(saved.body.chartDrawings, { HSY: [{ t: "trend", p: [{ time: 1, price: 2 }, { time: 3, price: 4 }] }] });
 });
 

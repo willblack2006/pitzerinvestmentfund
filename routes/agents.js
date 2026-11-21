@@ -55,7 +55,7 @@ router.get("/agents/overview", requireAi, (req, res) => {
 
 router.get("/agents/runs/:id", requireAi, (req, res) => {
   const r = runs.getRun(Number(req.params.id));
-  if (!r || (r.memberId && r.memberId !== req.member.id && !req.member.isAdmin)) return res.status(404).json({ error: "No such run." });
+  if (!r || (r.memberId && r.memberId !== req.member.id && !req.member.isAdmin && !require("../lib/feed/share").isShared(r))) return res.status(404).json({ error: "No such run." });
   const event = r.eventId ? db.prepare("SELECT * FROM agent_events WHERE id = ?").get(r.eventId) : null;
   res.json({ ...r, event, feedback: feedbackFor([r.id], req.member.id)[r.id] || { useful: 0, wrong: 0, not_useful: 0, mine: null } });
 });
@@ -90,8 +90,8 @@ router.post("/agents/runs/:id/feedback", requireAi, (req, res) => {
   const id = Number(req.params.id);
   const { verdict, note = "" } = req.body || {};
   if (!["useful", "wrong", "not_useful"].includes(verdict)) return res.status(400).json({ error: "verdict must be useful, wrong or not_useful." });
-  const r = db.prepare("SELECT id, memberId FROM agent_runs WHERE id = ?").get(id);
-  if (!r || (r.memberId && r.memberId !== req.member.id)) return res.status(404).json({ error: "No such run." });
+  const r = db.prepare("SELECT * FROM agent_runs WHERE id = ?").get(id);
+  if (!r || (r.memberId && r.memberId !== req.member.id && !require("../lib/feed/share").isShared(r))) return res.status(404).json({ error: "No such run." });
   db.prepare(`INSERT INTO agent_feedback (runId, memberId, verdict, note) VALUES (?, ?, ?, ?)
     ON CONFLICT(runId, memberId) DO UPDATE SET verdict = excluded.verdict, note = excluded.note, createdAt = datetime('now')`).run(id, req.member.id, verdict, String(note).slice(0, 1000));
   res.json(feedbackFor([id], req.member.id)[id]);

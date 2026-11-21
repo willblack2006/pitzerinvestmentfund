@@ -1,6 +1,7 @@
 // Quarterly and trailing-twelve-month numbers built from SEC company facts: fiscal Q4 from
 // the 10-K, single quarters from year-to-date cash-flow totals, and FCF that doesn't
 // pretend a missing capex figure is zero.
+require("./tmpdb"); // before any lib/ module loads db.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
 require("./helpers");

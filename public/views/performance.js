@@ -2,6 +2,7 @@ import { el, esc, api, fmtPct, fmtRatio, fmtUSD, signed, pageHead, loading, subT
 import { lineChart, barChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { term } from "../glossary.js";
+import { mountPerformanceExtras } from "./performanceExtras.js";
 
 // Server stats can be null (e.g. a flat price series has no volatility); never call toFixed on them.
 const f2 = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "—");
@@ -98,7 +99,9 @@ export async function mount(container) {
         <div class="panel-head"><h3 id="corr-h">${term("correlation")} between the 12 largest holdings</h3></div>
         ${heatmap(d.correlation)}
       </section>
-    </div>`;
+    </div>
+    <div class="tab-grid" id="perfExtras"></div>`;
+  mountPerformanceExtras(el("perfExtras"));
 
   // Your pick is saved as your default "Compare with" everywhere (Allocation, Risk, Backtester…).
   wireBenchmarkPicker("perfBench", async (v) => { await setPref("benchmark", v); mount(container); });

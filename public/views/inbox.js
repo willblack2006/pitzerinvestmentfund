@@ -1,4 +1,4 @@
-import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, bindRetry } from "../shared.js";
+import { esc, api, can, pageHead, lockedHint, skeleton, emptyState, errorState, bindRetry, toast } from "../shared.js";
 import { itemHtml, markRead, markAllRead } from "../inbox.js";
 
 export const title = "Notifications";
@@ -12,9 +12,23 @@ export async function mount(container) {
     `<button type="button" class="btn btn-ghost" id="readAll">Mark all read</button> <a class="btn btn-ghost" href="#/account/notify">Choose what you get</a>`) + `<div class="page-pad" id="inboxBody">${skeleton("rows", { rows: 5, label: "Loading" })}</div>`;
   let items = [], hasMore = false;
   const body = container.querySelector("#inboxBody");
+  // Agent notifications are grouped by agent, each group with a Mute button (WS11).
+  const agentName = (n) => (/^agent/.test(n.type) && /^#\/agents\/runs\/\d+$/.test(n.link || "") ? String(n.title).split(/[:(]/)[0].trim() : null);
+  const listHtml = () => {
+    const out = [], groups = new Map();
+    for (const n of items) {
+      const a = agentName(n);
+      if (!a) { out.push(itemHtml(n)); continue; }
+      if (!groups.has(a)) { groups.set(a, []); out.push({ group: a }); }
+      groups.get(a).push(n);
+    }
+    return out.map((x) => typeof x === "string" ? x : `<li class="inbox-group"><div class="inbox-group-head"><strong>${esc(x.group)}</strong><span class="small muted">${groups.get(x.group).length} update${groups.get(x.group).length === 1 ? "" : "s"}</span>
+      <button type="button" class="btn-link small" data-mute-run="${esc(groups.get(x.group)[0].link.split("/").pop())}">Mute this agent</button></div>
+      <ul class="inbox-list">${groups.get(x.group).map(itemHtml).join("")}</ul></li>`).join("");
+  };
   const draw = () => {
     body.innerHTML = items.length
-      ? `<ul class="inbox-list inbox-page">${items.map(itemHtml).join("")}</ul>${hasMore ? `<button type="button" class="btn btn-ghost btn-sm" id="older">Older</button>` : ""}`
+      ? `<ul class="inbox-list inbox-page">${listHtml()}</ul>${hasMore ? `<button type="button" class="btn btn-ghost btn-sm" id="older">Older</button>` : ""}`
       : emptyState({ icon: "bell", title: "No notifications yet", body: "Set a price alert on any Research page, or follow pitches, and they'll show up here.", action: { label: "Open Research", href: "#/research" } });
   };
   const fetchPage = async (before) => {
@@ -34,6 +48,14 @@ export async function mount(container) {
   if (!(await firstLoad())) return;
   body.addEventListener("click", (e) => {
     if (e.target.closest("#older")) { fetchPage(items.at(-1).id); return; }
+    const m = e.target.closest("[data-mute-run]");
+    if (m) {
+      m.disabled = true;
+      api("/api/agents-hub/mute", { method: "POST", body: JSON.stringify({ runId: Number(m.dataset.muteRun) }) })
+        .then((r) => { m.textContent = "Muted"; toast(`${r.agent.name} won't notify you any more. Unmute it from its page.`, { type: "success" }); })
+        .catch((err) => { m.disabled = false; toast(err.message, { type: "error" }); });
+      return;
+    }
     const a = e.target.closest("[data-open]");
     if (a) markRead(Number(a.dataset.open));
   });

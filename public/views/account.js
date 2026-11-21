@@ -99,7 +99,7 @@ function renderPrefs(presets, settings) {
       <p class="field-hint">Used on Performance, Allocation, Research → Risk, the Backtester and Paper trading. ${getPref("benchmark") ? `<button type="button" class="btn-link small" id="prefBenchReset">Use the fund's (${esc(settings.benchmarkLabel || settings.benchmark || "")})</button>` : `Currently the fund's official benchmark.`}</p>
     </div>
     <div class="pref-item"><span class="pref-label">Theme</span>${seg("theme", [["system", "Match device"], ["light", "Light"], ["dark", "Dark"]], getPref("theme", "system"))}</div>
-    <div class="pref-item"><span class="pref-label">Start page</span>${seg("startPage", [["holdings", "Holdings"], ["today", "Today"]], getPref("startPage", "holdings"))}</div>
+    <div class="pref-item"><span class="pref-label">Start page</span>${seg("startPage", [["holdings", "Holdings"], ["today", "Today"], ["cockpit", "Cockpit"]], getPref("startPage", "holdings"))}</div>
     <div class="pref-item"><label class="pref-label" for="prefPeriod">Holdings gains default</label>
       <select id="prefPeriod">${PERIODS.map(([v, l]) => `<option value="${v}" ${v === getPref("holdingsPeriod", "all") ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
     <div class="pref-item span-pref">

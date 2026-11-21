@@ -1,3 +1,4 @@
+require("./tmpdb"); // before any lib/ module loads db.js
 const { test } = require("node:test");
 const assert = require("node:assert");
 const a = require("../lib/analytics");
