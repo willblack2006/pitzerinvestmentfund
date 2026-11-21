@@ -115,6 +115,10 @@ export const GLOSSARY = {
   macd: ["MACD", "Moving average convergence divergence: the 12-bar EMA minus the 26-bar EMA. The signal line is a 9-bar EMA of that gap, and the histogram is the difference between the two. Crossings are often read as shifts in momentum."],
   atr: ["Average true range (ATR)", "The average size of each bar's true range: high to low, stretched to include any gap from the previous close. Wilder's smoothing over 14 bars by default. It measures how much the price moves, not which way."],
   volume: ["Volume", "The number of shares traded in each bar. On this chart a bar is green when the close was at or above the previous close and red when it was below."],
+  // Agents (Agents hub, team feed)
+  agent: ["Agent", "A saved job that checks something for you: on a schedule, when an event happens (a filing, a big price move, earnings coming up) or when you press Run. Simple checks cost nothing; steps that use AI count against the fund's and your monthly AI budget. Agents only read: anything that would change the app goes to the approval queue first."],
+  agentTrigger: ["Trigger", "What starts an agent: a schedule (for example every weekday before the open), an event in the app (a new 8-K, a 2-sigma move, earnings within 7 days), another agent handing work over, or a member running it by hand."],
+  sharedMemory: ["Shared memory", "Notes agents keep about a company or the fund (facts, observations, open questions, predictions), each with its source and date. Other agents read them before they run, so they build on each other instead of starting from zero. Members can retract a wrong one."],
 };
 
 // `label` defaults to the glossary's own name for the term.
