@@ -547,40 +547,97 @@ export async function mount(container, params) {
         ${data.quote?.time ? `<div class="muted small price-time">${{ REGULAR: "Live", PRE: "Pre-market", POST: "After hours" }[data.quote.marketState] || "At close"} · ${esc(new Date(data.quote.time).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" }))} ET</div>` : ""}
       </div>
       <div class="page-actions">
-        ${can("ai") ? `<button type="button" class="btn btn-ghost ask-open" data-ask-open title="Ask PIF about ${esc(symbol)} (press A)">${icon("sparkle", { size: 16 })}<span>Ask about ${esc(symbol)}</span></button>` : ""}
+        ${can("ai") ? `<button type="button" class="btn btn-ghost ask-open" data-ask-open title="Ask PIF about ${esc(symbol)} (press A)"><span>Ask about ${esc(symbol)}</span></button>` : ""}
         <a class="btn btn-primary" href="#/pitches/new/${encodeURIComponent(symbol)}">Pitch it</a>
         <button id="moreBtn" type="button" class="btn btn-ghost" aria-haspopup="dialog" aria-expanded="false" aria-label="More actions">${icon("more-horizontal", { size: 18 })}<span class="more-label">More</span></button>
       </div>
     </div>
-    ${tabNav(TABS.map(([k, label]) => [k, k === "overview" ? base : `${base}/${k}`, label]), tab, `${symbol} research sections`)}
     ${partial.length && tab === "overview" ? `<p class="notice" role="note">Some data couldn't be loaded (${partial.map(esc).join(", ")}). The rest of the page is still accurate.</p>` : ""}
-    <div id="tabBody"></div>`;
+    <div class="rdoc">
+      <nav class="rdoc-outline" aria-label="${esc(symbol)} research sections">
+        ${TABS.map(([k, label]) => `<a class="rdoc-link" data-sec="${k}" href="${k === "overview" ? base : `${base}/${k}`}"${k === tab ? ' aria-current="true"' : ""}>${label}</a>`).join("")}
+      </nav>
+      <div class="rdoc-body" id="tabBody"></div>
+    </div>`;
 
   const body = el("tabBody");
   const tctx = { symbol, data, fund, price, unlocked, isFinancial: isFinancialSector(data) };
-  if (tab === "overview") {
-    renderOverview(body, tctx);
-    // Your notes on this company, right on the Overview (signed-in members).
-    if (can("member")) {
-      const box = document.createElement("div");
-      box.className = "overview-notes";
-      body.querySelector(".research-layout")?.before(box);
-      TAB_LOADERS.notes().then((m) => box.isConnected && m.render(box, { symbol, compact: true }));
-      // What the fund's agents and members already know about this ticker (shared memory).
-      const mem = document.createElement("section");
-      box.after(mem);
-      import("./research/dossierCard.js").then((m) => mem.isConnected && m.render(mem, { symbol })).catch(() => mem.remove());
-    }
-  }
-  else if (tab === "thesis") renderThesisTab(body, tctx);
-  else {
-    body.innerHTML = skeleton("rows", { label: `Loading ${tab}` });
-    const mod = await TAB_LOADERS[tab]();
-    if (el("tabBody") !== body) return; // navigated away while the tab's code was loading
+  // Options is a deep table, so it keeps a page of its own. Everything else is one document:
+  // Overview renders now, and each later section renders when it scrolls near the screen.
+  if (tab === "options") {
+    body.innerHTML = skeleton("rows", { label: "Loading options" });
+    const mod = await TAB_LOADERS.options();
+    if (el("tabBody") !== body) return;
     await mod.render(body, tctx);
+  } else {
+    mountDocument(body, tctx, tab, base);
   }
-
   el("moreBtn").addEventListener("click", (e) => openMoreMenu(e.currentTarget, { symbol, price, owned, watched, unlocked }));
+}
+
+// ---- Research as one document (revamp 2B) ----
+const DOC_SECTIONS = TABS.filter(([k]) => k !== "options");
+function mountDocument(body, tctx, target, base) {
+  const { symbol } = tctx;
+  body.innerHTML = DOC_SECTIONS.map(([k, label]) => `
+    <section class="rdoc-sec" id="sec-${k}" data-sec="${k}" aria-labelledby="sech-${k}">
+      ${k === "overview" ? `<h3 class="sr-only" id="sech-${k}">${label}</h3>` : `<h3 class="rdoc-h" id="sech-${k}">${label}</h3>`}
+      <div class="rdoc-sec-body">${k === "overview" ? "" : skeleton("rows", { rows: 3, label: `Loading ${label.toLowerCase()}` })}</div>
+    </section>`).join("") + `<p class="rdoc-end muted small">The options chain has its own page: <a href="${base}/options">Options</a></p>`;
+
+  const done = new Set();
+  const renderSection = async (k) => {
+    if (done.has(k)) return;
+    done.add(k);
+    const box = body.querySelector(`#sec-${k} .rdoc-sec-body`);
+    if (!box) return;
+    try {
+      if (k === "overview") {
+        renderOverview(box, tctx);
+        if (can("member")) {
+          const mem = document.createElement("section");
+          box.querySelector(".research-layout")?.before(mem);
+          import("./research/dossierCard.js").then((m) => mem.isConnected && m.render(mem, { symbol })).catch(() => mem.remove());
+        }
+      } else if (k === "thesis") renderThesisTab(box, tctx);
+      else {
+        const mod = await TAB_LOADERS[k]();
+        if (!box.isConnected) return;
+        await mod.render(box, tctx);
+      }
+    } catch (err) {
+      box.innerHTML = `<p class="muted small page-pad">Couldn't load this section: ${esc(err.message)}</p>`;
+    }
+  };
+
+  renderSection("overview");
+  if (target !== "overview") {
+    renderSection(target).then(() => body.querySelector(`#sec-${target}`)?.scrollIntoView({ block: "start" }));
+  }
+  // Sections render a screen ahead of the reader.
+  const lazy = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (e.isIntersecting) { renderSection(e.target.dataset.sec); lazy.unobserve(e.target); }
+  }), { rootMargin: "800px 0px" });
+  body.querySelectorAll(".rdoc-sec").forEach((sec) => lazy.observe(sec));
+
+  // The outline jumps without reloading the page and follows the reader as they scroll.
+  const links = [...document.querySelectorAll(".rdoc-link")];
+  const mark = (k) => links.forEach((a) => (a.dataset.sec === k ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current")));
+  links.forEach((a) => a.addEventListener("click", (e) => {
+    if (a.dataset.sec === "options" || e.metaKey || e.ctrlKey) return;
+    e.preventDefault();
+    renderSection(a.dataset.sec);
+    body.querySelector(`#sec-${a.dataset.sec}`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    history.replaceState(null, "", a.getAttribute("href"));
+    mark(a.dataset.sec);
+  }));
+  const spy = new IntersectionObserver((entries) => {
+    const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+    if (top) mark(top.target.dataset.sec);
+  }, { rootMargin: "-10% 0px -70% 0px" });
+  body.querySelectorAll(".rdoc-sec").forEach((sec) => spy.observe(sec));
+  const stop = () => { lazy.disconnect(); spy.disconnect(); window.removeEventListener("hashchange", stop); };
+  window.addEventListener("hashchange", stop);
 }
 
 // The header's overflow menu: one vertical list of buttons. Built on open so Follow shows its current state.
