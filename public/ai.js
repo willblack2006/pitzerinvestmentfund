@@ -2,7 +2,7 @@
 // anywhere), live progress while an agent works, and the shared answer card with its sources.
 // Members with AI access only; everything here is hidden for everyone else.
 import { el, esc, api, can, icon, toast, safeUrl, fmtUSD } from "./shared.js";
-import { toolLabel, sourceLabel, progressLines, suggestedQuestions } from "./aiFormat.js";
+import { toolLabel, sourceLabel, progressLines, suggestedQuestions, routeSymbol } from "./aiFormat.js";
 
 export { toolLabel, sourceLabel, progressLines };
 
@@ -161,7 +161,7 @@ let showingHistory = false;
 
 function panelHtml() {
   return `<div class="ask">
-    <header class="chat-head ask-head"><div class="ask-head-title"><h2 id="askTitle">${icon("sparkle")} <span id="askTitleText">Ask PIF</span></h2></div>
+    <header class="chat-head ask-head"><div class="ask-head-title"><h2 id="askTitle"><span id="askTitleText">Ask PIF</span></h2><span class="ask-context hidden" id="askContext"></span></div>
       <div class="ask-head-actions">
         <button type="button" class="icon-btn" id="askHistory" aria-pressed="false" aria-label="Past conversations" title="Past conversations">${icon("inbox", { size: 18 })}</button>
         <button type="button" class="icon-btn hidden" id="askShare" aria-label="Share with the team" title="Share with the team">${icon("users", { size: 18 })}</button>
@@ -183,6 +183,10 @@ function syncHead(st) {
   share.setAttribute("aria-pressed", String(t?.visibility === "team"));
   share.title = t?.visibility === "team" ? "Shared with the team (click to make private)" : "Share with the team";
   panel.querySelector("#askFull").setAttribute("href", t ? `#/agents/ask?thread=${t.id}` : "#/agents/ask");
+  // What the panel already knows about: the ticker of the page behind it.
+  const sym = routeSymbol(location.hash), ctx = panel.querySelector("#askContext");
+  ctx.textContent = sym ? `On ${sym}` : "";
+  ctx.classList.toggle("hidden", !sym || !!st?.turns?.length);
 }
 
 async function toggleHistory(force) {
@@ -243,6 +247,7 @@ export async function openAsk({ question = "", autoSubmit = false, threadId = nu
     });
   }
   if (!panel.open) panel.show();
+  syncHead(convo.state);
   el("chatBtn") && document.querySelector(".chat-panel:not(.ask-panel)[open]")?.close();
   if (threadId) { toggleHistory(false); convo.load(threadId); return; }
   if (question && autoSubmit) { toggleHistory(false); convo.ask(question); }
@@ -285,7 +290,7 @@ const KIND_LABEL = { filing_flash: "Filing brief", earnings_flash: "Earnings bri
 export function aiPanelHtml({ id, title = "From the research agents", symbol = null } = {}) {
   if (!can("ai")) return "";
   return `<section class="panel ai-panel" aria-labelledby="${id}-h" id="${id}">
-    <div class="panel-head"><h3 id="${id}-h">${icon("sparkle", { size: 16 })} ${esc(title)}</h3><a class="small" href="#/agents">All briefs →</a></div>
+    <div class="panel-head"><h3 id="${id}-h">${esc(title)}</h3><a class="small" href="#/agents">All briefs →</a></div>
     <div class="ai-panel-body"><p class="muted small">Loading…</p></div>
     ${askChips(suggestionsFor(symbol).slice(0, symbol ? 3 : 2), { label: symbol ? `Ask about ${symbol}` : "Ask PIF" })}
   </section>`;

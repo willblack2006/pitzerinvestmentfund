@@ -63,8 +63,8 @@ export function mountConversation(container, { compact = false, threadId = null,
 
   function emptyHtml() {
     if (readOnly()) return "";
-    return `<div class="ask-empty"><span class="ask-empty-mark" aria-hidden="true">${icon("sparkle", { size: 22 })}</span><p class="ask-empty-title">What would you like to know?</p>
-      <p class="muted">PIF looks things up in the app and in SEC filings, and shows where every fact came from. Follow-ups remember the conversation.</p>
+    return `<div class="ask-empty"><p class="ask-empty-title">Ask about the fund or a company</p>
+      <p class="muted small">Answers cite the filing or page each fact came from. Follow-ups remember the conversation.</p>
       <div class="ask-suggest">${suggestionsFor().map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask-fill="${esc(q)}">${esc(q)}</button>`).join("")}</div>
       <div class="ask-agents" data-ask-agents></div></div>`;
   }

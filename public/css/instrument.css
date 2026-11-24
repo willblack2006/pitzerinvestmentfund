@@ -305,3 +305,21 @@ a.stat:hover, a.panel:hover, .panel[role="button"]:hover, .panel.is-link:hover {
   .rdoc-sec { scroll-margin-top: 16px; }
 }
 .research-head .ask-open { color: var(--text); }
+
+/* ============ Ask panel (3A) ============ */
+.ask-panel { border-left: 1px solid var(--border); box-shadow: var(--shadow-pop); background: var(--surface-1); }
+.ask-head { min-height: 48px; }
+.ask-head-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ask-head-title h2 { font-size: 14px; font-weight: 500; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-context { font: 11px var(--mono); color: var(--text-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+.ask-empty { padding: 16px 4px; }
+.ask-empty-title { font-size: 15px; font-weight: 500; }
+.ask-suggest { gap: 2px; margin-top: 16px; }
+.ask-suggest .agent-chip { border: 0; background: transparent; color: var(--text-2); font-weight: 400; font-size: 13px; padding: 6px 8px; margin-left: -8px; min-height: 0; border-radius: 6px; }
+.ask-suggest .agent-chip:hover { background: var(--surface-2); color: var(--text); }
+.agent-q { font-weight: 500; }
+.ask-panel textarea, .ask-panel .ask-input { border-color: var(--border); border-radius: 12px; }
+.ask-panel textarea:focus, .ask-panel .ask-input:focus { border-color: var(--text-3); box-shadow: none; outline: none; }
+.ask-field { border-radius: 12px; border-color: var(--border); background: var(--surface-1); }
+.ask-field:focus-within { border-color: var(--text-3); box-shadow: none; }
+.ask-field button[type="submit"], .ask-send { background: var(--accent-bg); color: var(--on-accent); border-radius: 8px; }
