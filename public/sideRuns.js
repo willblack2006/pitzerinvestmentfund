@@ -13,9 +13,10 @@ const elapsed = (ms) => {
 
 function draw() {
   if (!box) return;
+  if (runs.length > 1) box.dataset.more = runs.length - 1; else delete box.dataset.more;
   if (!runs.length) { box.innerHTML = ""; stopTicker(); return; }
   box.innerHTML = `<div class="side-runs-label">Working now</div>` + runs.map((r) => {
-    const name = r.agent?.name || r.workflow;
+    const name = r.agent?.name || String(r.workflow || "Agent").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
     return `<a class="side-run" href="#/agents/runs/${Number(r.runId)}" title="${esc(name)}${r.symbol ? ` on ${esc(r.symbol)}` : ""}">
       <span class="status-dot is-running" aria-hidden="true"></span>
       <span class="side-run-name">${esc(name)}${r.symbol ? ` · ${esc(r.symbol)}` : ""}</span>

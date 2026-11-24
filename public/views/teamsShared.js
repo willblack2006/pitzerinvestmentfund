@@ -180,23 +180,35 @@ export function teamRunHtml(tree, opts = {}) {
     <footer class="agent-brief-foot"><span class="muted small">AI agents simulating a research team, not advice. Members decide and vote. <a href="#/agents/runs/${tree.runId}">Synthesis trace</a></span></footer></article>`;
 }
 
-// Polls a running team run into `box` until it finishes. Returns a stop function.
+// Shows a team run in `box` and keeps it current until it finishes. Returns a stop function.
+// It re-reads the run tree when the server says one of its runs started or finished
+// (run_started / run_finished on /api/events). A slow 15s check stays as a safety net for
+// workers this member's stream doesn't hear about (runs started by someone else).
 export function followRun(box, runId, { onDone, opts = {} } = {}) {
-  let stopped = false, timer = null, lastStatus = null;
+  let stopped = false, timer = null, lastStatus = null, pending = null;
   const tick = async () => {
-    if (stopped || !box.isConnected) return;
+    if (stopped || !box.isConnected) return stop();
+    clearTimeout(timer);
     let tree;
     try { tree = await api(`/api/agents/teams/runs/${runId}`); } catch (err) { box.innerHTML = aiErrorHtml(err); return; }
     // Keep open <details> open across repaints.
     const open = [...box.querySelectorAll("details[open] > summary")].map((s) => s.textContent);
     box.innerHTML = teamRunHtml(tree, opts);
     box.querySelectorAll("details > summary").forEach((s) => { if (open.includes(s.textContent)) s.parentElement.open = true; });
-    if (tree.status === "running") timer = setTimeout(tick, 2500);
-    else if (lastStatus === "running" || lastStatus === null) { onDone?.(tree); }
+    if (tree.status === "running") timer = setTimeout(tick, 15000);
+    else { if (lastStatus === "running" || lastStatus === null) onDone?.(tree); stop(); }
     lastStatus = tree.status;
   };
+  const onLive = (e) => {
+    const t = e.detail?.type, d = e.detail?.data || {};
+    if ((t === "run_started" || t === "run_finished") && (d.runId === runId || d.parentRunId === runId)) {
+      clearTimeout(pending); pending = setTimeout(tick, 150); // several workers can finish together
+    }
+  };
+  window.addEventListener("pif:live", onLive);
+  function stop() { stopped = true; clearTimeout(timer); clearTimeout(pending); window.removeEventListener("pif:live", onLive); }
   tick();
-  return () => { stopped = true; clearTimeout(timer); };
+  return stop;
 }
 
 export function runRow(r) {

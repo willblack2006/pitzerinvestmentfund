@@ -115,21 +115,30 @@ export function progressHtml({ steps = [], intro = "Starting", elapsed = 0, expe
 }
 
 // Runs `promise` (a POST that starts an agent) while showing its steps in `box`. Returns the
-// promise's result. `match` narrows which of the member's running runs to follow.
+// promise's result. `workflow` / `symbol` pick out which run_started event is this request's.
 export async function withProgress(box, promise, { workflow, symbol, intro = "Starting", expect = "" } = {}) {
   const started = Date.now();
-  let steps = [], stopped = false;
+  let steps = [], stopped = false, es = null;
   const paint = () => { if (!stopped && box?.isConnected) box.innerHTML = progressHtml({ steps, intro, expect, elapsed: Math.round((Date.now() - started) / 1000) }); };
   paint();
-  const qs = new URLSearchParams({ ...(workflow ? { workflow } : {}), ...(symbol ? { symbol } : {}) });
-  const tick = async () => {
-    if (stopped || !box?.isConnected) return;
-    try { const r = await api(`/api/agents/runs-live?${qs}`); if (r.run) steps = r.run.steps || []; } catch { /* progress is optional */ }
-    paint();
-    if (!stopped) timer = setTimeout(tick, 1200);
+  // The server announces the run the moment it starts (run_started, sent only to this member);
+  // from then on its steps arrive on the run's own stream. No polling.
+  const sym = symbol ? String(symbol).toUpperCase() : null;
+  const onLive = (e) => {
+    if (e.detail?.type !== "run_started" || es || stopped) return;
+    const d = e.detail.data || {};
+    if ((workflow && d.workflow !== workflow) || (sym && String(d.symbol || "").toUpperCase() !== sym)) return;
+    es = new EventSource(`/api/agents/runs/${Number(d.runId)}/stream`);
+    es.addEventListener("run", (m) => {
+      let ev; try { ev = JSON.parse(m.data); } catch { return; }
+      if (ev.type === "step" && ev.step) { steps = [...steps, ev.step]; paint(); }
+      if (ev.type === "done" || ev.type === "error") es.close();
+    });
+    es.onerror = () => es?.close(); // progress is optional; the POST still returns the answer
   };
-  let timer = setTimeout(tick, 700);
-  try { return await promise; } finally { stopped = true; clearTimeout(timer); }
+  window.addEventListener("pif:live", onLive);
+  const clock = setInterval(paint, 1000); // redraws the elapsed time only
+  try { return await promise; } finally { stopped = true; clearInterval(clock); es?.close(); window.removeEventListener("pif:live", onLive); }
 }
 
 // An AI error with the next step a member can take.

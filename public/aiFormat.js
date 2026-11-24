@@ -48,8 +48,8 @@ export function sourceLabel(u) {
   } catch { return "source"; }
 }
 
-// Steps recorded so far → short lines a member can follow. The run's own steps come from
-// GET /api/agents/runs-live, which the page polls while it waits on the POST.
+// Steps recorded so far → short lines a member can follow. The steps arrive on the run's own
+// stream (GET /api/agents/runs/:id/stream) while the page waits on the POST.
 export function progressLines(steps = []) {
   const lines = [];
   for (const s of steps) {

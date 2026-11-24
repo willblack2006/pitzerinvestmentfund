@@ -82,28 +82,17 @@ export function renderTest(box, state, { start = false } = {}) {
   if (start) { dry(); box.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
 }
 
-// Starts a real run and shows it: WS11's run card when it's installed, otherwise a light
-// poll of the run until it finishes.
+// Starts a real run and shows it live in the shared run card (steps stream in over SSE).
 async function runOnce(out, state, btn) {
   btn.disabled = true;
   let runId;
   try { ({ runId } = await A.runNow(state.agent.id)); }
   catch (err) { btn.disabled = false; toast(err.message, { type: "error" }); return; }
   try {
-    const rc = await import("../ui/runCard.js");
-    if (typeof rc.mountRunCard === "function") { await rc.mountRunCard(out, runId); btn.disabled = false; return; }
-  } catch { /* shared run card not installed yet */ }
-  out.innerHTML = `<p class="muted small">${icon("sparkle", { size: 16 })} Running… <a href="#/agents/runs/${runId}">open the run</a></p>`;
-  for (let i = 0; i < 90; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
-    if (!out.isConnected) return;
-    let run;
-    try { run = await A.run(runId); } catch { continue; }
-    if (run.status === "running") continue;
-    let card = "";
-    try { card = (await import("../views/agents.js")).outputCard?.(run.output, run.id, run.feedback) || ""; } catch { /* fine */ }
-    out.innerHTML = `<p class="small"><span class="badge ${run.status === "done" ? "badge-owned" : "badge-danger"}">${esc(run.status)}</span>${run.error ? ` ${esc(run.error)}` : ""} · <a href="#/agents/runs/${run.id}">How it was made</a></p>${card}`;
-    break;
+    const { mountRunCard } = await import("../ui/runCard.js");
+    await mountRunCard(out, runId);
+  } catch {
+    out.innerHTML = `<p class="muted small">Running. <a href="#/agents/runs/${Number(runId)}">Open the run</a> to follow it.</p>`;
   }
   btn.disabled = false;
 }
