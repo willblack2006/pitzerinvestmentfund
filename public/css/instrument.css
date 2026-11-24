@@ -363,3 +363,49 @@ a.stat:hover, a.panel:hover, .panel[role="button"]:hover, .panel.is-link:hover {
   .runlive-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .runlive-grid > section + section { border-left: 1px solid var(--border-soft); }
 }
+
+/* Committee decision sheet (5A): the lean and open questions first, then one row per agent. */
+.cm-lean { display: grid; gap: 14px; padding: 0 0 16px; border-bottom: 1px solid var(--border); }
+.cm-lean p { margin: 0; }
+.cm-lean-main { display: grid; gap: 6px; max-width: 72ch; }
+.cm-lean-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+.cm-lean-label .status-dot { margin: 0; }
+.cm-lean-head { font-size: 17px; line-height: 1.4; font-weight: 500; color: var(--text); }
+.cm-lean-sum { color: var(--text-2); }
+.cm-open th { font-weight: 500; }
+.cm-table { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.cm-cols, .cm-sum { display: grid; grid-template-columns: 120px 96px 110px minmax(0, 1fr) 80px; gap: 12px; align-items: center; padding: 0 14px; }
+.cm-cols { min-height: 32px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.cm-rows { list-style: none; margin: 0; padding: 0; }
+.cm-row + .cm-row { border-top: 1px solid var(--border); }
+.cm-sum { min-height: 48px; padding-top: 10px; padding-bottom: 10px; cursor: pointer; list-style: none; }
+.cm-sum::-webkit-details-marker { display: none; }
+details > .cm-sum:hover { background: var(--surface-2); }
+details[open] > .cm-sum { background: var(--surface-2); }
+.cm-agent { font-weight: 500; color: var(--text); }
+.cm-stance { display: flex; align-items: center; gap: 6px; }
+.cm-stance .status-dot { margin: 0; }
+.cm-head { font-size: 13px; line-height: 1.45; color: var(--text); }
+.cm-src { text-align: right; }
+.cm-body { display: grid; gap: 12px; padding: 4px 14px 16px 146px; }
+.cm-body p { margin: 0; }
+.cm-body .team-points { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; }
+.cm-body .team-rebuttal { padding-top: 10px; border-top: 1px solid var(--border); }
+.cm-memo summary { cursor: pointer; color: var(--text-2); }
+.cm-row.is-missing .cm-sum, .cm-row.is-pending .cm-sum { cursor: default; }
+@media (max-width: 760px) {
+  .cm-cols { display: none; }
+  .cm-sum { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "agent stance" "head head" "conf src"; row-gap: 6px; }
+  .cm-agent { grid-area: agent; } .cm-stance { grid-area: stance; } .cm-head { grid-area: head; } .cm-conf { grid-area: conf; } .cm-src { grid-area: src; }
+  .cm-body { padding-left: 14px; }
+}
+.team-chip .status-dot, .team-phase .status-dot { margin: 0 2px 0 0; width: 6px; height: 6px; box-shadow: none; }
+@media (max-width: 760px) { .team-head-side { justify-items: start; grid-auto-flow: column; align-items: center; gap: 10px; } }
+@media (max-width: 760px) {
+  .cm-stance { justify-self: end; }
+  .cm-open thead { display: none; }
+  .cm-open, .cm-open tbody, .cm-open tr, .cm-open th, .cm-open td { display: block; width: auto; }
+  .cm-open tr { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .cm-open th, .cm-open td { padding: 2px 0; border: 0; }
+  .cm-open td:last-child::before { content: "Settled by: "; color: var(--text-3); }
+}
