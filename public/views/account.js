@@ -1,5 +1,5 @@
 import { mountMyAlerts } from "../myAlerts.js";
-import { el, esc, api, toast, currentMember, setSession, pageHead, lockedHint, getPref, setPref, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker } from "../shared.js";
+import { el, esc, api, toast, currentMember, setSession, pageHead, lockedHint, getPref, setPref, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, icon } from "../shared.js";
 
 export const title = "Account";
 
@@ -20,7 +20,7 @@ export async function mount(container) {
       </section>
       <section class="panel" aria-labelledby="notify-h" id="notify">
         <h3 id="notify-h">Notifications</h3>
-        <p class="small">What shows up under 🔔. Everything is on unless you turn it off.</p>
+        <p class="small">What shows up under ${icon("bell", { size: 14 })}. Everything is on unless you turn it off.</p>
         <div class="check-grid check-col" id="notifyPrefs"></div>
       </section>
       <section class="panel" aria-labelledby="ma-h">
@@ -104,7 +104,7 @@ function renderPrefs(presets, settings) {
       <select id="prefPeriod">${PERIODS.map(([v, l]) => `<option value="${v}" ${v === getPref("holdingsPeriod", "all") ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
     <div class="pref-item span-pref">
       <span class="pref-label">Tickers you follow</span>
-      <div class="chip-list">${tickers.length ? tickers.map((t) => `<span class="chip"><a href="#/research/${encodeURIComponent(t)}">${esc(t)}</a><button type="button" class="chip-x" data-unfollow="${esc(t)}" aria-label="Stop following ${esc(t)}">×</button></span>`).join("") : `<span class="muted small">None yet. Use ☆ Follow on any company's research page, or add one here.</span>`}</div>
+      <div class="chip-list">${tickers.length ? tickers.map((t) => `<span class="chip"><a href="#/research/${encodeURIComponent(t)}">${esc(t)}</a><button type="button" class="chip-x" data-unfollow="${esc(t)}" aria-label="Stop following ${esc(t)}">×</button></span>`).join("") : `<span class="muted small">None yet. Use ${icon("star", { size: 14 })} Follow on any company's research page, or add one here.</span>`}</div>
       <form id="followForm" class="inline-form"><label class="sr-only" for="followInput">Ticker to follow</label><input id="followInput" data-ticker data-ticker-go placeholder="Ticker" maxlength="12" autocomplete="off" /><button class="btn btn-ghost btn-sm">Follow</button></form>
     </div>
     <div class="pref-item span-pref">

@@ -24,7 +24,7 @@
 
 /* Discovery chips */
 .filter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 var(--sp-3, 12px); }
-.filter-label { font-size: var(--fs-xs); font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; }
+.filter-label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-2); }
 .filter-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
 .filter-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 4px 12px; border: 1px solid var(--border); border-radius: var(--r-full, 999px); background: var(--surface-1); color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
 .filter-chip:hover { border-color: var(--accent); }

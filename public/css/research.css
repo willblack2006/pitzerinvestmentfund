@@ -33,8 +33,8 @@
 }
 a.ks:hover { background: var(--surface-2); }
 a.ks:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
-.ks-label { color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.ks-value { font-size: var(--fs-lg); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ks-label { color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; }
+.ks-value { font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ks-range { font-size: var(--fs-md); }
 .ks-sub { color: var(--text-2); font-size: var(--fs-xs); }
 .ks .consensus-bar, .ks .range-track { margin-top: 6px; }
@@ -50,7 +50,7 @@ a.ks:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .sg-chip:hover { background: var(--surface-2); }
 .sg-chip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .sig-label { color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; }
-.sig-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.sig-value { font-weight: 600; font-variant-numeric: tabular-nums; }
 .sg-chip.tone-good { background: var(--positive-soft); border-color: transparent; color: var(--positive); }
 .sg-chip.tone-bad { background: var(--negative-soft); border-color: transparent; color: var(--negative); }
 .sg-chip.tone-warn { background: var(--caution-soft); border-color: transparent; color: var(--caution); }

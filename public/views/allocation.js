@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, pageHead, subTabs, can, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam, errorState, bindRetry, skeleton } from "../shared.js";
+import { el, esc, api, fmtUSD, pageHead, subTabs, can, benchmarkPresets, benchmarkPicker, wireBenchmarkPicker, setPref, getPref, benchParam, errorState, bindRetry, skeleton, icon } from "../shared.js";
 import { barChart, destroyAll } from "../charts.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 
@@ -27,7 +27,7 @@ export async function mount(container) {
        ${can("admin") ? `<a class="btn btn-ghost" href="#/settings">Edit policy limits</a>` : ""}`)}
 
     <section class="compliance ${breaches.length ? "has-breach" : "ok"}" aria-labelledby="ips-h">
-      <h3 id="ips-h">${breaches.length ? `<span aria-hidden="true">⚠</span> ${breaches.length} policy breach${breaches.length > 1 ? "es" : ""}` : [s.maxPositionPct, s.maxSectorPct, s.minPositions, s.maxPositions, s.minCashPct].every((v) => v == null) ? "Policy limits not set" : `<span aria-hidden="true">✓</span> Within policy`}</h3>
+      <h3 id="ips-h">${breaches.length ? `${icon("alert", { size: 14 })} ${breaches.length} policy breach${breaches.length > 1 ? "es" : ""}` : [s.maxPositionPct, s.maxSectorPct, s.minPositions, s.maxPositions, s.minCashPct].every((v) => v == null) ? "Policy limits not set" : `<span aria-hidden="true">✓</span> Within policy`}</h3>
       ${a.checks.length ? `<ul class="check-list">
         ${[...breaches, ...watches].map((c) => `<li class="check-${c.level}"><strong>${esc(c.rule)}:</strong> ${esc(c.detail)}${c.symbol ? ` <a href="#/research/${encodeURIComponent(c.symbol)}">Research ${esc(c.symbol)}</a>` : ""}</li>`).join("")}
       </ul>` : ""}

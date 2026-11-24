@@ -8,7 +8,7 @@ import { noteCounts, noteMarker } from "../notes.js";
 
 export const title = "Portfolio";
 
-const state = { positions: [], quotes: {}, market: null, sort: { key: "marketValue", dir: -1 }, filter: "", signals: {}, signalsLoaded: false, period: "all", bases: null, basesError: null, cash: null, dividends: null };
+const state = { positions: [], quotes: {}, market: null, sort: { key: "marketValue", dir: -1 }, filter: "", signals: {}, signalsLoaded: false, period: "all", bases: null, basesError: null, cash: null, dividends: null, selected: null, bars: {}, theses: {} };
 
 // Time frames for the gain columns and summary. "all" = since purchase (vs cost basis);
 // "1d" = live day change; the rest compare the live price with the close before the frame
@@ -106,21 +106,18 @@ function renderSummary(rows) {
 
   const topFive = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 5).reduce((t, r) => t + r.weight, 0);
 
-  el("summary").innerHTML = `
-    <div class="stat stat-lg"><div class="label">Total portfolio</div><div class="value">${fmtUSD(portfolioTotal)}</div>
-      <div class="sub">Invested + cash${liveRows.length ? ` · <span class="nowrap">${dayLabel()} ${signed(dayChange, fmtUSD(dayChange))} (${fmtPct(dayPct)})</span>` : ""}</div></div>
-    <div class="stat"><div class="label">${state.period === "all" ? "Total gain" : `Gain, ${esc(periodLabel(state.period))}`}</div>
-      ${pending ? `<div class="value muted">${state.basesError ? "Unavailable" : "Loading…"}</div><div class="sub">${state.basesError ? esc(state.basesError) : "Fetching price history"}</div>`
-        : `<div class="value">${signed(totalGain, fmtUSD(totalGain))}</div><div class="sub">${gainSub}</div>`}</div>
-    <div class="stat"><div class="label">Cash</div><div class="value">${state.cash == null ? "…" : fmtUSD(cash)}</div>
-      <div class="sub">${share(cash)}</div></div>
-    <div class="stat"><div class="label">Dividends, next 12 months</div><div class="value">${div ? `${fmtUSD(div.totals.annualIncome)}` : `<span class="muted">…</span>`}</div>
-      <div class="sub">${div ? `Projected · ${fmtUSD(div.totals.receivedSinceStart)} received since tracking began · <a href="#/dividends">Details</a>` : "Loading dividend rates…"}</div></div>
-  `;
+  const fig = (label, value, sub = "") => `<div class="hold-fig"><div class="hold-fig-label">${label}</div><div class="hold-fig-value">${value}</div>${sub ? `<div class="hold-fig-sub">${sub}</div>` : ""}</div>`;
+  el("summary").innerHTML =
+    fig("Net asset value", fmtUSD(portfolioTotal), liveRows.length ? `${dayLabel()} ${signed(dayChange, fmtUSD(dayChange))} (${fmtPct(dayPct)})` : "Invested + cash") +
+    fig(state.period === "all" ? "Total gain" : `Gain, ${esc(periodLabel(state.period))}`,
+      pending ? `<span class="muted">${state.basesError ? "Unavailable" : "…"}</span>` : signed(totalGain, fmtUSD(totalGain)),
+      pending ? (state.basesError ? esc(state.basesError) : "Fetching price history") : gainSub) +
+    fig("Cash", state.cash == null ? "…" : fmtUSD(cash), share(cash)) +
+    fig("Dividends, next 12 months", div ? fmtUSD(div.totals.annualIncome) : `<span class="muted">…</span>`, div ? `<a href="#/dividends">${fmtUSD(div.totals.receivedSinceStart)} received so far</a>` : "");
   el("summaryMore").innerHTML = `
-    <span><strong>Invested</strong> ${fmtUSD(totalValue)} <span class="muted">(${rows.length} positions · ${share(totalValue)})</span></span>
-    <span><strong>Winners / losers</strong> ${pending ? "…" : `${winners} / ${losers}`} <span class="muted">${state.period === "all" ? "above / below cost" : `up / down, ${esc(periodLabel(state.period))}`}</span></span>
-    <span><strong>Top 5</strong> = ${topFive.toFixed(1)}% <span class="muted">of invested</span></span>`;
+    <span>${rows.length} positions · ${share(totalValue).replace(" of portfolio", "")} invested</span>
+    <span>${pending ? "…" : `${winners} up, ${losers} down`} ${state.period === "all" ? "vs cost" : esc(periodLabel(state.period))}</span>
+    <span>Top 5 are ${topFive.toFixed(1)}% of invested</span>`;
 }
 
 // Concentration view: the biggest weights as labelled bars (a list, so it reads fine
@@ -128,14 +125,15 @@ function renderSummary(rows) {
 function renderConcentration(rows) {
   const top = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 8);
   const max = top[0]?.weight || 1;
+  if (!el("concentration")) return;
   el("concentration").innerHTML = `
-    <div class="panel-head"><h3>Largest positions</h3></div>
+    <h3 class="hold-aside-title">Largest positions</h3>
     <ol class="bar-list">
       ${top.map((r) => `
         <li>
           <a href="#/research/${encodeURIComponent(r.symbol)}" class="bar-label">${esc(r.symbol)}</a>
           <span class="bar-track" aria-hidden="true"><span class="bar-fill ${r.weight > 10 ? "bar-warn" : ""}" style="width:${(r.weight / max) * 100}%"></span></span>
-          <span class="bar-value">${r.weight.toFixed(1)}%${r.weight > 10 ? ` <span class="badge badge-warn" title="Above 10% of the fund">&gt;10%</span>` : ""}</span>
+          <span class="bar-value">${r.weight.toFixed(1)}%</span>
         </li>`).join("")}
     </ol>`;
 }
@@ -217,22 +215,15 @@ function renderTable() {
   el("thead").innerHTML = `<tr>
     ${sortHeader("symbol", "Ticker", s, { align: "left sticky-col" })}
     ${cols.map((c) => c.plain ? `<th scope="col">${esc(colLabel(c))}</th>` : sortHeader(c.key, esc(colLabel(c)), s)).join("")}
-    ${unlocked ? `<th scope="col"><span class="sr-only">Actions</span></th>` : ""}
   </tr>`;
 
   el("tbody").innerHTML = rows.map((r) => `
-    <tr data-id="${r.id}">
+    <tr data-id="${r.id}" data-symbol="${esc(r.symbol)}" class="${state.selected === r.symbol ? "is-selected" : ""}" aria-selected="${state.selected === r.symbol}">
       <th scope="row" class="left sticky-col">
-        <a class="symbol-cell" href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a>${noteMarker(r.symbol, state.noteCounts)}
+        <button type="button" class="symbol-cell symbol-btn" data-inspect="${esc(r.symbol)}" aria-label="Show details for ${esc(r.symbol)}">${esc(r.symbol)}</button>${noteMarker(r.symbol, state.noteCounts)}
         ${r.notes ? `<div class="muted small cell-note">${esc(r.notes)}</div>` : ""}
       </th>
       ${cols.map((c) => c.cell(r)).join("")}
-      ${unlocked ? `<td>
-        <div class="row-actions">
-          <button class="btn btn-ghost btn-sm" data-edit="${r.id}" aria-label="Edit ${esc(r.symbol)}">Edit</button>
-          <button class="btn btn-danger btn-sm" data-delete="${r.id}" aria-label="Delete ${esc(r.symbol)}">Delete</button>
-        </div>
-      </td>` : ""}
     </tr>
   `).join("");
 
@@ -248,6 +239,67 @@ function renderTable() {
     el("search").focus();
   });
   el("filterCount").textContent = state.filter ? `${rows.length} of ${all.length} positions shown` : "";
+  if (state.selected) renderInspector();
+}
+
+// ---- Inspector: the selected holding's details beside the table (a bottom sheet on phones) ----
+const THESIS_LABEL = { intact: "On track", watch: "Watch", weakened: "Weakened", broken: "Broken", unknown: "No checks yet" };
+const THESIS_DOT = { intact: "is-done", watch: "is-watch", weakened: "is-watch", broken: "is-error" };
+function sparkline(bars) {
+  const c = (bars || []).map((b) => b.close).filter(Number.isFinite);
+  if (c.length < 2) return `<div class="hold-spark-empty muted small">No price history</div>`;
+  const lo = Math.min(...c), hi = Math.max(...c), w = 288, h = 64;
+  const d = c.map((v, i) => `${i ? "L" : "M"}${((i / (c.length - 1)) * w).toFixed(1)},${(4 + (1 - (v - lo) / (hi - lo || 1)) * (h - 8)).toFixed(1)}`).join("");
+  return `<svg class="hold-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function renderInspector() {
+  const box = el("holdInspector");
+  if (!box) return;
+  const all = withDerived(state.positions);
+  const r = all.find((x) => x.symbol === state.selected);
+  document.querySelector(".hold-layout")?.classList.toggle("has-selection", !!r);
+  if (!r) { box.innerHTML = ""; box.hidden = true; return; }
+  box.hidden = false;
+  const s = r.symbol, enc = encodeURIComponent(s);
+  const th = state.theses[s];
+  const bars = state.bars[s];
+  box.innerHTML = `
+    <div class="hold-insp-head"><span class="hold-insp-sym">${esc(s)}</span>
+      <a class="btn btn-ghost btn-sm" href="#/research/${enc}">Research</a>
+      <button type="button" class="icon-btn" data-inspect-close aria-label="Close details">${icon("x", { size: 16 })}</button></div>
+    <div class="hold-insp-sec">
+      <div class="hold-insp-price num">${fmtUSD(r.lastPrice)} ${r.dayChangePct == null ? "" : `<span class="small">${signed(r.dayChangePct, fmtPct(r.dayChangePct))}</span>`}</div>
+      ${bars === undefined ? `<div class="hold-spark-empty muted small">Loading chart…</div>` : sparkline(bars)}
+      <div class="muted small">3 months</div>
+    </div>
+    <div class="hold-insp-sec"><dl class="hold-kv">
+      <dt>Shares</dt><dd>${r.shares.toLocaleString()}</dd>
+      <dt>Value</dt><dd>${fmtUSD(r.marketValue)}</dd>
+      <dt>Avg cost</dt><dd>${fmtUSD(r.avgCost)}</dd>
+      <dt>Weight</dt><dd>${r.weight.toFixed(1)}%${r.weight > 10 ? ` <span class="hold-cap">above 10% cap</span>` : ""}</dd>
+      <dt>${state.period === "all" ? "Gain" : `Gain, ${esc(periodLabel(state.period))}`}</dt><dd>${r.gain == null ? "—" : `${signed(r.gain, fmtUSD(r.gain))} <span class="small">${signed(r.gainPct, fmtPct(r.gainPct))}</span>`}</dd>
+    </dl></div>
+    ${th ? `<div class="hold-insp-sec"><div class="hold-aside-title">Thesis</div>
+      <div><span class="status-dot ${THESIS_DOT[th.status] || ""}"></span> ${esc(THESIS_LABEL[th.status] || th.status)}</div>
+      ${th.catalysts?.next?.[0] ? `<div class="muted small">Next: ${esc(th.catalysts.next[0].title || th.catalysts.next[0].text || "")}</div>` : ""}
+      <a class="small" href="#/research/${enc}/thesis">Open thesis</a></div>` : ""}
+    ${r.notes ? `<div class="hold-insp-sec"><div class="hold-aside-title">Note</div><div class="small">${esc(r.notes)}</div></div>` : ""}
+    <div class="hold-insp-actions">
+      ${can("ai") ? `<button type="button" class="btn btn-sm" data-ask="What's the latest on ${esc(s)}, and does it change our thesis?">Ask about ${esc(s)}</button>` : ""}
+      ${can("trade") ? `<button type="button" class="btn btn-sm" data-edit="${r.id}">Edit</button><button type="button" class="btn btn-ghost btn-sm" data-delete="${r.id}">Delete</button>` : ""}
+    </div>`;
+}
+async function inspect(symbol) {
+  state.selected = state.selected === symbol ? null : symbol;
+  document.querySelectorAll("#tbody tr[data-symbol]").forEach((tr) => {
+    const on = tr.dataset.symbol === state.selected;
+    tr.classList.toggle("is-selected", on); tr.setAttribute("aria-selected", String(on));
+  });
+  renderInspector();
+  if (!state.selected) return;
+  const s = state.selected;
+  if (state.bars[s] === undefined) api(`/api/research/${encodeURIComponent(s)}/bars?frame=3M`).then((r) => { state.bars[s] = r.bars || []; }).catch(() => { state.bars[s] = []; }).then(() => state.selected === s && renderInspector());
+  if (can("ai") && !(s in state.theses)) api(`/api/theses/${encodeURIComponent(s)}`).then((r) => { state.theses[s] = r?.summary || null; }).catch(() => { state.theses[s] = null; }).then(() => state.selected === s && renderInspector());
 }
 
 async function loadPositions() {
@@ -509,7 +561,7 @@ export async function mount(container) {
     ${pageHead(
       "Portfolio",
       `The fund's current holdings, valued at live prices. <span id="marketLine" class="market-line" role="status">${marketLine()}</span>`,
-      unlocked ? `<button id="addBtn" class="btn btn-primary">+ Add position</button>` : ""
+      unlocked ? `<button id="addBtn" class="btn btn-primary">Add position</button>` : ""
     )}
     <div class="period-bar">
       <span class="muted small" id="periodLabel">Gains for</span>
@@ -517,33 +569,40 @@ export async function mount(container) {
         ${PERIODS.map(([k, short, long]) => `<button type="button" class="seg-btn" data-period="${k}" aria-pressed="${state.period === k}" title="${esc(long)}">${short}</button>`).join("")}
       </div>
     </div>
-    <section class="summary summary-main" id="summary" aria-label="Portfolio summary"></section>
-    <p class="summary-more small" id="summaryMore"></p>
-    ${askChips(suggestionsFor(null).slice(0, 3), { label: "Ask about the portfolio" })}
-    <div class="two-col">
-      <section class="panel" id="concentration" aria-label="Largest positions"></section>
-      <section class="panel quick-links" aria-labelledby="ql-title">
-        <div class="panel-head"><h3 id="ql-title">Needs attention</h3><a class="small" href="#/alerts">All alerts →</a></div>
-        <div id="alertPreview">${skeleton("cards", { label: "Checking alerts" })}</div>
-      </section>
-    </div>
-    <section class="toolbar">
-      <div class="field-inline">
-        <label for="search" class="sr-only">Filter holdings</label>
-        <input id="search" type="search" placeholder="Filter by ticker or note…" autocomplete="off" />
-        <span id="filterCount" class="muted small" role="status"></span>
+    <section class="hold-figs" id="summary" aria-label="Portfolio summary"></section>
+    <p class="hold-figs-more small muted" id="summaryMore"></p>
+    <div class="hold-layout">
+      <div class="hold-main">
+        <section class="toolbar hold-toolbar">
+          <div class="field-inline">
+            <label for="search" class="sr-only">Filter holdings</label>
+            <input id="search" type="search" placeholder="Filter" autocomplete="off" />
+            <span id="filterCount" class="muted small" role="status"></span>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="columnsBtn" aria-haspopup="dialog" aria-expanded="false"></button>
+          ${unlocked ? "" : lockedHint("Sign in to add, edit, or delete positions.", "trade")}
+        </section>
+        <section class="table-wrap">
+          <table id="table">
+            <caption class="sr-only">Fund holdings. Column headers are buttons that sort the table. Pick a ticker to see its details.</caption>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div id="tableEmpty"></div>
+        </section>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm" id="columnsBtn" aria-haspopup="dialog" aria-expanded="false"></button>
-      ${unlocked ? "" : lockedHint("Sign in to add, edit, or delete positions.", "trade")}
-    </section>
-    <section class="table-wrap">
-      <table id="table">
-        <caption class="sr-only">Fund holdings. Column headers are buttons that sort the table.</caption>
-        <thead id="thead"></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-      <div id="tableEmpty"></div>
-    </section>
+      <aside class="hold-aside" aria-label="Details">
+        <section class="hold-inspector" id="holdInspector" hidden aria-live="polite"></section>
+        <div class="hold-default">
+          <section class="hold-aside-sec quick-links" aria-labelledby="ql-title">
+            <div class="hold-aside-head"><h3 id="ql-title" class="hold-aside-title">Needs attention</h3><a class="small" href="#/alerts">All alerts</a></div>
+            <div id="alertPreview">${skeleton("cards", { label: "Checking alerts" })}</div>
+          </section>
+          <section class="hold-aside-sec" id="concentration" aria-label="Largest positions"></section>
+          ${askChips(suggestionsFor(null).slice(0, 3), { label: "Ask about the portfolio" })}
+        </div>
+      </aside>
+    </div>
     ${crowdingPanelHtml("crowdPanel")}
   `;
 
@@ -575,7 +634,19 @@ export async function mount(container) {
     state.filter = e.target.value.trim();
     renderTable();
   });
+  const onInspectorClick = (e) => {
+    if (e.target.closest("[data-inspect-close]")) { inspect(state.selected); return; }
+    const editId = e.target.closest("[data-edit]")?.dataset.edit;
+    const delId = e.target.closest("[data-delete]")?.dataset.delete;
+    const p = state.positions.find((x) => String(x.id) === (editId || delId));
+    if (p && editId) openPositionDialog(p);
+    if (p && delId) deletePosition(p);
+  };
+  el("holdInspector").addEventListener("click", onInspectorClick);
   el("tbody").addEventListener("click", (e) => {
+    const pick = e.target.closest("[data-inspect]");
+    if (pick) { inspect(pick.dataset.inspect); return; }
+    if (!e.target.closest("a, button, input") && e.target.closest("tr[data-symbol]")) { inspect(e.target.closest("tr[data-symbol]").dataset.symbol); return; }
     const jump = e.target.closest("[data-scroll-to]");
     if (jump) { e.preventDefault(); document.getElementById(jump.dataset.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const editId = e.target.closest("[data-edit]")?.dataset.edit;

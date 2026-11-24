@@ -443,7 +443,7 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
 }
 
 // ---- Running now ----
-// Chips for runs in progress; refreshes on run_finished/feed events and every 20s while shown.
+// Chips for runs in progress; refreshes when the server announces a run starting or ending.
 export function mountRunning(el) {
   const draw = async () => {
     if (!el.isConnected) return stop();
@@ -451,9 +451,8 @@ export function mountRunning(el) {
     el.innerHTML = r.running.length ? `<span class="feed-running-label small muted">Running now</span>${r.running.map((x) => `<a class="feed-running-chip" href="${x.agent ? `#/agents/a/${encodeURIComponent(x.agent.slug)}` : `#/agents/runs/${x.runId}`}"><span class="agent-pulse" aria-hidden="true"></span>${esc(x.agent?.name || x.workflow)}${x.symbol ? ` · ${esc(x.symbol)}` : ""}</a>`).join("")}` : "";
     el.classList.toggle("hidden", !r.running.length);
   };
-  const onLive = (e) => { if (["run_finished", "feed"].includes(e.detail?.type)) draw(); };
-  const timer = setInterval(draw, 20e3);
-  function stop() { clearInterval(timer); window.removeEventListener("pif:live", onLive); }
+  const onLive = (e) => { if (["run_started", "run_finished", "feed"].includes(e.detail?.type)) draw(); };
+  function stop() { window.removeEventListener("pif:live", onLive); }
   window.addEventListener("pif:live", onLive);
   draw();
   return { stop, refresh: draw };

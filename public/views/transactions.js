@@ -1,4 +1,4 @@
-import { el, esc, api, fmtUSD, can, toast, confirmAction, lockedHint, pageHead, subTabs, invalidateContext, signed, errorState, bindRetry, skeleton, emptyState } from "../shared.js";
+import { el, esc, api, fmtUSD, can, toast, confirmAction, lockedHint, pageHead, subTabs, invalidateContext, signed, errorState, bindRetry, skeleton, emptyState, icon } from "../shared.js";
 import { PORTFOLIO_TABS } from "./portfolioTabs.js";
 import { mountTransactionsViz } from "./transactionsViz.js";
 
@@ -35,7 +35,7 @@ function refreshExecHint(form) {
       const r = await api(`/api/execution/${encodeURIComponent(symbol)}?direction=${direction}${shares ? `&shares=${encodeURIComponent(shares)}` : ""}`);
       if (!el("execHint")) return;
       if (r.error || r.mid === null) { hint.innerHTML = ""; return; }
-      hint.innerHTML = `Bid/ask ${fmtUSD(r.bid)} / ${fmtUSD(r.ask)}${r.suggestedLimitPrice ? ` · suggested limit ${fmtUSD(r.suggestedLimitPrice)}` : ""}${r.warnings?.length ? `<br>${r.warnings.map((w) => `⚠ ${esc(w)}`).join("<br>")}` : ""}`;
+      hint.innerHTML = `Bid/ask ${fmtUSD(r.bid)} / ${fmtUSD(r.ask)}${r.suggestedLimitPrice ? ` · suggested limit ${fmtUSD(r.suggestedLimitPrice)}` : ""}${r.warnings?.length ? `<br>${r.warnings.map((w) => `${icon("alert", { size: 14 })} ${esc(w)}`).join("<br>")}` : ""}`;
     } catch { if (el("execHint")) hint.innerHTML = ""; }
   }, 350);
 }

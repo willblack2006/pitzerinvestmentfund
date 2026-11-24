@@ -151,7 +151,9 @@ test("front end: escaping and markdown rendering are injection-safe", async () =
   assert.ok(html.includes("<h4>Head</h4>") && html.includes("<strong>bold</strong>") && html.includes("<li>"));
   assert.ok(!/href=/.test(html));
   assert.ok(shared.signed(null).includes("—"));
-  assert.ok(shared.signed(-1, "-1").includes("▼"));
+  // Direction shows as a sign (true minus) plus colour, with a screen-reader word, not triangles.
+  assert.ok(shared.signed(-1, "-1").includes("−1") && shared.signed(-1, "-1").includes("down"));
+  assert.ok(shared.signed(2, "2%").includes("+2%"));
 });
 
 test("time-weighted return ignores deposits, even on days with no valuation", () => {

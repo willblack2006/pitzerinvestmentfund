@@ -27,9 +27,13 @@ export function signed(value, formatted, { invert = false, neutral = false } = {
   if (value === null || value === undefined || Number.isNaN(value)) return `<span class="muted">—</span>`;
   const good = !neutral && (invert ? value < 0 : value > 0), bad = !neutral && (invert ? value > 0 : value < 0);
   const cls = good ? "gain-pos" : bad ? "gain-neg" : "";
-  const icon = value > 0 ? "▲" : value < 0 ? "▼" : "";
+  // Direction is shown by the sign and the colour, not by triangles: "+" when the formatted text
+  // has no sign of its own, and a true minus for negatives.
+  let text = String(formatted ?? value);
+  if (value > 0 && !/^[+]/.test(text)) text = `+${text}`;
+  if (value < 0) text = text.replace(/^-/, "−");
   const word = value > 0 ? "up" : value < 0 ? "down" : "";
-  return `<span class="${cls}">${icon ? `<span aria-hidden="true">${icon} </span><span class="sr-only">${word} </span>` : ""}${formatted ?? value}</span>`;
+  return `<span class="${cls}">${word ? `<span class="sr-only">${word} </span>` : ""}${text}</span>`;
 }
 
 // ---- Signed-in member (cookie session; loaded once by app.js from /api/auth/session) ----
@@ -204,10 +208,10 @@ const CAP_REASON = { trade: "Only portfolio managers can do this.", ai: "AI feat
 // it's off: a Sign in button for visitors, a plain reason for members without the right.
 export function lockedHint(text, cap = "member") {
   if (!session.member) {
-    return `<p class="locked-hint"><span aria-hidden="true">🔒</span> ${esc(text)}
+    return `<p class="locked-hint">${icon("lock", { size: 14 })} ${esc(text)}
       <button type="button" class="btn-link" data-signin>Sign in</button></p>`;
   }
-  return `<p class="locked-hint"><span aria-hidden="true">🔒</span> ${esc(CAP_REASON[cap] || text)}</p>`;
+  return `<p class="locked-hint">${icon("lock", { size: 14 })} ${esc(CAP_REASON[cap] || text)}</p>`;
 }
 
 // ---- Sortable tables: real <button>s inside <th> with aria-sort ----

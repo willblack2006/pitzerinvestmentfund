@@ -148,7 +148,7 @@ export const suggestionsFor = (symbol) => suggestedQuestions({ symbol, hash: loc
 // A row of question buttons; clicking one opens Ask PIF and asks it.
 export function askChips(questions, { label = "Ask PIF" } = {}) {
   if (!can("ai") || !questions?.length) return "";
-  return `<div class="agent-followups ask-chips"><span class="small muted">${icon("sparkle", { size: 14 })} ${esc(label)}</span>${questions.map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
+  return `<div class="agent-followups ask-chips"><span class="small muted">${esc(label)}</span>${questions.map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
 }
 
 // ---- Ask PIF side panel ----

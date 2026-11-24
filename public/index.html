@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" />
-  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#141415" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="PIF" />
@@ -16,7 +16,7 @@
   <title>Pitzer Investment Fund</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="ui/ui.css" />
   <link rel="stylesheet" href="ui/states.css" />
@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="css/polish.css" />
   <link rel="stylesheet" href="css/touch.css" />
   <link rel="stylesheet" href="css/index.css" />
+  <link rel="stylesheet" href="css/instrument.css" />
   <link rel="icon" type="image/png" href="/icons/icon-192.png" />
   <!-- The default route's module is a dynamic import() (see app.js), which the browser can't
        discover until app.js actually runs. Preloading it lets the two fetches happen in
@@ -50,13 +51,14 @@
     </a>
 
     <nav class="nav" aria-label="Primary">
-      <a class="nav-link" href="#/today" data-section="today">Today</a>
-      <a class="nav-link" href="#/" data-section="portfolio">Portfolio</a>
-      <a class="nav-link" href="#/research" data-section="research">Research</a>
-      <a class="nav-link" href="#/screener" data-section="ideas">Ideas</a>
-      <a class="nav-link" href="#/macro" data-section="market">Market</a>
-      <a class="nav-link hidden" id="agentsNav" href="#/agents" data-section="agents">Agents</a>
+      <a class="nav-link" href="#/today" data-section="today"><svg class="icon nav-icon" width="16" height="16" aria-hidden="true" focusable="false"><use href="/icons.svg#i-calendar"/></svg>Today</a>
+      <a class="nav-link" href="#/" data-section="portfolio"><svg class="icon nav-icon" width="16" height="16" aria-hidden="true" focusable="false"><use href="/icons.svg#i-briefcase"/></svg>Portfolio</a>
+      <a class="nav-link" href="#/research" data-section="research"><svg class="icon nav-icon" width="16" height="16" aria-hidden="true" focusable="false"><use href="/icons.svg#i-doc"/></svg>Research</a>
+      <a class="nav-link" href="#/screener" data-section="ideas"><svg class="icon nav-icon" width="16" height="16" aria-hidden="true" focusable="false"><use href="/icons.svg#i-crosshair"/></svg>Ideas</a>
+      <a class="nav-link" href="#/macro" data-section="market"><svg class="icon nav-icon" width="16" height="16" aria-hidden="true" focusable="false"><use href="/icons.svg#i-trending-up"/></svg>Market</a>
+      <a class="nav-link hidden" id="agentsNav" href="#/agents" data-section="agents"><svg class="icon nav-icon" width="16" height="16" aria-hidden="true" focusable="false"><use href="/icons.svg#i-users"/></svg>Agents</a>
     </nav>
+    <div id="sideRuns" class="side-runs" aria-live="polite"></div>
 
     <button id="searchToggle" type="button" class="icon-btn search-toggle" aria-label="Search" aria-controls="jumpForm" aria-expanded="false"><svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-search"/></svg></button>
 
@@ -73,7 +75,7 @@
     </form>
 
     <div class="auth-area">
-      <button id="askBtn" type="button" class="ask-btn hidden" aria-haspopup="dialog" title="Ask PIF (press A)"><svg class="icon" width="18" height="18" aria-hidden="true" focusable="false"><use href="/icons.svg#i-sparkle"/></svg><span class="ask-btn-label">Ask PIF</span></button>
+      <button id="askBtn" type="button" class="ask-btn hidden" aria-haspopup="dialog" title="Ask PIF (press A)"><svg class="icon" width="18" height="18" aria-hidden="true" focusable="false"><use href="/icons.svg#i-chat"/></svg><span class="ask-btn-label">Ask PIF</span><kbd class="ask-kbd" aria-hidden="true">A</kbd></button>
       <a id="alertsLink" class="icon-btn" href="#/alerts" aria-label="Alerts">
         <svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-bell"/></svg><span id="alertCount" class="icon-badge hidden"></span>
       </a>
@@ -81,7 +83,7 @@
         <svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-bell"/></svg><span id="inboxCount" class="icon-badge hidden"></span>
       </button>
       <button id="chatBtn" type="button" class="icon-btn chat-btn hidden" aria-label="Club chat" title="Club chat">
-        <svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-chat"/></svg><span id="chatCount" class="icon-badge hidden"></span>
+        <svg class="icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="/icons.svg#i-users"/></svg><span id="chatCount" class="icon-badge hidden"></span>
       </button>
       <button id="signInBtn" class="btn btn-ghost btn-sm" aria-haspopup="dialog">Sign in</button>
       <button id="accountBtn" type="button" class="account-btn is-guest" aria-haspopup="dialog" aria-expanded="false"><span id="accountInitials" aria-hidden="true"><svg class="icon" width="20" height="20" focusable="false"><use href="/icons.svg#i-user"/></svg></span><span class="sr-only" id="accountLabel">Menu</span></button>
