@@ -195,14 +195,14 @@ function wireDcf(symbol, data, price) {
     el("dcfImplied").textContent = ig === null ? "—" : `${(ig * 100).toFixed(1)}%`;
     const rs = [p.r - 0.02, p.r - 0.01, p.r, p.r + 0.01, p.r + 0.02];
     const gs = [p.gT - 0.01, p.gT - 0.005, p.gT, p.gT + 0.005, p.gT + 0.01];
-    el("dcfSens").innerHTML = `<caption class="cap">Sensitivity: value per share (rows = discount rate, columns = terminal growth). ▲ / ▼ = more than 15% above / below today's price.</caption>
+    el("dcfSens").innerHTML = `<caption class="cap">Sensitivity: value per share (rows = discount rate, columns = terminal growth). + / − = more than 15% above / below today's price.</caption>
       <thead><tr><th scope="col">WACC \\ g</th>${gs.map((g) => `<th scope="col" class="num">${(g * 100).toFixed(1)}%</th>`).join("")}</tr></thead>
       <tbody>${rs.map((r) => `<tr><th scope="row">${(r * 100).toFixed(1)}%</th>${gs.map((g) => {
         const val = dcfValue({ ...p, r, gT: g })?.perShare;
         // Neutral marks, not green/red: a model value above the price isn't a buy call.
         const mark = val && price ? (val > price * 1.15 ? "above" : val < price * 0.85 ? "below" : "") : "";
         const center = r === p.r && g === p.gT ? " sens-center" : "";
-        return `<td class="num${mark ? ` sens-${mark}` : ""}${center}">${val ? fmtUSD(val).replace(/\.\d+$/, "") : "—"}${mark ? ` <span aria-hidden="true">${mark === "above" ? "▲" : "▼"}</span><span class="sr-only">(${mark} today's price)</span>` : ""}</td>`;
+        return `<td class="num${mark ? ` sens-${mark}` : ""}${center}">${val ? fmtUSD(val).replace(/\.\d+$/, "") : "—"}${mark ? ` <span aria-hidden="true">${mark === "above" ? "+" : "−"}</span><span class="sr-only">(${mark} today's price)</span>` : ""}</td>`;
       }).join("")}</tr>`).join("")}</tbody>`;
   };
   el("dcfForm").addEventListener("input", update);

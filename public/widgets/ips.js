@@ -7,7 +7,7 @@ export default {
     const items = ctx.data.ips || [];
     const breaches = (ctx.data.checks || []).filter((c) => c.level === "breach");
     if (!items.length) { body.innerHTML = ctx.empty("No limits set", "Set position, sector and cash limits in Settings to track headroom here.", { label: "Open Settings", href: "#/settings" }); return; }
-    body.innerHTML = `${breaches.length ? `<p class="small gain-neg" role="alert">▼ ${breaches.length} breach${breaches.length === 1 ? "" : "es"}: ${esc(breaches[0].detail)}</p>` : ""}
+    body.innerHTML = `${breaches.length ? `<p class="small gain-neg" role="alert">${breaches.length} breach${breaches.length === 1 ? "" : "es"}: ${esc(breaches[0].detail)}</p>` : ""}
       <ul class="mini-list">${items.map((i) => {
         const used = i.unit === "%" ? i.current / i.limit : i.current / i.limit;
         const tight = i.headroom < 0 ? "is-breach" : i.headroom / (i.limit || 1) < 0.15 ? "is-tight" : "";

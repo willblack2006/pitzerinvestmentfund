@@ -45,7 +45,7 @@ function row(r, maxP) {
     <th scope="row"><a href="#/research/${encodeURIComponent(r.symbol)}/thesis"><strong>${esc(r.symbol)}</strong></a>${r.owned ? "" : ` <span class="badge">not held</span>`}</th>
     <td>${statusChip(r.status)}</td>
     ${cells.join("")}
-    <td class="num">${healthBadge(r.health)}${t ? ` <span class="small ${t > 0 ? "gain-pos" : "gain-neg"}"><span aria-hidden="true">${t > 0 ? "▲" : "▼"}</span><span class="sr-only">${t > 0 ? "up" : "down"}</span>${Math.abs(Math.round(t))}</span>` : ""}</td>
+    <td class="num">${healthBadge(r.health)}${t ? ` <span class="small ${t > 0 ? "gain-pos" : "gain-neg"}"><span aria-hidden="true">${t > 0 ? "+" : "−"}</span><span class="sr-only">${t > 0 ? "up" : "down"}</span>${Math.abs(Math.round(t))}</span>` : ""}</td>
     <td>${sparkline(r.history)}</td>
     <td>${r.drift?.drifted ? `<span class="badge badge-warn" title="Compared with ${esc(r.drift.from)}">Drift</span>` : r.drift ? `<span class="muted small">${Math.round((r.drift.similarity || 0) * 100)}% same</span>` : `<span class="muted small">—</span>`}</td>
     <td class="small">${next ? `${esc(next.dueDate || "no date")}${next.state === "late" ? ` <span class="badge badge-warn">late</span>` : ""}<div class="muted">${esc(next.text.slice(0, 50))}</div>` : cs.due ? `${cs.onTime}/${cs.due} on time` : `<span class="muted">—</span>`}</td>
@@ -68,7 +68,7 @@ function render(c, rows) {
         <thead><tr><th scope="col">Ticker</th><th scope="col">Overall</th>${Array.from({ length: maxP }, (_, i) => `<th scope="col" class="th-cell">P${i + 1}</th>`).join("")}<th scope="col" class="num">Health</th><th scope="col">6 months</th><th scope="col">Drift</th><th scope="col">Next catalyst</th></tr></thead>
         <tbody>${shown.map((r) => row(r, maxP)).join("")}</tbody></table></div>`
         : emptyState({ icon: "target", title: filter === "all" ? "No holdings to track yet" : "Nothing matches this filter", body: filter === "all" ? "Add holdings, then split each thesis into pillars on its Research → Thesis tab." : "Try another filter." })}
-      <p class="muted small">● intact · ◆ watch · ▼ weakened · ✕ broken · ○ unknown. Health = weighted share of pillars intact (watch 75%, weakened 50%, broken 0), leaving out unchecked or overdue pillars, minus points for a stale thesis, a price near the bear case, or a tripped exit tripwire. Hover a score for the reasons.</p>
+      <p class="muted small">● intact · ◆ watch · ◇ weakened · ✕ broken · ○ unknown. Health = weighted share of pillars intact (watch 75%, weakened 50%, broken 0), leaving out unchecked or overdue pillars, minus points for a stale thesis, a price near the bear case, or a tripped exit tripwire. Hover a score for the reasons.</p>
     </div>`;
   c.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", () => { filter = b.dataset.filter; render(c, rows); c.querySelector(`[data-filter="${filter}"]`)?.focus(); }));
   c.querySelector("#thSort")?.addEventListener("change", (e) => { sort = e.target.value; render(c, rows); c.querySelector("#thSort")?.focus(); });

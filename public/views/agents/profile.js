@@ -24,7 +24,7 @@ export function agentCard(a) {
   const s = a.stats || {};
   return `<article class="panel feed-agent-card" data-agent-card="${esc(a.slug)}">
     <header class="feed-agent-card-head">
-      <span class="feed-avatar is-agent feed-tone-${hue(a.slug)}" aria-hidden="true">${icon("sparkle", { size: 16 })}</span>
+      <span class="feed-avatar is-agent feed-tone-${hue(a.slug)}" aria-hidden="true">${icon("agent", { size: 16 })}</span>
       <div><h3><a href="#/agents/a/${encodeURIComponent(a.slug)}">${esc(a.name)}</a></h3>
         <p class="small muted">${a.kind === "builtin" ? "Built in" : a.owner ? `By ${esc(a.owner.name)}` : "Team"}${a.visibility === "private" ? " · Private" : ""}${a.status !== "active" ? ` · <span class="badge ${STATUS[a.status]?.[0] || ""}">${esc(STATUS[a.status]?.[1] || a.status)}</span>` : ""}</p></div>
     </header>

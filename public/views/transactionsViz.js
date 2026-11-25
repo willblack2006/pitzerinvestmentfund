@@ -16,7 +16,7 @@ function timeline(rows) {
     const amount = trade ? r.shares * r.price : r.amount;
     out += `<li class="tx-item" data-type="${esc(r.type)}">
       <div class="tx-item-head"><span>${esc(TYPES[r.type] || r.type)}${r.symbol ? ` <a href="#/research/${encodeURIComponent(r.symbol)}">${esc(r.symbol)}</a>` : ""}</span><span class="num">${fmt.usd(amount)}</span></div>
-      <div class="tx-item-meta">${esc(fmt.date(r.date))}${trade ? ` · ${esc(String(+r.shares.toFixed(4)))} shares at ${fmt.usd(r.price)}` : ""}${r.realizedGain != null ? ` · realized ${r.realizedGain >= 0 ? "▲" : "▼"} ${fmt.usd(r.realizedGain)}` : ""}${r.createdBy ? ` · ${esc(r.createdBy)}` : ""}</div>
+      <div class="tx-item-meta">${esc(fmt.date(r.date))}${trade ? ` · ${esc(String(+r.shares.toFixed(4)))} shares at ${fmt.usd(r.price)}` : ""}${r.realizedGain != null ? ` · realized ${r.realizedGain >= 0 ? "+" : "−"}${fmt.usd(Math.abs(r.realizedGain))}` : ""}${r.createdBy ? ` · ${esc(r.createdBy)}` : ""}</div>
       ${r.note ? `<div class="tx-item-note">${esc(r.note)}</div>` : ""}</li>`;
   }
   return `<ol class="tx-timeline" aria-label="Ledger timeline, newest first">${out}</ol>`;
@@ -38,7 +38,7 @@ async function costChart(box, symbol) {
   const note = d.heldBeforeLedger && d.ledgerStarts && d.ledgerStarts > dates[0]
     ? `The cost line starts at the first recorded trade (${esc(fmt.date(d.ledgerStarts))}); earlier shares came in before the ledger.`
     : !d.trades.length ? "No trades recorded for it, so the cost line is today's average cost." : "";
-  box.innerHTML = `<p class="small">${esc(symbol)} ${fmt.usd(last)} vs average cost ${fmt.usd(d.avgCost)}${gain !== null ? `: <b class="${gain >= 0 ? "gain-pos" : "gain-neg"}">${gain >= 0 ? "▲" : "▼"} ${fmt.pct(Math.abs(gain), 1)}</b>` : ""} on ${esc(String(+d.shares.toFixed(4)))} shares. ${note}</p><div class="cost-chart"></div>`;
+  box.innerHTML = `<p class="small">${esc(symbol)} ${fmt.usd(last)} vs average cost ${fmt.usd(d.avgCost)}${gain !== null ? `: <b class="${gain >= 0 ? "gain-pos" : "gain-neg"}">${gain >= 0 ? "+" : "−"}${fmt.pct(Math.abs(gain), 1)}</b>` : ""} on ${esc(String(+d.shares.toFixed(4)))} shares. ${note}</p><div class="cost-chart"></div>`;
   lineChart(box.querySelector(".cost-chart"), {
     dates, label: `${symbol} price against the fund's average cost, with trades marked`, height: 260, events,
     series: [

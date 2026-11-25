@@ -3,7 +3,7 @@ import { api, emptyState } from "../../shared.js";
 import { outputCard } from "../agents.js";
 
 export default {
-  key: "briefs", label: "Briefs &amp; reports", order: 30,
+  key: "briefs", label: "Briefs & reports", order: 30,
   async render(el) {
     const r = await api("/api/agents/briefs");
     el.innerHTML = r.briefs.length ? r.briefs.map((x) => outputCard(x.brief, x.runId, x.feedback)).join("")

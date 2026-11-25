@@ -33,13 +33,13 @@ const nyToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_
 const daysUntil = (iso) => Math.round((new Date(`${iso}T12:00:00Z`) - new Date(`${nyToday()}T12:00:00Z`)) / 864e5);
 const ext = (url, html, cls = "") => `<a ${cls ? `class="${cls}" ` : ""}href="${safeUrl(url)}" target="_blank" rel="noopener">${html}<span class="sr-only"> (opens in new tab)</span></a>`;
 
-// Day change with an arrow. Only broad indices and our own holdings get green/red (up is
+// Day change with a sign. Only broad indices and our own holdings get green/red (up is
 // good for a long-only fund); VIX, yields, oil, gold, dollar, bitcoin and sectors stay neutral.
 function change(v, tone = "neutral") {
   if (!Number.isFinite(v)) return `<span class="muted">—</span>`;
   const cls = tone === "market" ? (v > 0 ? "gain-pos" : v < 0 ? "gain-neg" : "") : "";
-  const arrow = v > 0 ? "▲" : v < 0 ? "▼" : "";
-  return `<span class="${cls}">${arrow ? `<span aria-hidden="true">${arrow} </span><span class="sr-only">${v > 0 ? "up" : "down"} </span>` : ""}${Math.abs(v).toFixed(2)}%</span>`;
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "";
+  return `<span class="${cls}">${sign ? `<span aria-hidden="true">${sign}</span><span class="sr-only">${v > 0 ? "up" : "down"} </span>` : ""}${Math.abs(v).toFixed(2)}%</span>`;
 }
 const price = (row) => {
   if (!Number.isFinite(row.price)) return "—";

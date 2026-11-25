@@ -12,6 +12,6 @@ export default {
     const d = await api("/api/signal-matrix?scope=holdings");
     const m = d.movers || [];
     if (!m.length) { body.innerHTML = `<p class="muted small">No price data yet today.</p>`; return; }
-    body.innerHTML = `<ul class="rv-w-list">${m.map((x) => `<li><a href="#/research/${encodeURIComponent(x.symbol)}"><strong>${esc(x.symbol)}</strong></a><span class="muted">${esc(x.text)}</span><span class="${x.sigmas >= 0 ? "tone-good" : "tone-bad"}">${x.sigmas >= 0 ? "▲" : "▼"} ${Math.abs(x.sigmas).toFixed(1)}σ</span></li>`).join("")}</ul>`;
+    body.innerHTML = `<ul class="rv-w-list">${m.map((x) => `<li><a href="#/research/${encodeURIComponent(x.symbol)}"><strong>${esc(x.symbol)}</strong></a><span class="muted">${esc(x.text)}</span><span class="${x.sigmas >= 0 ? "tone-good" : "tone-bad"}">${x.sigmas >= 0 ? "+" : "−"}${Math.abs(x.sigmas).toFixed(1)}σ</span></li>`).join("")}</ul>`;
   },
 };

@@ -40,7 +40,7 @@ function card(key, series) {
   const delta = prev ? latest.value - prev.value : null;
   const unit = esc(series.unit);
   // Direction is shown neutrally: a rising rate or CPI isn't "good" or "bad" by itself.
-  const dir = delta === null ? "" : delta > 0 ? "▲ up" : delta < 0 ? "▼ down" : "unchanged";
+  const dir = delta === null ? "" : delta > 0 ? "up" : delta < 0 ? "down" : "unchanged";
   return `
     <section class="panel macro-card" aria-labelledby="h-${key}">
       <h3 id="h-${key}">${esc(series.label)}</h3>

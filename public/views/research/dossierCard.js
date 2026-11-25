@@ -12,7 +12,7 @@ export async function render(el, { symbol }) {
   if (!total) { el.remove(); return; }
   const summary = dossierSummary(d, { canRefresh: can("ai") });
   el.className = "panel dossier-card";
-  el.innerHTML = `<div class="panel-head"><h3>${icon("sparkle", { size: 16 })} What our agents know</h3><a class="small" href="#/memory/${encodeURIComponent(symbol)}">All ${total} ${total === 1 ? "memory" : "memories"}</a></div>
+  el.innerHTML = `<div class="panel-head"><h3>${icon("agent", { size: 16 })} What our agents know</h3><a class="small" href="#/memory/${encodeURIComponent(symbol)}">All ${total} ${total === 1 ? "memory" : "memories"}</a></div>
     ${summary}
     ${d.openQuestions.length ? `<p class="pf-sub">Open questions</p><ul class="mem-list">${d.openQuestions.slice(0, 3).map((m) => memoryItem(m, { actions: false, showSymbol: false })).join("")}</ul>` : ""}
     ${recent.length ? `<details${summary ? "" : " open"}><summary class="small">Latest notes (${Math.min(4, recent.length)} of ${recent.length})</summary><ul class="mem-list">${recent.slice(0, 4).map((m) => memoryItem(m, { actions: false, showSymbol: false })).join("")}</ul></details>` : ""}

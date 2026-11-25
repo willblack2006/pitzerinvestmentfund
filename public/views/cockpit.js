@@ -66,7 +66,7 @@ function kpis(d) {
     <div class="kpi"><div class="kpi-label">Active share</div><div class="kpi-value">${fmt.pct(k.activeShare, 0)}</div>
       <div class="kpi-sub">Sector mix vs ${esc(d.sectorBenchmark || d.benchmark)}</div></div>
     <div class="kpi"><div class="kpi-label">Policy headroom</div>
-      ${ips ? `<div class="kpi-value">${ips.headroom >= 0 ? `${ips.headroom.toFixed(1)}${ips.unit === "%" ? " pts" : ""}` : `<span class="gain-neg">▼ over ${Math.abs(ips.headroom).toFixed(1)}</span>`}</div>
+      ${ips ? `<div class="kpi-value">${ips.headroom >= 0 ? `${ips.headroom.toFixed(1)}${ips.unit === "%" ? " pts" : ""}` : `<span class="gain-neg">Over by ${Math.abs(ips.headroom).toFixed(1)}</span>`}</div>
         <div class="kpi-sub">${esc(ips.rule)}${ips.symbol ? ` (${esc(ips.symbol)})` : ips.sector ? ` (${esc(ips.sector)})` : ""}: ${ips.unit === "%" ? `${ips.current.toFixed(1)}% of ${ips.limit}%` : `${ips.current} of ${ips.limit}`}</div>
         <div class="kpi-bar ${ipsCls}" aria-hidden="true"><span style="width:${ipsBar.toFixed(0)}%"></span></div>`
       : `<div class="kpi-value">—</div><div class="kpi-sub"><a href="#/settings">Set policy limits</a></div>`}</div>

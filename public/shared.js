@@ -17,7 +17,7 @@ export const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 // Only allow http(s) links from external data (blocks javascript: URLs in news feeds).
 export const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? esc(u) : "#");
 
-// Gain/loss with a shape cue (▲/▼) so it never relies on red/green alone. Missing values
+// Gain/loss with a sign (+/−) so it never relies on red/green alone. Missing values
 // stay neutral instead of defaulting to "positive".
 // `invert`: for numbers where up is the bad direction (e.g. rising short interest), so the
 // color matches the meaning while the arrow still shows the direction.

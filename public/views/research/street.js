@@ -44,12 +44,12 @@ function estimatesTable(est) {
             <td class="num">${e.growth != null ? signed(e.growth * 100, fmtPct(e.growth * 100)) : "—"}</td>
             <td class="num">${fmtMoneyCompact(e.revenueAvg)}</td>
             <td class="num">${drift === null ? "—" : signed(drift, fmtPct(drift))}</td>
-            <td class="num">${up || down ? `<span class="tone-good">▲${up}</span> / <span class="tone-bad">▼${down}</span>` : "—"}</td>
+            <td class="num">${up || down ? `<span class="tone-good">${up} up</span> / <span class="tone-bad">${down} down</span>` : "—"}</td>
           </tr>`;
         }).join("")}</tbody>
       </table>
     </div>
-    <p class="muted small">Rising estimates (more ▲ revisions, positive 90-day change) tend to support the stock; falling estimates are an early warning.</p>`;
+    <p class="muted small">Rising estimates (more upward revisions, positive 90-day change) tend to support the stock; falling estimates are an early warning.</p>`;
 }
 
 function changesTable(changes) {

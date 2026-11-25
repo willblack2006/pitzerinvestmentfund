@@ -12,7 +12,7 @@ let state = { scope: "holdings", sort: "summary", dir: -1 };
 try { Object.assign(state, JSON.parse(sessionStorage.getItem("pif_signal_matrix") || "{}")); } catch { /* defaults */ }
 const save = () => { try { sessionStorage.setItem("pif_signal_matrix", JSON.stringify(state)); } catch { /* private mode */ } };
 
-const cellText = (c) => (c.score === null ? "—" : `${c.score > 0.05 ? "▲" : c.score < -0.05 ? "▼" : "•"} ${Math.round(Math.abs(c.score) * 100)}`);
+const cellText = (c) => (c.score === null ? "—" : `${c.score > 0.05 ? "+" : c.score < -0.05 ? "−" : ""}${Math.round(Math.abs(c.score) * 100)}`);
 const word = (s) => (s === null ? "no data" : s >= 0.5 ? "strongly supportive" : s >= 0.15 ? "supportive" : s > -0.15 ? "neutral" : s > -0.5 ? "a warning" : "a strong warning");
 
 export async function mount(c) {

@@ -49,10 +49,10 @@ export function renderTest(box, state, { start = false } = {}) {
     box.innerHTML = `<section class="ab-side-card ab-test" aria-labelledby="abTestH">
       <div class="ab-test-head"><h3 id="abTestH">${icon("flask", { size: 16 })} Test</h3>
         <div class="seg seg-sm" role="group" aria-label="Look back">${[30, 90].map((d) => `<button type="button" class="seg-btn" data-test-days="${d}" aria-pressed="${state.days === d}">${d} days</button>`).join("")}</div></div>
-      <div class="ab-test-body" aria-live="polite">${state.running ? `<p class="muted">${icon("sparkle", { size: 16 })} Checking the last ${state.days} days…</p>`
+      <div class="ab-test-body" aria-live="polite">${state.running ? `<p class="muted">${icon("agent", { size: 16 })} Checking the last ${state.days} days…</p>`
         : state.error ? `<p class="error small">${esc(state.error)}</p>` : state.result ? resultHtml(state.result, state.days) : ""}</div>
       <div class="ab-test-run">
-        ${saved ? `<button type="button" class="btn btn-ghost btn-sm" data-test-run>${icon("sparkle", { size: 16 })} Run once now</button><span class="muted small">A real run: it posts where the agent posts and costs what a run costs.</span>`
+        ${saved ? `<button type="button" class="btn btn-ghost btn-sm" data-test-run>${icon("agent", { size: 16 })} Run once now</button><span class="muted small">A real run: it posts where the agent posts and costs what a run costs.</span>`
           : `<span class="muted small">Save the agent to run it for real.</span>`}
       </div>
       <div class="ab-run-out" aria-live="polite"></div>

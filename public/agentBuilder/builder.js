@@ -39,7 +39,7 @@ export async function mountBuilder(root, { slug = null, template = null, embedde
   ensureCss();
   const me = currentMember();
   if (!can("ai")) { root.innerHTML = `<p class="notice">Building agents needs AI access. An admin can turn it on for you in Settings.</p>`; return; }
-  root.innerHTML = `<div class="ab-loading">${icon("sparkle")} Loading the builder…</div>`;
+  root.innerHTML = `<div class="ab-loading">${icon("agent")} Loading the builder…</div>`;
 
   const st = {
     agent: null, meta: { name: "", description: "", icon: "sparkle", visibility: "team" }, spec: M.defaultSpec(),
@@ -167,7 +167,7 @@ export async function mountBuilder(root, { slug = null, template = null, embedde
       <div class="ab-add-row"><span class="muted small">Add</span>
         <button type="button" class="btn btn-ghost btn-sm" data-act="step-add" data-type="tool"${full ? " disabled" : ""}>${icon("doc", { size: 16 })} Get data</button>
         <button type="button" class="btn btn-ghost btn-sm" data-act="step-add" data-type="rule"${full ? " disabled" : ""}>${icon("sliders", { size: 16 })} Rule</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-act="step-add" data-type="ai"${full || aiN >= M.MAX_AI_STEPS ? " disabled" : ""}>${icon("sparkle", { size: 16 })} AI step</button></div>`;
+        <button type="button" class="btn btn-ghost btn-sm" data-act="step-add" data-type="ai"${full || aiN >= M.MAX_AI_STEPS ? " disabled" : ""}>${icon("agent", { size: 16 })} AI step</button></div>`;
   };
 
   const outBody = () => `<ul class="ab-outs">${M.OUTPUT_KINDS.map((k) => {
@@ -227,7 +227,7 @@ export async function mountBuilder(root, { slug = null, template = null, embedde
       <span class="ab-head-actions">${mine ? `<button type="button" class="btn btn-ghost btn-sm" data-act="${st.agent.status === "paused" ? "resume" : "pause"}">${st.agent.status === "paused" ? "Turn on" : "Pause"}</button>` : ""}<button type="button" class="btn btn-ghost btn-sm" data-act="history">History</button></span></div>` : "";
 
   const describeBox = () => st.agent ? "" : `<form class="panel ab-describe" data-act="draft-form">
-      <label for="abWords"><strong>${icon("sparkle", { size: 16 })} Describe it in words</strong> <span class="muted small">and the form fills itself in. You check everything before saving.</span></label>
+      <label for="abWords"><strong>${icon("agent", { size: 16 })} Describe it in words</strong> <span class="muted small">and the form fills itself in. You check everything before saving.</span></label>
       <div class="ab-describe-row"><textarea id="abWords" rows="2" maxlength="1500" placeholder="e.g. Tell me when any holding's estimates get cut twice in a month and check it against our thesis"></textarea>
       <button type="submit" class="btn btn-primary">Draft it</button></div>
       <p class="muted small" id="abDraftNote">${st.draftNote ? esc(st.draftNote.text) : "Uses the fast model, under a cent."}</p>

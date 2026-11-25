@@ -206,7 +206,7 @@ dialog { border: 1px solid var(--border); border-radius: 14px; box-shadow: var(-
 /* ============ Holdings (1B: table with an inspector) ============ */
 .period-bar { padding: 0 var(--gutter); }
 .seg-sm { border-color: transparent; background: var(--surface-2); padding: 2px; border-radius: 8px; gap: 0; }
-.seg-btn { font: 12px var(--mono); border: 0; border-radius: 6px; color: var(--text-3); background: transparent; }
+.seg-btn { font: 12px var(--font); font-variant-numeric: tabular-nums; border: 0; border-radius: 6px; color: var(--text-2); background: transparent; }
 .seg-btn[aria-pressed="true"] { background: var(--surface-1); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
 
 .hold-figs { display: flex; flex-wrap: wrap; gap: 12px 40px; padding: 16px var(--gutter) 0; }
@@ -431,3 +431,9 @@ details[open] > .cm-sum { background: var(--surface-2); }
   .note-fab { bottom: calc(var(--tabbar-h) + 14px); }
   .hold-inspector { bottom: var(--tabbar-h) !important; }
 }
+
+/* Sweep: notices are quiet hairline boxes with a small tone dot, not tinted panels. */
+.notice { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-2); border-radius: 8px; position: relative; padding-left: 28px; }
+.notice::before { content: ""; position: absolute; left: 12px; top: 1.05em; width: 6px; height: 6px; border-radius: 50%; background: var(--caution, #b7791f); }
+.error-box { border: 1px solid var(--border); background: var(--surface-1); border-radius: 8px; }
+.error-box > :first-child { color: var(--negative); }
