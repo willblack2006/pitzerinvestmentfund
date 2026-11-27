@@ -102,3 +102,26 @@
 }
 .trace-page > .notice { margin: 0; }
 .trace-page .chip-list { margin: 0; padding: 0; list-style: none; }
+
+/* Data health page (#/data-health) */
+.dh-table th[scope="row"] { min-width: 200px; }
+.dh-table th[scope="row"] .status-dot { display: inline-block; margin: 0 6px 0 0; vertical-align: 1px; }
+.dh-sub { display: block; font-weight: 400; margin-left: 14px; }
+.dh-err { display: block; color: var(--negative); overflow-wrap: anywhere; }
+.dh-runs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.dh-runs li { display: grid; grid-template-columns: auto 1fr auto; gap: 2px var(--sp-2); align-items: baseline; padding-bottom: var(--sp-2); border-bottom: 1px solid var(--border); }
+.dh-runs li:last-child { border-bottom: 0; }
+.dh-runs li > .muted.small:not(.dh-when) { grid-column: 2; }
+.dh-runs .dh-when { grid-column: 3; grid-row: 1; }
+.dh-runs .dh-msg { grid-column: 2 / -1; }
+.dh-runs .status-dot { margin: 0; align-self: center; }
+@media (max-width: 640px) {
+  .dh-scroll { overflow: visible; }
+  .dh-table thead { display: none; }
+  .dh-table, .dh-table tbody, .dh-table tr, .dh-table th, .dh-table td { display: block; width: auto; text-align: left; }
+  .dh-table tr { padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+  .dh-table td, .dh-table th[scope="row"] { border: 0; padding: 2px 0; min-width: 0; }
+  .dh-table td[data-label]::before { content: attr(data-label) ": "; color: var(--text-2); }
+  .dh-table .dh-act { padding-top: var(--sp-2); }
+  .mini-table.dh-table td.num { text-align: left; font-family: inherit; }
+}
