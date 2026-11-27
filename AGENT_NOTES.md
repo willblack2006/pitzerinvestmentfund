@@ -10,6 +10,15 @@ Format:
 - Gotchas: ...
 ```
 
+## 2026-11-25 — Claude (frontend revamp, all parts built; not pushed)
+- Will picked direction C "Instrument" and feature options 1B 2B 3A 4A+4B 5A 6A (mockups: project files `frontend-revamp/`). Work is on branch `claude/project-thread-g8hnm5`, committed locally and **not pushed**: Will asked that nothing is pushed until he says the whole revamp is finished. A patch of each commit is in project files `frontend-revamp/patches/`.
+- `public/css/instrument.css` loads last: tokens (Geist/Geist Mono, neutral greys, ink primary buttons, one blue accent), a fixed 232px sidebar at >=1024px (app.js sets `--topbar-h` to 0 there), bottom tab bar under 720px (`--tabbar-h` lifts the notes button, run pill and holdings sheet), quiet notices, sans segmented controls. Rules follow heydamir/unslop (CC BY 4.0).
+- No uppercase tracked labels, weights capped at 600, no ▲▼ glyphs (signs + / − instead; `viz/core.js` `arrow()` now returns ""), no sparkle: `i-sparkle` in icons.svg now draws a plain agent glyph because "sparkle" is a stored agent icon name.
+- Live updates: `run_started`/`run_finished` (with `parentRunId`, and for failed runs too) on /api/events drive the sidebar "Working now" list and phone pill (`public/sideRuns.js`), the feed's Running now, Ask progress (`ai.js` withProgress streams `/api/agents/runs/:id/stream`), team runs (`followRun`, 15s safety check only) and the builder test panel. A running run's page (`views/agents/trace.js` mountLive) shows a live step log beside the answer so far.
+- Pages: holdings inspector (1B), research as one scrolling document with an outline (2B), Ask panel context chip (3A), committee decision sheet in `teamsShared.js` (5A), agents tab row deduped.
+- Still polling on purpose: presence heartbeat (30s), holdings price refresh (60s), alert badge (10 min). There is no push source for prices.
+- Gotcha: `polish.css` page-enter animation used fill-mode both, leaving a transform on the view that traps `position: fixed` children; instrument.css forces fill-mode backwards.
+
 ## 2026-11-19, Claude (AI polish round 2: Agents tabs, desk, red team, briefs)
 - Did: adopted `polish.css` tokens (`--ease-out`, `--dur-*`, `--shadow-*`, `--ring`, `--r-xl`) in `public/css/agents.css`. Agents Ask tab has a rounded composer with a round-pill Ask button; Research desk uses a segmented control, per-tool run labels and focus on the first field; red team objections are individual cards with a severity edge and a pulse while waiting; briefs get a highlighted quote style. Removed my earlier `.desk-trade` flex override, which broke the grid in `style.css`.
 - Checked: screenshots in `/mnt/project-files/ai-polish/round2-*.png` with a fake OpenAI.

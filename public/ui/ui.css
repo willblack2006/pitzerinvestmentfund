@@ -60,7 +60,7 @@
 .ui-pick-list { overflow: auto; padding: 0 var(--sp-1, 4px) var(--sp-2, 8px); }
 .ui-pick-head {
   padding: var(--sp-3, 12px) var(--sp-2, 8px) var(--sp-1, 4px);
-  font-size: var(--fs-xs, 12px); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: var(--fs-xs, 12px); font-weight: 600;
   color: var(--text-2, var(--muted));
 }
 .ui-pick-row {
@@ -75,7 +75,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .ui-pick-right { flex: none; display: flex; align-items: center; gap: var(--sp-1, 4px); color: var(--text-2, var(--muted)); }
-.ui-pick-check { color: var(--accent); font-weight: 700; }
+.ui-pick-check { color: var(--accent); font-weight: 600; }
 .ui-pick-right button {
   appearance: none; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--border-strong, var(--border)); background: transparent; color: var(--text-2, var(--muted)); font: inherit; font-size: var(--fs-xs, 12px);

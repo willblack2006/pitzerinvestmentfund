@@ -24,7 +24,7 @@ export const fmt = {
 };
 
 // Up/down said in words and a shape, never by color alone.
-export const arrow = (v) => (finite(v) ? (v > 0 ? "▲ " : v < 0 ? "▼ " : "") : "");
+export const arrow = () => ""; // signs come from fmt.spct; kept so callers need no change
 
 export const linear = (d0, d1, r0, r1) => {
   const k = d1 === d0 ? 0 : (r1 - r0) / (d1 - d0);

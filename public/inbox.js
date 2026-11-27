@@ -1,4 +1,4 @@
-// Personal notifications: the 🔔 for signed-in members opens this inbox (visitors keep the
+// Personal notifications: the bell for signed-in members opens this inbox (visitors keep the
 // bell as a link to the fund's Alerts page). New ones arrive live over /api/events.
 import { el, esc, api, toast, can, icon } from "./shared.js";
 import { togglePopover } from "./ui/popover.js";

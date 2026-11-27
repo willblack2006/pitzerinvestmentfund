@@ -916,7 +916,7 @@ export async function mountPriceTerminal(ctx) {
       return `
         <span class="ct-lg-sym">${esc(ctx.symbol)}</span><span class="muted">${esc(when)}</span>
         ${state.type === "line" || state.type === "area" || percent ? `<span>Close <b>${priceFmt(b.close)}</b></span>` : `<span>O <b>${priceFmt(b.open)}</b></span><span>H <b>${priceFmt(b.high)}</b></span><span>L <b>${priceFmt(b.low)}</b></span><span>C <b>${priceFmt(b.close)}</b></span>`}
-        ${chg != null ? `<span class="${chg >= 0 ? "tone-good" : "tone-bad"}">${chg >= 0 ? "▲" : "▼"} ${Math.abs(chg).toFixed(2)}%</span>` : ""}
+        ${chg != null ? `<span class="${chg >= 0 ? "tone-good" : "tone-bad"}">${chg >= 0 ? "+" : "−"}${Math.abs(chg).toFixed(2)}%</span>` : ""}
         ${legendItems.map((li) => { const vs = li.series.map(val).filter((v) => v != null); return vs.length ? `<span class="ct-lg-ind" data-ind="${li.k}" title="Change or remove ${esc(li.label)}"><i style="--c:${li.color}"></i>${esc(li.label)} <b>${vs.map((v) => (li.fmt || priceFmt)(v)).join(" / ")}</b></span>` : ""; }).join("")}
         ${cmpSeries.map(({ s, label }) => { const d = s.data().find((x) => x.time === b.t); return d ? `<span class="ct-lg-ind"><i style="--c:${s.options().color}"></i>${esc(label)} <b>${priceFmt(d.value)}</b></span>` : ""; }).join("")}`;
     };

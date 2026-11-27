@@ -32,7 +32,7 @@
 .trace-row summary:hover { background: var(--row-hover); }
 .trace-row summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .trace-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
-.trace-kind { display: inline-block; min-width: 54px; font-size: var(--fs-xs); color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.trace-kind { display: inline-block; min-width: 54px; font-size: var(--fs-xs); color: var(--text-2); }
 .trace-track { position: relative; height: 12px; background-image: linear-gradient(to right, var(--grid) 1px, transparent 1px); background-size: 25% 100%; }
 .trace-bar { position: absolute; top: 1px; bottom: 1px; border-radius: 4px; min-width: 4px; box-shadow: 0 0 0 2px var(--surface-1); }
 .trace-bar.is-estimated { opacity: .6; }

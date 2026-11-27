@@ -175,7 +175,7 @@ function renderRolling(symbol, r, p, win) {
   const months = Number(win) === 63 ? 3 : 6;
   const label = `${symbol}'s ${months}-month rolling beta and correlation with ${r.benchmark} from ${roll.dates[0]} to ${roll.dates.at(-1)}. Beta now ${f2(roll.beta.at(-1))} (two-year ${f2(p.beta)}); correlation now ${f2(roll.correlation.at(-1))} (two-year ${f2(p.correlation)}).${t ? ` ${t.text}` : ""}`;
   box.innerHTML = `
-    ${t ? `<p class="roll-verdict tone-${t.direction === "up" ? "warn" : t.direction === "down" ? "good" : "neutral"}"><span aria-hidden="true">${t.direction === "up" ? "▲" : t.direction === "down" ? "▼" : "■"}</span> ${esc(t.text)}</p>` : ""}
+    ${t ? `<p class="roll-verdict tone-${t.direction === "up" ? "warn" : t.direction === "down" ? "good" : "neutral"}">${esc(t.text)}</p>` : ""}
     <div class="kv-grid kv-4">
       <div><span class="muted small">${term("rollingBeta", "Beta")} now</span><strong>${f2(roll.beta.at(-1))}</strong></div>
       <div><span class="muted small">Beta a year ago</span><strong>${t ? f2(t.betaThen) : "—"}</strong></div>

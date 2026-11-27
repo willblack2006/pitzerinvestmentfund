@@ -72,7 +72,7 @@ export async function mountGallery(root, { filter = "all" } = {}) {
         <label class="ab-search"><span class="sr-only">Search agents</span>${icon("search", { size: 16 })}<input type="search" placeholder="Search agents" value="${esc(state.q)}" data-q></label>
         <a class="btn btn-primary btn-sm" href="#/agents/new">${icon("plus", { size: 16 })} Create agent</a>
       </div>
-      ${f === "all" && !state.q ? `<a class="panel ab-create" href="#/agents/new"><span class="ab-create-icon">${icon("sparkle", { size: 22 })}</span><span><strong>Describe an agent in words</strong><span class="muted small">"Tell me when any holding's estimates get cut twice in a month and check it against our thesis"</span></span>${icon("arrow-up", { size: 16 })}</a>` : ""}
+      ${f === "all" && !state.q ? `<a class="panel ab-create" href="#/agents/new"><span class="ab-create-icon">${icon("agent", { size: 22 })}</span><span><strong>Describe an agent in words</strong><span class="muted small">"Tell me when any holding's estimates get cut twice in a month and check it against our thesis"</span></span>${icon("arrow-up", { size: 16 })}</a>` : ""}
       ${tpls.length ? `<h3 class="ab-gal-h">Start from a template</h3>${list(tpls, templateCard)}` : ""}
       ${f !== "templates" && mine.length ? `<h3 class="ab-gal-h">${f === "mine" ? "Your agents" : "Yours"}</h3>${list(mine, (a) => agentCard(a, me))}` : ""}
       ${f !== "templates" && f !== "mine" && others.length ? `<h3 class="ab-gal-h">${f === "following" ? "Following" : "The team's agents"}</h3>${list(others, (a) => agentCard(a, me))}` : ""}

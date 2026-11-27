@@ -82,7 +82,7 @@ function shellHtml(mode) {
       <div class="chat-input-row">
         <label class="sr-only" for="chatInput">Message</label>
         <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Message the club…" title="Type @name to mention someone, $TICKER to link a company"></textarea>
-        <button type="button" class="btn btn-ghost btn-sm" id="chatSnap" title="Snapshot part of the page">📷<span class="sr-only"> Snapshot part of the page</span></button>
+        <button type="button" class="btn btn-ghost btn-sm" id="chatSnap" title="Snapshot part of the page">Snapshot</button>
         <button class="btn btn-primary btn-sm" id="chatSend">Send</button>
       </div>
       <div id="chatSuggest" class="chat-suggest hidden" role="listbox" aria-label="Mention a member"></div>
@@ -97,7 +97,7 @@ function renderList({ keepScroll = false } = {}) {
   const prevHeight = list.scrollHeight, prevTop = list.scrollTop;
   list.innerHTML = (state.hasMore ? `<button type="button" class="btn-link small chat-older" id="chatOlder">Load earlier messages</button>` : "") +
     (state.messages.length ? state.messages.map((m, i) => messageHtml(m, state.messages[i - 1])).join("")
-      : `<div class="empty-state"><p class="empty-title">Start the conversation</p><p class="muted small">Highlight text on any page and choose "Share to chat", or use 📷 to snapshot a chart or table.</p></div>`);
+      : `<div class="empty-state"><p class="empty-title">Start the conversation</p><p class="muted small">Highlight text on any page and choose "Share to chat", or use Snapshot to capture a chart or table.</p></div>`);
   if (keepScroll) list.scrollTop = list.scrollHeight - prevHeight + prevTop;
   else if (atBottom || !state.loaded) list.scrollTop = list.scrollHeight;
   root.querySelector("#chatOnline").textContent = state.online.length ? `${state.online.length} online` : "";
@@ -276,9 +276,9 @@ function toastStatus(msg) {
   return () => n.remove();
 }
 
-// "Pick a panel" mode from the 📷 button in the chat box.
+// "Pick a panel" mode from the Snapshot button in the chat box.
 function pickPanel() {
-  if (isPhone()) { toast("Tap the 📷 on any section to snapshot it."); return; }
+  if (isPhone()) { toast("Tap the snapshot button on any section to snapshot it."); return; }
   document.body.classList.add("snap-picking");
   toast("Click any section of the page to snapshot it (Esc to cancel).");
   const done = () => { document.body.classList.remove("snap-picking"); document.removeEventListener("click", onClick, true); document.removeEventListener("keydown", onKey, true); };
@@ -293,7 +293,7 @@ function pickPanel() {
   setTimeout(() => { document.addEventListener("click", onClick, true); document.addEventListener("keydown", onKey, true); }, 0);
 }
 
-// A 📷 button on every panel (members only), added as pages render.
+// A snapshot button on every panel (members only), added as pages render.
 function addSnapButtons() {
   if (!can("member")) return;
   document.querySelectorAll("#view .panel:not([data-snap])").forEach((p) => {
@@ -303,7 +303,7 @@ function addSnapButtons() {
     b.className = "snap-btn";
     b.title = "Snapshot this and share it in the club chat";
     b.setAttribute("aria-label", `Snapshot "${(p.querySelector("h2, h3")?.textContent || "this section").trim()}" to chat`);
-    b.textContent = "📷";
+    b.innerHTML = icon("doc", { size: 16 });
     b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); snapshotPanel(p); });
     if (getComputedStyle(p).position === "static") p.style.position = "relative";
     p.append(b);
@@ -479,7 +479,7 @@ export function initChat() {
     state.image = null;
     openChat().then(() => { renderPending(); root?.querySelector("#chatInput")?.focus(); });
   });
-  // 📷 buttons on panels as pages render.
+  // Snapshot buttons on panels as pages render.
   const view = document.getElementById("view");
   new MutationObserver(() => addSnapButtons()).observe(view, { childList: true, subtree: true });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) markRead(); });

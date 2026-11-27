@@ -21,7 +21,7 @@ export function kindBadge(kind) {
 }
 
 function byLine(m) {
-  const who = m.by?.type === "agent" ? `${icon("sparkle", { size: 14 })} ${esc(m.by.name)}` : m.by?.type === "member" ? `${icon("user", { size: 14 })} ${esc(m.by.name)}` : esc(m.by?.name || "PIF");
+  const who = m.by?.type === "agent" ? `${icon("agent", { size: 14 })} ${esc(m.by.name)}` : m.by?.type === "member" ? `${icon("user", { size: 14 })} ${esc(m.by.name)}` : esc(m.by?.name || "PIF");
   return `<span class="mem-by">${who}</span>`;
 }
 
@@ -50,7 +50,7 @@ export function memoryItem(m, { actions = true, showSymbol = true, cited = null 
 
 function agentName(x) {
   if (!x) return "";
-  return `${icon("sparkle", { size: 14 })} ${esc(x.name || x.workflow || "agent")}`;
+  return `${icon("agent", { size: 14 })} ${esc(x.name || x.workflow || "agent")}`;
 }
 
 export function messageItem(m) {

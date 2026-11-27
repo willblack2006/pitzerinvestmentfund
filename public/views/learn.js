@@ -25,7 +25,7 @@ function lessonHtml(l, done, read, open) {
           <p class="small learn-why" role="status" aria-live="polite"></p></fieldset>`).join("")}</div>` : ""}
       <div class="learn-foot">
         <button type="button" class="btn btn-ghost btn-sm" data-read="${esc(l.id)}" aria-pressed="${isRead}">${isRead ? "Mark as unread" : "Mark as read"}</button>
-        ${can("ai") ? `<button type="button" class="btn btn-ghost btn-sm" data-ask="${esc(l.ask)}">${icon("sparkle", { size: 14 })} Ask PIF to explain</button>` : ""}
+        ${can("ai") ? `<button type="button" class="btn btn-ghost btn-sm" data-ask="${esc(l.ask)}">${icon("chat", { size: 14 })} Ask PIF to explain</button>` : ""}
       </div>
     </div>
   </details>`;

@@ -32,7 +32,7 @@ export function noteCard(n, { showSymbol = true } = {}) {
   return `<article class="note-card ${n.pinned ? "pinned" : ""}" data-note="${n.id}">
     <header class="note-head">
       ${showSymbol && n.symbol ? `<a class="symbol-cell" href="#/research/${encodeURIComponent(n.symbol)}">${esc(n.symbol)}</a>` : ""}
-      <span class="muted small">${n.mine ? "You" : esc(n.authorName)} · ${esc(when(n.updatedAt))}${n.visibility === "club" ? ` · <span class="badge badge-watch">Shared with club</span>` : ""}${n.pinned && n.mine ? " · 📌" : ""}</span>
+      <span class="muted small">${n.mine ? "You" : esc(n.authorName)} · ${esc(when(n.updatedAt))}${n.visibility === "club" ? ` · <span class="badge badge-watch">Shared with club</span>` : ""}${n.pinned && n.mine ? ` · ${icon("flag", { size: 14 })}` : ""}</span>
     </header>
     ${n.quote ? `<blockquote class="note-quote">${esc(n.quote)}</blockquote>` : ""}
     ${n.body ? `<div class="note-body">${noteText(n.body)}</div>` : ""}
@@ -83,7 +83,7 @@ export async function noteCounts() {
 export function noteMarker(symbol, map) {
   const c = map?.[symbol];
   if (!c) return "";
-  return `<a class="note-marker" href="#/research/${encodeURIComponent(symbol)}/notes" title="${c.mine ? `${c.mine} of your notes` : ""}${c.mine && c.total > c.mine ? " · " : ""}${c.total > c.mine ? `${c.total - c.mine} shared by others` : ""}" aria-label="${c.total} note${c.total === 1 ? "" : "s"} on ${esc(symbol)}">📝</a>`;
+  return `<a class="note-marker" href="#/research/${encodeURIComponent(symbol)}/notes" title="${c.mine ? `${c.mine} of your notes` : ""}${c.mine && c.total > c.mine ? " · " : ""}${c.total > c.mine ? `${c.total - c.mine} shared by others` : ""}" aria-label="${c.total} note${c.total === 1 ? "" : "s"} on ${esc(symbol)}">${icon("pencil", { size: 14 })}</a>`;
 }
 
 // ---- The drawer ----
@@ -202,7 +202,7 @@ export function initNotes() {
   fab.type = "button";
   fab.setAttribute("aria-label", "Write a note (N)");
   fab.title = "Write a note (N)";
-  fab.innerHTML = `<span aria-hidden="true">📝</span>`;
+  fab.innerHTML = icon("pencil", { size: 18 });
   fab.addEventListener("click", () => openNoteDrawer());
   document.body.append(fab);
   const sync = () => fab.classList.toggle("hidden", !can("member"));

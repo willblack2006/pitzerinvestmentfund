@@ -7,7 +7,6 @@ const money = (v) => (v == null ? "—" : v > 0 && v < 0.01 ? `$${v.toFixed(4)}`
 const pct = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
 export const TEAM_LABEL = { committee: "Investment committee", deep_research: "Deep research", portfolio_review: "Weekly portfolio review" };
 const ROLE_LABEL = { bull: "Bull", bear: "Bear", risk: "Risk & policy", valuation: "Valuation" };
-const ROLE_ICON = { bull: "▲", bear: "▼", risk: "◆", valuation: "≈" };
 const STANCE = { for: ["For", "is-pos"], against: ["Against", "is-neg"], mixed: ["Mixed", "is-mid"] };
 const LEAN = {
   yes: ["Leans yes", "is-pos"], no: ["Leans no", "is-neg"], abstain: ["Leans abstain", "is-mid"],
@@ -16,7 +15,7 @@ const LEAN = {
 const STATUS = { running: ["Working", "is-run"], done: ["Done", "is-pos"], failed: ["Failed", "is-neg"], refused: ["Stopped", "is-mid"] };
 const TRIGGER = { manual: "Started by", event: "Started automatically when the pitch opened for a vote", schedule: "Weekly schedule", handoff: "Handed off by another agent" };
 
-export const statusChip = (s) => { const [l, c] = STATUS[s] || [s, ""]; return `<span class="team-chip ${c}">${s === "running" ? `<span class="agent-pulse" aria-hidden="true"></span>` : ""}${esc(l)}</span>`; };
+export const statusChip = (s) => { const [l, c] = STATUS[s] || [s, ""]; return `<span class="team-chip ${c}">${s === "running" ? `<span class="status-dot is-running" aria-hidden="true"></span>` : ""}${esc(l)}</span>`; };
 const stanceChip = (s) => { const [l, c] = STANCE[s] || [s || "—", ""]; return `<span class="team-chip ${c}">${esc(l)}</span>`; };
 const confMeter = (v, label = "Confidence") => v == null ? "" : `<span class="team-conf" title="${label} ${pct(v)}"><span class="team-conf-bar" role="meter" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(v * 100)}"><span style="width:${Math.round(v * 100)}%"></span></span><span class="small">${pct(v)}</span></span>`;
 const srcs = (u, sourced) => u ? `${sourceLink(u)}${sourced === false ? ` <span class="badge badge-warn" title="The agent cites this but never read it in this run">not read</span>` : ""}` : "";
@@ -37,7 +36,7 @@ export function runHeader(tree, { link = false } = {}) {
       <span class="team-conf-bar team-budget" role="meter" aria-label="Team budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${used.toFixed(0)}"><span style="width:${used.toFixed(1)}%"></span></span>
     </div>
   </header>
-  ${tree.status === "running" ? `<p class="team-phase small" role="status" aria-live="polite"><span class="agent-pulse" aria-hidden="true"></span>${esc(tree.phase || "Working")}…</p>` : ""}
+  ${tree.status === "running" ? `<p class="team-phase small" role="status" aria-live="polite"><span class="status-dot is-running" aria-hidden="true"></span>${esc(tree.phase || "Working")}…</p>` : ""}
   ${tree.status !== "running" && tree.status !== "done" && tree.error ? `<p class="error small" role="alert">${esc(tree.error)}</p>` : ""}`;
 }
 
@@ -57,37 +56,60 @@ export function workersHtml(tree) {
 }
 
 // ---- Committee ----
+// A decision sheet: the PM's lean and the open questions first, then one row per agent.
+// Each row opens to the full memo, its evidence and the rebuttal.
 
-function memoCard(m, reb) {
-  if (!m.ok) return `<article class="team-memo is-missing"><h4><span aria-hidden="true">${ROLE_ICON[m.role] || ""}</span> ${esc(ROLE_LABEL[m.role] || m.label)}</h4><p class="small muted">This memo didn't finish: ${esc(m.error || "unknown error")}</p></article>`;
+const sourceCount = (m) => new Set([...(m.points || []).map((p) => p.source_url), ...((m._reb?.responses) || []).map((r) => r.source_url)].filter(Boolean)).size;
+
+function memoBody(m, reb) {
   const moved = reb && reb.stance && reb.stance !== m.stance;
-  return `<article class="team-memo role-${esc(m.role)}">
-    <header><h4><span aria-hidden="true">${ROLE_ICON[m.role] || ""}</span> ${esc(ROLE_LABEL[m.role] || m.label)}</h4>${stanceChip(m.stance)}${confMeter(m.confidence)}</header>
-    <p class="team-memo-head">${esc(m.headline)}</p>
-    <details><summary class="small">Full memo</summary><div class="team-prose small">${String(m.memo || "").split(/\n{2,}/).map((p) => `<p>${esc(p)}</p>`).join("")}</div></details>
+  return `<div class="cm-body">
     <ul class="team-points">${(m.points || []).map((p) => `<li><p>${esc(p.text)}</p><p class="muted small">${esc(p.evidence)} ${srcs(p.source_url, p.sourced)}</p></li>`).join("")}</ul>
-    ${m.keyQuestion ? `<p class="small"><strong>Would change my mind:</strong> ${esc(m.keyQuestion)}</p>` : ""}
+    ${m.keyQuestion ? `<p class="small"><span class="muted">Would change my mind:</span> ${esc(m.keyQuestion)}</p>` : ""}
     ${unbacked(m.unbackedNumbers)}
-    ${reb?.ok ? `<section class="team-rebuttal" aria-label="${esc(ROLE_LABEL[m.role])} rebuttal">
-      <p class="pf-sub">Rebuttal ${moved ? `<span class="team-moved">moved to ${stanceChip(reb.stance)}</span>` : ""} ${confMeter(reb.confidence, "Confidence after rebuttal")}</p>
-      <ul class="small">${(reb.responses || []).map((r) => `<li><span class="team-to">→ ${esc(ROLE_LABEL[r.to] || r.to)}</span> on “${esc(r.point)}”: ${esc(r.reply)} ${srcs(r.source_url, r.sourced)}</li>`).join("")}</ul>
-      ${reb.concede ? `<p class="small"><strong>Concedes:</strong> ${esc(reb.concede)}</p>` : ""}
+    ${m.memo ? `<details class="cm-memo"><summary class="small">Full memo</summary><div class="team-prose small">${String(m.memo).split(/\n{2,}/).map((p) => `<p>${esc(p)}</p>`).join("")}</div></details>` : ""}
+    ${reb?.ok ? `<section class="team-rebuttal" aria-label="${esc(ROLE_LABEL[m.role] || m.role)} rebuttal">
+      <p class="pf-sub">Rebuttal${moved ? ` · moved to ${stanceChip(reb.stance)}` : ""} ${confMeter(reb.confidence, "Confidence after rebuttal")}</p>
+      <ul class="small">${(reb.responses || []).map((r) => `<li><span class="muted">To ${esc(ROLE_LABEL[r.to] || r.to)}</span> on “${esc(r.point)}”: ${esc(r.reply)} ${srcs(r.source_url, r.sourced)}</li>`).join("")}</ul>
+      ${reb.concede ? `<p class="small"><span class="muted">Concedes:</span> ${esc(reb.concede)}</p>` : ""}
     </section>` : reb && !reb.ok ? `<p class="small muted">Rebuttal didn't finish: ${esc(reb.error || "")}</p>` : ""}
-  </article>`;
+  </div>`;
+}
+
+function memoRow(m, reb) {
+  const name = esc(ROLE_LABEL[m.role] || m.label || m.role);
+  if (m._running) return `<li class="cm-row is-pending"><div class="cm-sum"><span class="cm-agent">${name}</span><span class="cm-stance"><span class="status-dot is-running" aria-hidden="true"></span><span class="muted small">Researching</span></span><span></span><span class="cm-head muted"></span><span></span></div></li>`;
+  if (!m.ok) return `<li class="cm-row is-missing"><div class="cm-sum"><span class="cm-agent">${name}</span><span class="cm-stance muted small">Didn't finish</span><span></span><span class="cm-head muted small">${esc(m.error || "unknown error")}</span><span></span></div></li>`;
+  const stance = reb?.ok && reb.stance ? reb.stance : m.stance;
+  const conf = reb?.ok && reb.confidence != null ? reb.confidence : m.confidence;
+  const n = sourceCount({ ...m, _reb: reb });
+  return `<li class="cm-row"><details><summary class="cm-sum">
+      <span class="cm-agent">${name}</span>
+      <span class="cm-stance">${stanceChip(stance)}</span>
+      <span class="cm-conf">${confMeter(conf)}</span>
+      <span class="cm-head">${esc(m.headline)}${m.unbackedNumbers?.length ? ` <span class="badge badge-warn" title="Numbers without a source">check numbers</span>` : ""}</span>
+      <span class="cm-src num small muted">${n ? `${n} source${n === 1 ? "" : "s"}` : ""}</span>
+    </summary>${memoBody(m, reb)}</details></li>`;
+}
+
+function memoTable(memos, reb) {
+  return `<div class="cm-table" role="region" aria-label="Agent memos">
+    <div class="cm-cols small muted" aria-hidden="true"><span>Agent</span><span>Stance</span><span>Confidence</span><span>Strongest point</span><span></span></div>
+    <ul class="cm-rows">${memos.map((m) => memoRow(m, reb[m.role])).join("")}</ul></div>`;
 }
 
 export function synthesisHtml(s, subjectType) {
   if (!s) return "";
   const [leanLabel, leanCls] = LEAN[s.lean] || [s.lean, ""];
-  return `<section class="team-synth" aria-label="PM synthesis">
-    <div class="team-synth-top">
-      <div><p class="pf-sub">PM synthesis</p><p class="team-synth-head">${esc(s.headline)}</p></div>
-      <div class="team-lean ${leanCls}"><span class="team-lean-label">${esc(leanLabel)}</span>${confMeter(s.confidence)}</div>
+  return `<section class="cm-lean" aria-label="PM synthesis">
+    <div class="cm-lean-main">
+      <p class="cm-lean-label"><span class="status-dot ${leanCls === "is-pos" ? "is-done" : leanCls === "is-neg" ? "is-error" : "is-watch"}" aria-hidden="true"></span>${esc(leanLabel)} ${confMeter(s.confidence)}</p>
+      <p class="cm-lean-head">${esc(s.headline)}</p>
+      <p class="small cm-lean-sum">${esc(s.summary)}</p>
     </div>
-    <p>${esc(s.summary)}</p>
-    ${s.disagreements?.length ? `<div class="table-scroll"><table class="mini-table team-disagree"><caption class="sr-only">Where the committee disagrees</caption>
-      <thead><tr><th scope="col" class="left">Disagreement</th><th scope="col" class="left">Views</th><th scope="col" class="left">What would settle it</th></tr></thead>
-      <tbody>${s.disagreements.map((d) => `<tr><th scope="row" class="left">${esc(d.topic)}</th><td class="left small">${(d.positions || []).map((p) => `<div><strong>${esc(ROLE_LABEL[p.role] || p.role)}:</strong> ${esc(p.view)}</div>`).join("")}</td><td class="left small">${esc(d.whatWouldSettleIt)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${s.disagreements?.length ? `<div class="table-scroll"><table class="mini-table cm-open"><caption class="sr-only">Open questions</caption>
+      <thead><tr><th scope="col" class="left">Open question</th><th scope="col" class="left">Views</th><th scope="col" class="left">What would settle it</th></tr></thead>
+      <tbody>${s.disagreements.map((d) => `<tr><th scope="row" class="left">${esc(d.topic)}</th><td class="left small">${(d.positions || []).map((p) => `<div><span class="muted">${esc(ROLE_LABEL[p.role] || p.role)}:</span> ${esc(p.view)}</div>`).join("")}</td><td class="left small">${esc(d.whatWouldSettleIt)}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <div class="team-cols">
       ${s.agreements?.length ? `<div><p class="pf-sub">Everyone agrees</p>${list(s.agreements)}</div>` : ""}
       ${s.changeMind?.length ? `<div><p class="pf-sub">Would flip the lean</p>${list(s.changeMind)}</div>` : ""}
@@ -100,17 +122,14 @@ export function synthesisHtml(s, subjectType) {
 
 export function committeeHtml(o) {
   const reb = Object.fromEntries((o.rebuttals || []).map((r) => [r.role, r]));
-  return `${synthesisHtml(o.synthesis, o.subject?.type)}
-    <h4 class="team-sub">The debate</h4>
-    <div class="team-debate">${(o.memos || []).map((m) => memoCard(m, reb[m.role])).join("")}</div>`;
+  return `${synthesisHtml(o.synthesis, o.subject?.type)}${memoTable(o.memos || [], reb)}`;
 }
 
-// While a committee is still running, show memos as they land.
+// While a committee is still running, rows fill in as memos land.
 function liveCommittee(tree) {
   const memos = tree.workers.filter((w) => w.round === 1).map((w) => ({ role: w.role, label: w.label, ok: w.status === "done", error: w.status === "running" ? null : w.error, ...(w.output || {}), _running: w.status === "running" }));
   const reb = Object.fromEntries(tree.workers.filter((w) => w.round === 2 && w.status === "done").map((w) => [w.role, { ok: true, ...(w.output || {}) }]));
-  if (!memos.length) return "";
-  return `<div class="team-debate">${memos.map((m) => m._running ? `<article class="team-memo is-pending"><h4><span aria-hidden="true">${ROLE_ICON[m.role] || ""}</span> ${esc(ROLE_LABEL[m.role] || m.label)}</h4><p class="small muted"><span class="agent-pulse" aria-hidden="true"></span> Researching…</p></article>` : memoCard(m, reb[m.role])).join("")}</div>`;
+  return memos.length ? memoTable(memos, reb) : "";
 }
 
 // ---- Deep research ----
@@ -126,8 +145,8 @@ export function dossierHtml(o) {
     ${(d.sections || []).map((s) => `<section class="team-section"><h4>${esc(s.heading)}</h4>${String(s.body || "").split(/\n{2,}/).map((p) => `<p class="small">${esc(p)}</p>`).join("")}
       ${s.sources?.length ? `<p class="small muted">Sources: ${s.sources.map((u) => sourceLink(u)).join(" · ")}</p>` : ""}</section>`).join("")}
     <div class="team-cols">
-      <div><p class="pf-sub">▲ Bull points</p>${list(d.bullPoints)}</div>
-      <div><p class="pf-sub">▼ Bear points</p>${list(d.bearPoints)}</div>
+      <div><p class="pf-sub">Bull points</p>${list(d.bullPoints)}</div>
+      <div><p class="pf-sub">Bear points</p>${list(d.bearPoints)}</div>
     </div>
     ${d.keyNumbers?.length ? `<div class="table-scroll"><table class="mini-table"><caption class="sr-only">Key numbers</caption><thead><tr><th scope="col" class="left">Figure</th><th scope="col" class="num">Value</th><th scope="col" class="left">Source</th></tr></thead>
       <tbody>${d.keyNumbers.map((k) => `<tr><th scope="row" class="left">${esc(k.label)}</th><td class="num">${esc(k.value)}</td><td class="left small">${srcs(k.source_url, k.sourced)}</td></tr>`).join("")}</tbody></table></div>` : ""}
@@ -147,7 +166,7 @@ export function dossierHtml(o) {
 const SCORE_SHAPE = (v, invert = false) => {
   if (v == null) return `<span class="muted">—</span>`;
   const good = invert ? v <= 2 : v >= 4, bad = invert ? v >= 4 : v <= 2;
-  return `<span class="team-score ${good ? "is-pos" : bad ? "is-neg" : "is-mid"}" title="${v} of 5">${good ? "▲" : bad ? "▼" : "●"} ${v}</span>`;
+  return `<span class="team-score ${good ? "is-pos" : bad ? "is-neg" : "is-mid"}" title="${v} of 5">${v}</span>`;
 };
 
 export function reviewHtml(o) {
@@ -180,23 +199,35 @@ export function teamRunHtml(tree, opts = {}) {
     <footer class="agent-brief-foot"><span class="muted small">AI agents simulating a research team, not advice. Members decide and vote. <a href="#/agents/runs/${tree.runId}">Synthesis trace</a></span></footer></article>`;
 }
 
-// Polls a running team run into `box` until it finishes. Returns a stop function.
+// Shows a team run in `box` and keeps it current until it finishes. Returns a stop function.
+// It re-reads the run tree when the server says one of its runs started or finished
+// (run_started / run_finished on /api/events). A slow 15s check stays as a safety net for
+// workers this member's stream doesn't hear about (runs started by someone else).
 export function followRun(box, runId, { onDone, opts = {} } = {}) {
-  let stopped = false, timer = null, lastStatus = null;
+  let stopped = false, timer = null, lastStatus = null, pending = null;
   const tick = async () => {
-    if (stopped || !box.isConnected) return;
+    if (stopped || !box.isConnected) return stop();
+    clearTimeout(timer);
     let tree;
     try { tree = await api(`/api/agents/teams/runs/${runId}`); } catch (err) { box.innerHTML = aiErrorHtml(err); return; }
     // Keep open <details> open across repaints.
     const open = [...box.querySelectorAll("details[open] > summary")].map((s) => s.textContent);
     box.innerHTML = teamRunHtml(tree, opts);
     box.querySelectorAll("details > summary").forEach((s) => { if (open.includes(s.textContent)) s.parentElement.open = true; });
-    if (tree.status === "running") timer = setTimeout(tick, 2500);
-    else if (lastStatus === "running" || lastStatus === null) { onDone?.(tree); }
+    if (tree.status === "running") timer = setTimeout(tick, 15000);
+    else { if (lastStatus === "running" || lastStatus === null) onDone?.(tree); stop(); }
     lastStatus = tree.status;
   };
+  const onLive = (e) => {
+    const t = e.detail?.type, d = e.detail?.data || {};
+    if ((t === "run_started" || t === "run_finished") && (d.runId === runId || d.parentRunId === runId)) {
+      clearTimeout(pending); pending = setTimeout(tick, 150); // several workers can finish together
+    }
+  };
+  window.addEventListener("pif:live", onLive);
+  function stop() { stopped = true; clearTimeout(timer); clearTimeout(pending); window.removeEventListener("pif:live", onLive); }
   tick();
-  return () => { stopped = true; clearTimeout(timer); };
+  return stop;
 }
 
 export function runRow(r) {

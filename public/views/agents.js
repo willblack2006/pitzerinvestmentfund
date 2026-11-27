@@ -188,9 +188,9 @@ export async function mount(container, params = {}) {
   const tab = alias || tabs.find((t) => t.key === wanted) || tabs.find((t) => t.key === "home") || tabs[0];
   if (!tab) { container.innerHTML = pageHead("Agents") + errorState({ title: "Couldn't load the agents page." }); return; }
   const nav = [...tabs.map((t) => [t.key, t.key === "home" ? "#/agents" : `#/agents/${t.key}`, esc(t.label), t.order ?? 100]),
-    ...links.map(([k, href, label, order]) => [k, href, label, order])].sort((a, b) => a[3] - b[3]);
+    ...links.filter(([k, , label]) => !tabs.some((t) => t.key === k || t.label === label)).map(([k, href, label, order]) => [k, href, label, order])].sort((a, b) => a[3] - b[3]);
   container.innerHTML = pageHead("Agents", "Your fund's research agents and the team's: what they found, what is running, what needs you. Every source is shown, every run and its cost is logged, and nothing changes in the app without a member's approval.",
-    `<button type="button" class="btn btn-ghost btn-sm ask-open" data-ask-open>${icon("sparkle", { size: 16 })}<span>Ask PIF</span></button>`)
+    `<button type="button" class="btn btn-ghost btn-sm ask-open" data-ask-open>${icon("chat", { size: 16 })}<span>Ask PIF</span></button>`)
     + `<div class="page-pad agents-top" id="agentTop"></div>${tabNav(nav.map(([k, h, l]) => [k, h, l]), tab.key, "Agent sections")}<div class="page-pad agents-tab agents-tab-${esc(tab.key)}" id="agentBody">${skeleton("cards", { rows: 3 })}</div>`;
   const top = container.querySelector("#agentTop"), body = container.querySelector("#agentBody");
   let overview = null;

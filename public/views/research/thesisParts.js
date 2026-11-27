@@ -5,7 +5,7 @@ import { esc } from "../../shared.js";
 export const STATUS = {
   intact: { label: "Intact", glyph: "●", cls: "th-intact" },
   watch: { label: "Watch", glyph: "◆", cls: "th-watch" },
-  weakened: { label: "Weakened", glyph: "▼", cls: "th-weakened" },
+  weakened: { label: "Weakened", glyph: "◇", cls: "th-weakened" },
   broken: { label: "Broken", glyph: "✕", cls: "th-broken" },
   unknown: { label: "Unknown", glyph: "○", cls: "th-unknown" },
 };

@@ -10,7 +10,7 @@ export default {
     const c = ctx.period === "1d" ? { explain: ctx.data.explain } : await ctx.contribution();
     const ex = c?.explain;
     if (!ex) { body.innerHTML = ctx.empty("Nothing to explain yet", "Needs at least two days of prices for the holdings."); return; }
-    const chip = (s, kind) => `<a class="chip" href="#/research/${encodeURIComponent(s)}">${kind === "up" ? "▲" : "▼"} ${esc(s)}</a>`;
+    const chip = (s, kind) => `<a class="chip" href="#/research/${encodeURIComponent(s)}">${esc(s)} ${kind === "up" ? "up" : "down"}</a>`;
     const fundUp = (ctx.period === "1d" ? ctx.data.periods["1d"].fund : c.fundReturn) >= 0;
     body.innerHTML = `<p class="explain-text">${ex.lines.map((l) => esc(l)).join(" ")}</p>
       <div class="explain-chips" aria-label="Names that drove it">${ex.top.map((s) => chip(s, fundUp ? "up" : "down")).join("")}${ex.offset.map((s) => chip(s, fundUp ? "down" : "up")).join("")}</div>`;

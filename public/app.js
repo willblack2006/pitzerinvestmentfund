@@ -8,6 +8,7 @@ import { initInbox, setFundAlertCount } from "./inbox.js";
 import { initTickerPicker } from "./tickerPicker.js";
 import { initCommandPalette } from "./commandPalette.js";
 import { togglePopover } from "./ui/popover.js";
+import { setSideRunsMember } from "./sideRuns.js";
 
 // Each page's code only downloads when the user actually navigates there, instead of every
 // view in the app loading up front (the old eager imports were the biggest contributor to
@@ -110,6 +111,7 @@ function updateAuthUI() {
   el("accountLabel").textContent = m ? `Menu for ${m.name}` : "Menu";
   // Research agents are only for members an admin gave AI access.
   el("agentsNav")?.classList.toggle("hidden", !(m && (m.canUseAi || m.isAdmin)));
+  setSideRunsMember(m);
   accountPop?.close({ returnFocus: false });
 }
 
@@ -234,7 +236,7 @@ function connectLive() {
   // Chat and presence (members only) are handled in chat.js.
   for (const type of ["hello", "notify", "presence", "chat.message", "chat.edited", "chat.deleted", "chat.reaction", "chat.mention",
     // Team feed (WS7): new items, comments, reactions, agents answering, presence, runs ending.
-    "feed", "feed.comment", "feed.comment_deleted", "feed.reaction", "feed.agent_working", "feed.presence", "feed.removed", "run_finished"]) {
+    "feed", "feed.comment", "feed.comment_deleted", "feed.reaction", "feed.agent_working", "feed.presence", "feed.removed", "run_started", "run_finished"]) {
     live.addEventListener(type, (e) => window.dispatchEvent(new CustomEvent("pif:live", { detail: { type, data: JSON.parse(e.data) } })));
   }
 }
@@ -325,7 +327,10 @@ document.addEventListener("keydown", (e) => {
 // ---- Header height and scrolling tab bars ----
 
 // Sticky bars under the header (.tabnav, .jump-nav) read --topbar-h so they stick right below it.
-const setTopbarHeight = () => document.documentElement.style.setProperty("--topbar-h", `${topbar.offsetHeight}px`);
+// On wide screens the header is a fixed sidebar, so nothing sits under it.
+const sidebarMode = window.matchMedia("(min-width: 1024px)");
+const setTopbarHeight = () => document.documentElement.style.setProperty("--topbar-h", sidebarMode.matches ? "0px" : `${topbar.offsetHeight}px`);
+sidebarMode.addEventListener?.("change", setTopbarHeight);
 setTopbarHeight();
 if (window.ResizeObserver) new ResizeObserver(setTopbarHeight).observe(topbar);
 else window.addEventListener("resize", setTopbarHeight);

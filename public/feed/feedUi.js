@@ -45,7 +45,7 @@ const inAppLink = (u) => (/^#\/[\w\-./%=&?]*$/.test(u || "") ? u : null);
 
 // ---- Pieces ----
 export function avatar(item) {
-  if (item.agent) return `<span class="feed-avatar is-agent feed-tone-${hue(item.agent.slug)}" aria-hidden="true">${icon("sparkle", { size: 16 })}</span>`;
+  if (item.agent) return `<span class="feed-avatar is-agent feed-tone-${hue(item.agent.slug)}" aria-hidden="true">${icon("agent", { size: 16 })}</span>`;
   if (item.actor?.type === "member") return `<span class="feed-avatar feed-tone-${hue(item.actor.name)}" aria-hidden="true">${esc(initials(item.actor.name))}</span>`;
   return `<span class="feed-avatar is-system" aria-hidden="true">${icon(KIND_ICON[item.kind] || "bell", { size: 16 })}</span>`;
 }
@@ -108,7 +108,7 @@ export function itemHtml(item, { open = false, showUnread = true } = {}) {
         ${reactionsHtml(item)}
         <button type="button" class="btn btn-ghost btn-sm feed-react-add" data-react-menu aria-label="Add a reaction">${icon("plus", { size: 14 })}<span aria-hidden="true">🙂</span></button>
         <button type="button" class="btn btn-ghost btn-sm" data-toggle-thread aria-expanded="${open}" aria-controls="ft-${item.id}">${icon("chat", { size: 14 })} ${item.commentCount ? `${item.commentCount} comment${item.commentCount === 1 ? "" : "s"}` : "Comment"}</button>
-        ${item.kind === "ask_shared" && can("ai") ? `<button type="button" class="btn btn-ghost btn-sm" data-followup>${icon("sparkle", { size: 14 })} Ask a follow-up</button>` : ""}
+        ${item.kind === "ask_shared" && can("ai") ? `<button type="button" class="btn btn-ghost btn-sm" data-followup>${icon("chat", { size: 14 })} Ask a follow-up</button>` : ""}
         ${link ? `<a class="btn btn-ghost btn-sm" href="${esc(link[0])}">${esc(link[1])}</a>` : ""}
         ${canPin ? `<button type="button" class="btn btn-ghost btn-sm feed-quiet" data-pin aria-pressed="${!!item.pinned}">${item.pinned ? "Unpin" : "Pin"}</button>` : ""}
         <span class="feed-viewers small muted" data-viewers></span>
@@ -123,7 +123,7 @@ export function itemHtml(item, { open = false, showUnread = true } = {}) {
 function commentHtml(c) {
   const by = c.agent ? `<a href="#/agents/a/${encodeURIComponent(c.agent.slug)}">${esc(c.agent.name)}</a>` : c.memberId ? `<a href="#/members/${c.memberId}">${esc(c.authorName)}</a>` : esc(c.authorName);
   return `<li class="feed-comment${c.byAgent ? " by-agent" : ""}${c.deleted ? " is-deleted" : ""}" data-comment="${c.id}">
-    <span class="feed-avatar sm${c.byAgent ? " is-agent" : ""} feed-tone-${hue(c.agent?.slug || c.authorName)}" aria-hidden="true">${c.byAgent ? icon("sparkle", { size: 12 }) : esc(initials(c.authorName))}</span>
+    <span class="feed-avatar sm${c.byAgent ? " is-agent" : ""} feed-tone-${hue(c.agent?.slug || c.authorName)}" aria-hidden="true">${c.byAgent ? icon("agent", { size: 12 }) : esc(initials(c.authorName))}</span>
     <div class="feed-comment-body">
       <p class="feed-comment-head"><strong>${by}</strong> <time class="muted small" title="${esc(fullTime(c.createdAt))}">${esc(ago(c.createdAt))}</time>
         ${c.runId ? ` <a class="small" href="#/agents/runs/${c.runId}">run</a>` : ""}
@@ -156,7 +156,7 @@ function bindMentionPicker(form) {
   const close = () => { list.classList.add("hidden"); options = []; ta.removeAttribute("aria-activedescendant"); };
   const token = () => { const m = ta.value.slice(0, ta.selectionStart).match(/(^|[\s(])@([\w-]{0,30})$/); return m ? m[2] : null; };
   const render = () => {
-    list.innerHTML = options.map((o, i) => `<li role="option" id="${form.querySelector("textarea").id}-o${i}" aria-selected="${i === active}" data-pick="${i}">${o.agent ? icon("sparkle", { size: 12 }) : ""} ${esc(o.label)} <span class="muted small">${esc(o.hint)}</span></li>`).join("");
+    list.innerHTML = options.map((o, i) => `<li role="option" id="${form.querySelector("textarea").id}-o${i}" aria-selected="${i === active}" data-pick="${i}">${o.agent ? icon("agent", { size: 12 }) : ""} ${esc(o.label)} <span class="muted small">${esc(o.hint)}</span></li>`).join("");
     list.classList.toggle("hidden", !options.length);
     if (options.length) ta.setAttribute("aria-activedescendant", `${ta.id}-o${active}`);
   };
@@ -443,17 +443,16 @@ export function mountFeed(container, { query = {}, compact = false, markRead = t
 }
 
 // ---- Running now ----
-// Chips for runs in progress; refreshes on run_finished/feed events and every 20s while shown.
+// Chips for runs in progress; refreshes when the server announces a run starting or ending.
 export function mountRunning(el) {
   const draw = async () => {
     if (!el.isConnected) return stop();
     const r = await api("/api/feed/running").catch(() => ({ running: [] }));
-    el.innerHTML = r.running.length ? `<span class="feed-running-label small muted">Running now</span>${r.running.map((x) => `<a class="feed-running-chip" href="${x.agent ? `#/agents/a/${encodeURIComponent(x.agent.slug)}` : `#/agents/runs/${x.runId}`}"><span class="agent-pulse" aria-hidden="true"></span>${esc(x.agent?.name || x.workflow)}${x.symbol ? ` · ${esc(x.symbol)}` : ""}</a>`).join("")}` : "";
+    el.innerHTML = r.running.length ? `<span class="feed-running-label small muted">Running now</span>${r.running.map((x) => `<a class="feed-running-chip" href="${x.agent ? `#/agents/a/${encodeURIComponent(x.agent.slug)}` : `#/agents/runs/${x.runId}`}"><span class="status-dot is-running" aria-hidden="true"></span>${esc(x.agent?.name || String(x.workflow || "Agent").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()))}${x.symbol ? ` · ${esc(x.symbol)}` : ""}</a>`).join("")}` : "";
     el.classList.toggle("hidden", !r.running.length);
   };
-  const onLive = (e) => { if (["run_finished", "feed"].includes(e.detail?.type)) draw(); };
-  const timer = setInterval(draw, 20e3);
-  function stop() { clearInterval(timer); window.removeEventListener("pif:live", onLive); }
+  const onLive = (e) => { if (["run_started", "run_finished", "feed"].includes(e.detail?.type)) draw(); };
+  function stop() { window.removeEventListener("pif:live", onLive); }
   window.addEventListener("pif:live", onLive);
   draw();
   return { stop, refresh: draw };

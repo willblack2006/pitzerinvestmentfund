@@ -56,7 +56,7 @@
 .ct-ind-pop .ui-pick-right .term-btn { min-width: 22px; width: 22px; height: 22px; margin-left: 0; padding: 0; border-radius: 50%; }
 .ct-pick-count {
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-full); display: inline-grid; place-items: center;
-  background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 700;
+  background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 600;
 }
 .ct-pop-note { margin: 0; padding: 0 var(--sp-3); min-height: 0; font-size: var(--fs-sm); color: var(--positive, var(--green)); font-weight: 600; }
 .ct-pop-note:empty { display: none; }
@@ -65,7 +65,7 @@
 
 /* Indicator settings popover */
 .ct-set { display: grid; gap: var(--sp-3); padding: var(--sp-3); }
-.ct-set-title { margin: 0; font-weight: 650; }
+.ct-set-title { margin: 0; font-weight: 600; }
 .ct-set-field { display: grid; gap: 4px; font-size: var(--fs-sm); }
 .ct-set-field > span { display: flex; justify-content: space-between; gap: var(--sp-2); }
 .ct-set-range { color: var(--text-2); font-size: var(--fs-xs); }

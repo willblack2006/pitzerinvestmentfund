@@ -3,7 +3,8 @@
 // handoffs and child runs; each row opens to show the exact input and a preview of the output.
 import { esc, api, can, pageHead, lockedHint, skeleton, errorState, safeUrl, fmtUSD } from "../../shared.js";
 import { bindFeedback, feedbackButtons, localTime } from "../../ai.js";
-import { toolLabel } from "../../aiFormat.js";
+import { toolLabel, sourceLabel } from "../../aiFormat.js";
+import { watchRun } from "../../ui/runCard.js";
 import { reasonChips } from "../../feedbackReasons.js";
 import { ensureCss } from "./cssLoader.js";
 
@@ -138,6 +139,7 @@ export async function mount(container, params = {}) {
   catch (err) { container.querySelector(".page-pad").innerHTML = errorState({ title: "Couldn't load this run.", detail: err.message }); return; }
   const r = d.run;
   const wfTitle = await workflowTitle(r.workflow);
+  if (r.status === "running") return mountLive(container, params, r, wfTitle);
   const who = [
     r.agentId ? `<a href="#/agents/stats/a${encodeURIComponent(r.agentId)}">Agent stats</a>` : `<a href="#/agents/stats/w${encodeURIComponent(r.workflow)}">${esc(wfTitle)} stats</a>`,
     d.member ? `asked by ${esc(d.member.name)}` : "",
@@ -164,4 +166,47 @@ export async function mount(container, params = {}) {
     out.innerHTML = html || (r.output ? `<pre class="trace-pre">${esc(JSON.stringify(r.output, null, 2))}</pre>` : `<p class="muted small">This run has no result${r.status === "failed" ? " because it failed" : ""}.</p>`);
     out.querySelectorAll(".agent-brief-foot .agent-feedback").forEach((x) => x.remove()); // one set of buttons per page
   } catch { out.innerHTML = `<pre class="trace-pre">${esc(JSON.stringify(r.output, null, 2))}</pre>`; }
+}
+
+// ---- A run still working (revamp 4A): a step log beside the answer as it is written ----
+// Everything arrives on the run's own stream (GET /api/agents/runs/:id/stream); when the run
+// ends the page re-opens as the full trace.
+const stepText = (s) => s.kind === "tool" ? `${s.ok === false ? "Couldn't read" : "Read"} ${toolLabel(s.name, s.args)}`
+  : s.kind === "source" ? `Opened ${sourceLabel(s.source_url)}`
+  : s.kind === "model" ? (s.toolCalls?.length ? `Decided to look up ${s.toolCalls.slice(0, 3).map((n) => toolLabel(n)).join(", ")}` : "Drafted the answer")
+  : s.kind === "review" ? "Checked its numbers" : s.kind === "memory_read" ? "Read the fund's notes" : s.kind === "handoff" ? "Handed off to another agent" : (s.note || s.kind);
+const stepSub = (s) => s.kind === "source" && s.source_url ? esc(sourceLabel(s.source_url)) : s.args?.form ? esc(s.args.form) : "";
+function mountLive(container, params, r, wfTitle) {
+  const t0 = Date.parse(String(r.createdAt).replace(" ", "T") + "Z");
+  const state = { steps: [], text: "", cost: r.costUsd };
+  const clock = () => { const s = Math.max(0, Math.round((Date.now() - t0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  container.innerHTML = `
+    <div class="runlive">
+      <header class="runlive-bar">
+        <span class="runlive-crumb"><a href="#/agents/activity">Runs</a> /</span>
+        <h2 class="runlive-title">${esc(wfTitle)}${r.symbol ? ` · ${esc(r.symbol)}` : ""}</h2>
+        <span class="status-dot is-running" aria-hidden="true"></span><span class="runlive-clock num" id="rlClock">${clock()}</span>
+        <span class="runlive-cost num muted small" id="rlCost">${state.cost ? money(state.cost) : ""}</span>
+      </header>
+      <div class="runlive-grid">
+        <section aria-label="Steps"><ol class="runlive-steps" id="rlSteps"></ol></section>
+        <section aria-label="Answer so far" class="runlive-out"><div class="runlive-label">Answer so far</div><div id="rlText" class="agent-answer-text" aria-live="polite"><p class="muted">The agent writes here once it has read its sources.</p></div></section>
+      </div>
+    </div>`;
+  const stepsEl = container.querySelector("#rlSteps"), textEl = container.querySelector("#rlText");
+  const paint = () => {
+    const at = (s) => { const t = Date.parse(s.at); return Number.isFinite(t) ? `${Math.max(0, Math.round((t - t0) / 1000))}s` : ""; };
+    stepsEl.innerHTML = state.steps.map((s) => `<li class="${s.ok === false ? "is-bad" : "is-done"}"><span class="runlive-ic" aria-hidden="true">${s.ok === false ? "×" : "✓"}</span><span>${esc(stepText(s))}${stepSub(s) ? `<span class="runlive-sub">${stepSub(s)}</span>` : ""}</span><span class="runlive-at num">${at(s)}</span></li>`).join("")
+      + `<li class="is-now"><span class="runlive-ic"><span class="runlive-spin" aria-hidden="true"></span></span><span>${state.text ? "Writing the answer" : "Working"}</span><span></span></li>`;
+    if (state.text) textEl.innerHTML = state.text.split(/\n{2,}/).map((p) => `<p>${esc(p)}</p>`).join("") ;
+  };
+  paint();
+  const tick = setInterval(() => { const c = container.querySelector("#rlClock"); if (!c) return clearInterval(tick); c.textContent = clock(); }, 1000);
+  const reopen = () => { clearInterval(tick); if (container.isConnected && location.hash.startsWith(`#/agents/runs/${r.id}`)) mount(container, params); };
+  const stop = watchRun(r.id, {
+    onStep: (_, steps) => { state.steps = steps; paint(); },
+    onText: (t) => { state.text = t; paint(); },
+    onDone: reopen, onError: reopen,
+  });
+  window.addEventListener("hashchange", () => { stop(); clearInterval(tick); }, { once: true });
 }

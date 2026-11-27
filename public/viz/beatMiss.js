@@ -54,7 +54,7 @@ export async function loadBeatMiss(symbol) {
     const tip = `<strong>${esc(r.date)}</strong><br>${word}${s != null ? ` by ${Math.abs(s * 100).toFixed(1)}%` : ""}${r.actual != null ? `<br>EPS $${r.actual.toFixed(2)}${r.estimate != null ? ` vs $${r.estimate.toFixed(2)}` : ""}` : ""}<br>Next day ${fmtSignedPct(r.d1)} · 5 days ${fmtSignedPct(r.d5)}`;
     return `<li class="rv-bm-tile ${cls}" tabindex="0" data-tip="${esc(tip)}">
       <span class="rv-bm-date">${esc(r.date.slice(0, 7))}</span>
-      <span class="rv-bm-word"><span aria-hidden="true">${s == null ? "–" : s >= 0 ? "▲" : "▼"}</span> ${word}${s != null ? ` ${Math.abs(s * 100).toFixed(0)}%` : ""}</span>
+      <span class="rv-bm-word"><span aria-hidden="true">${s == null ? "–" : s >= 0 ? "+" : "−"}</span> ${word}${s != null ? ` ${Math.abs(s * 100).toFixed(0)}%` : ""}</span>
       <span class="rv-bm-move ${r.d1 == null ? "" : r.d1 >= 0 ? "tone-good" : "tone-bad"}">${r.d1 == null ? "—" : `${fmtSignedPct(r.d1)} next day`}</span>
     </li>`;
   };

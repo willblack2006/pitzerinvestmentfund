@@ -52,7 +52,7 @@
 .team-lean.is-pos { border-left-color: var(--positive); }
 .team-lean.is-neg { border-left-color: var(--negative); }
 .team-lean.is-mid { border-left-color: var(--caution); }
-.team-lean-label { font-weight: 700; font-size: var(--fs-md); }
+.team-lean-label { font-weight: 600; font-size: var(--fs-md); }
 .team-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); }
 .team-cols ul, .team-run ul.small { margin: 4px 0 0; padding-left: 1.1em; display: grid; gap: 4px; }
 .team-disagree td div + div { margin-top: 4px; }

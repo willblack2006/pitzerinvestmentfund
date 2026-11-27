@@ -1,4 +1,4 @@
-import { esc, api, safeUrl, can, toast, loading, renderMarkdown, lockedHint, skeleton, errorState, bindRetry } from "../../shared.js";
+import { esc, api, safeUrl, can, toast, loading, renderMarkdown, lockedHint, skeleton, errorState, bindRetry, icon } from "../../shared.js";
 
 const FORM_LABEL = { "10-K": "Annual report", "10-Q": "Quarterly report", "8-K": "Current report (material event)" };
 
@@ -11,8 +11,8 @@ function summaryBlock(s) {
 }
 
 const TIER = {
-  critical: { label: "Critical", icon: "⚠", cls: "flag-critical" },
-  high: { label: "Serious", icon: "⚠", cls: "flag-high" },
+  critical: { label: "Critical", icon: icon("alert", { size: 14 }), cls: "flag-critical" },
+  high: { label: "Serious", icon: icon("alert", { size: 14 }), cls: "flag-high" },
   watch: { label: "Watch", icon: "◐", cls: "flag-watch" },
   info: { label: "Routine", icon: "·", cls: "flag-info" },
 };
@@ -53,13 +53,13 @@ async function loadRedFlags(symbol) {
     : `${esc(st.label)} in the last two years.`;
   box.innerHTML = `
     <div class="flag-status flag-status-${esc(st.level)}" role="status">
-      <span class="flag-status-icon" aria-hidden="true">${st.level === "clean" ? "✓" : st.level === "watch" ? "◐" : "⚠"}</span>
+      <span class="flag-status-icon" aria-hidden="true">${st.level === "clean" ? "✓" : st.level === "watch" ? "◐" : icon("alert", { size: 14 })}</span>
       <div><p class="flag-status-head">${head}</p>
         <p class="small muted">${r.read ? `Read ${r.read} filing${r.read === 1 ? "" : "s"} to separate real findings from boilerplate. ` : ""}${routine.length ? `${routine.length} routine item${routine.length === 1 ? "" : "s"} hidden.` : ""}</p></div>
     </div>
     ${r.error ? `<p class="notice small" role="note">Part of the scan failed: ${esc(r.error)}</p>` : ""}
     <ul class="flag-checks small" aria-label="What the scan checked">
-      ${(r.checks || []).map((c) => `<li class="${found.has(c.key) ? "is-flagged" : "is-clear"}"><span aria-hidden="true">${found.has(c.key) ? "⚑" : "✓"}</span> ${esc(c.label)}<span class="sr-only">: ${found.has(c.key) ? "found" : "none found"}</span></li>`).join("")}
+      ${(r.checks || []).map((c) => `<li class="${found.has(c.key) ? "is-flagged" : "is-clear"}"><span aria-hidden="true">${found.has(c.key) ? icon("flag", { size: 14 }) : "✓"}</span> ${esc(c.label)}<span class="sr-only">: ${found.has(c.key) ? "found" : "none found"}</span></li>`).join("")}
     </ul>
     ${main.length ? `<ul class="flag-list">${main.map(flagRow).join("")}</ul>` : ""}
     ${routine.length ? `

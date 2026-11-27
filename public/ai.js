@@ -2,7 +2,7 @@
 // anywhere), live progress while an agent works, and the shared answer card with its sources.
 // Members with AI access only; everything here is hidden for everyone else.
 import { el, esc, api, can, icon, toast, safeUrl, fmtUSD } from "./shared.js";
-import { toolLabel, sourceLabel, progressLines, suggestedQuestions } from "./aiFormat.js";
+import { toolLabel, sourceLabel, progressLines, suggestedQuestions, routeSymbol } from "./aiFormat.js";
 
 export { toolLabel, sourceLabel, progressLines };
 
@@ -115,21 +115,30 @@ export function progressHtml({ steps = [], intro = "Starting", elapsed = 0, expe
 }
 
 // Runs `promise` (a POST that starts an agent) while showing its steps in `box`. Returns the
-// promise's result. `match` narrows which of the member's running runs to follow.
+// promise's result. `workflow` / `symbol` pick out which run_started event is this request's.
 export async function withProgress(box, promise, { workflow, symbol, intro = "Starting", expect = "" } = {}) {
   const started = Date.now();
-  let steps = [], stopped = false;
+  let steps = [], stopped = false, es = null;
   const paint = () => { if (!stopped && box?.isConnected) box.innerHTML = progressHtml({ steps, intro, expect, elapsed: Math.round((Date.now() - started) / 1000) }); };
   paint();
-  const qs = new URLSearchParams({ ...(workflow ? { workflow } : {}), ...(symbol ? { symbol } : {}) });
-  const tick = async () => {
-    if (stopped || !box?.isConnected) return;
-    try { const r = await api(`/api/agents/runs-live?${qs}`); if (r.run) steps = r.run.steps || []; } catch { /* progress is optional */ }
-    paint();
-    if (!stopped) timer = setTimeout(tick, 1200);
+  // The server announces the run the moment it starts (run_started, sent only to this member);
+  // from then on its steps arrive on the run's own stream. No polling.
+  const sym = symbol ? String(symbol).toUpperCase() : null;
+  const onLive = (e) => {
+    if (e.detail?.type !== "run_started" || es || stopped) return;
+    const d = e.detail.data || {};
+    if ((workflow && d.workflow !== workflow) || (sym && String(d.symbol || "").toUpperCase() !== sym)) return;
+    es = new EventSource(`/api/agents/runs/${Number(d.runId)}/stream`);
+    es.addEventListener("run", (m) => {
+      let ev; try { ev = JSON.parse(m.data); } catch { return; }
+      if (ev.type === "step" && ev.step) { steps = [...steps, ev.step]; paint(); }
+      if (ev.type === "done" || ev.type === "error") es.close();
+    });
+    es.onerror = () => es?.close(); // progress is optional; the POST still returns the answer
   };
-  let timer = setTimeout(tick, 700);
-  try { return await promise; } finally { stopped = true; clearTimeout(timer); }
+  window.addEventListener("pif:live", onLive);
+  const clock = setInterval(paint, 1000); // redraws the elapsed time only
+  try { return await promise; } finally { stopped = true; clearInterval(clock); es?.close(); window.removeEventListener("pif:live", onLive); }
 }
 
 // An AI error with the next step a member can take.
@@ -148,7 +157,7 @@ export const suggestionsFor = (symbol) => suggestedQuestions({ symbol, hash: loc
 // A row of question buttons; clicking one opens Ask PIF and asks it.
 export function askChips(questions, { label = "Ask PIF" } = {}) {
   if (!can("ai") || !questions?.length) return "";
-  return `<div class="agent-followups ask-chips"><span class="small muted">${icon("sparkle", { size: 14 })} ${esc(label)}</span>${questions.map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
+  return `<div class="agent-followups ask-chips"><span class="small muted">${esc(label)}</span>${questions.map((q) => `<button type="button" class="btn btn-ghost btn-sm agent-chip" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
 }
 
 // ---- Ask PIF side panel ----
@@ -161,7 +170,7 @@ let showingHistory = false;
 
 function panelHtml() {
   return `<div class="ask">
-    <header class="chat-head ask-head"><div class="ask-head-title"><h2 id="askTitle">${icon("sparkle")} <span id="askTitleText">Ask PIF</span></h2></div>
+    <header class="chat-head ask-head"><div class="ask-head-title"><h2 id="askTitle"><span id="askTitleText">Ask PIF</span></h2><span class="ask-context hidden" id="askContext"></span></div>
       <div class="ask-head-actions">
         <button type="button" class="icon-btn" id="askHistory" aria-pressed="false" aria-label="Past conversations" title="Past conversations">${icon("inbox", { size: 18 })}</button>
         <button type="button" class="icon-btn hidden" id="askShare" aria-label="Share with the team" title="Share with the team">${icon("users", { size: 18 })}</button>
@@ -183,6 +192,10 @@ function syncHead(st) {
   share.setAttribute("aria-pressed", String(t?.visibility === "team"));
   share.title = t?.visibility === "team" ? "Shared with the team (click to make private)" : "Share with the team";
   panel.querySelector("#askFull").setAttribute("href", t ? `#/agents/ask?thread=${t.id}` : "#/agents/ask");
+  // What the panel already knows about: the ticker of the page behind it.
+  const sym = routeSymbol(location.hash), ctx = panel.querySelector("#askContext");
+  ctx.textContent = sym ? `On ${sym}` : "";
+  ctx.classList.toggle("hidden", !sym || !!st?.turns?.length);
 }
 
 async function toggleHistory(force) {
@@ -243,6 +256,7 @@ export async function openAsk({ question = "", autoSubmit = false, threadId = nu
     });
   }
   if (!panel.open) panel.show();
+  syncHead(convo.state);
   el("chatBtn") && document.querySelector(".chat-panel:not(.ask-panel)[open]")?.close();
   if (threadId) { toggleHistory(false); convo.load(threadId); return; }
   if (question && autoSubmit) { toggleHistory(false); convo.ask(question); }
@@ -285,7 +299,7 @@ const KIND_LABEL = { filing_flash: "Filing brief", earnings_flash: "Earnings bri
 export function aiPanelHtml({ id, title = "From the research agents", symbol = null } = {}) {
   if (!can("ai")) return "";
   return `<section class="panel ai-panel" aria-labelledby="${id}-h" id="${id}">
-    <div class="panel-head"><h3 id="${id}-h">${icon("sparkle", { size: 16 })} ${esc(title)}</h3><a class="small" href="#/agents">All briefs →</a></div>
+    <div class="panel-head"><h3 id="${id}-h">${esc(title)}</h3><a class="small" href="#/agents">All briefs →</a></div>
     <div class="ai-panel-body"><p class="muted small">Loading…</p></div>
     ${askChips(suggestionsFor(symbol).slice(0, symbol ? 3 : 2), { label: symbol ? `Ask about ${symbol}` : "Ask PIF" })}
   </section>`;
