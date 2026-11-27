@@ -276,4 +276,5 @@ Format:
 - First collector: `finraShortVolume.js` stores FINRA Reg SHO short/total volume per tracked symbol, one marker row per day file; `finra.getShortVolumeHistory` now reads stored history first.
 - `lib/secFetch.js`: one shared limiter (8/s) + User-Agent for every sec.gov request (sources/sec.js, sources/thirteenF.js incl. the 13F ingest, sectorComps.js). New SEC code should use `secFetch`.
 - Data health page `#/data-health` (admins; account menu + command palette), API `GET /api/admin/data-health`, `POST /api/admin/data-health/:name/run`.
-- Next: 1.2 (Yahoo estimate/price-target snapshots, ETF holdings), 1.3 security master. Finviz steps wait on Will's API key; SEC financials wait on the disk decision.
+- Also: `yahooEstimates.js` saves consensus EPS/revenue (0q, +1q, 0y, +1y), analyst counts, revision counts and price targets once a day, changed-only; `valueAsOf(symbol, metric, date)` reads the value as of a date. ETF holdings collector NOT built: the issuer files (iShares CSV, SSGA xlsx) could not be checked from the sandbox.
+- Next: ETF holdings (verify issuer file formats first), 1.3 security master. Finviz steps wait on Will's API key; SEC financials wait on the disk decision.
