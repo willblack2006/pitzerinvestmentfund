@@ -38,6 +38,7 @@ const AGENT_PAGES = [
   ["Theses", "#/theses", "thesis pillars tracking"],
   ["Shared memory", "#/memory", "dossier notes remembered"],
   ["AI spending (admins)", "#/ai-spend", "budget cost cap"],
+  ["Data health (admins)", "#/data-health", "collectors sources warehouse status"],
 ];
 
 // Agents, runs and conversations matching the text (fetched as you type, cached per query).

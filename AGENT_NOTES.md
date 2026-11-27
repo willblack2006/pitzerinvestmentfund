@@ -269,3 +269,11 @@ Format:
 - `public/boot.js` (classic script, CSP blocks inline) starts `/api/auth/session` (and positions/settings/alerts on `#/`) before modules download; `api()` in shared.js consumes each early request once. Only add read-only endpoints there.
 - app.js warms route modules on pointerdown/hover/focus of `#/` links and for the 4 main tabs when idle.
 - `manifest.webmanifest` + `public/icons/*` (PIF mark, generated PNGs), theme-color / apple meta, `viewport-fit=cover`. `public/css/touch.css` holds the touch rules (44px targets, 16px inputs, safe areas, tap highlight). Sandbox has no external data, so only layouts were checked, not populated pages.
+
+## 2026-11-27 — Claude (public-data rebuild step 1.1: warehouse, collectors, Data health)
+- Did: `lib/warehouse.js` attaches `warehouse.db` (next to pif.db, `WAREHOUSE_PATH` override) as schema `wh` on the main connection: `wh.collector_runs`, `wh.alt_series`. Query it as `wh.<table>`; it can join main tables. Not in the daily backup on purpose (rebuildable).
+- `lib/collectors/index.js`: `define({ name, label, source, everyMs, staleAfterMs, collect })` registers a platform job `collector:<name>` and logs every run (ok / empty / error). Add new collector modules to `loadAll()`. `COLLECTORS=off` stops scheduling. Universe = holdings + fund watchlist + member watchlists unless `COLLECT_UNIVERSE=all` (keeps the 1 GB disk safe until Will decides on more disk).
+- First collector: `finraShortVolume.js` stores FINRA Reg SHO short/total volume per tracked symbol, one marker row per day file; `finra.getShortVolumeHistory` now reads stored history first.
+- `lib/secFetch.js`: one shared limiter (8/s) + User-Agent for every sec.gov request (sources/sec.js, sources/thirteenF.js incl. the 13F ingest, sectorComps.js). New SEC code should use `secFetch`.
+- Data health page `#/data-health` (admins; account menu + command palette), API `GET /api/admin/data-health`, `POST /api/admin/data-health/:name/run`.
+- Next: 1.2 (Yahoo estimate/price-target snapshots, ETF holdings), 1.3 security master. Finviz steps wait on Will's API key; SEC financials wait on the disk decision.

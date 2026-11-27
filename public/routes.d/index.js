@@ -17,4 +17,5 @@ export const ROUTE_FILES = [
   "memory.js",
   "agentBuilder.js",
   "feed.js",
+  "dataHealth.js", // public-data rebuild 1.1
 ];

@@ -128,6 +128,7 @@ function accountMenuHtml() {
     ${m && (m.canUseAi || m.isAdmin) ? link("flask", "Agents", "#/agents") : ""}
     ${m && (m.canUseAi || m.isAdmin) ? link("target", "Theses", "#/theses") : ""}
     ${m?.isAdmin ? link("percent", "AI spending", "#/ai-spend") : ""}
+    ${m?.isAdmin ? link("check-circle", "Data health", "#/data-health") : ""}
     ${act("chat", "Club chat", "chat")}
     ${m ? link("flag", "Start here", "#/learn") : ""}
     ${link("help", "Glossary", "#/glossary")}
